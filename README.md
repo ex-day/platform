@@ -1,4 +1,4 @@
-# ex-day platform
+# ex-day Platform
 
 **ex-day** は、「予定された一日に、もう一つの発見を」をコンセプトとした行動・発見支援プラットフォームです。
 
