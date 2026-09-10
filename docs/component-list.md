@@ -8,6 +8,6 @@
 |C05|[Discovery Section](ui/components/C05-discovery-section.md)|C03 Discovery Cardの集合（嗜好等のグループ化結果）|
 |C06|[Discovery検索・絞り込み](ui/components/C06-search.md)||
 |C07|[ドロップダウンメニュー](ui/components/C07-dropdown-menu.md)||
-|C08|ログイン認証ダイアログ||
-|C09|ローディング||
-|C10|リアクションボタン||
+|C08|[ログイン認証ダイアログ](ui/components/C08-login-dialog.md)||
+|C09|[ローディング](ui/components/C09-loading.md)||
+|C10|[リアクションボタン](ui/components/C10-reaction-button.md)||
