@@ -8,9 +8,12 @@ PCからの本サービスTOP画面、
 - 
 ## 表示項目
 - C01: 共通ヘッダー
-- C04: Discovery Section × 1..n
+- C05: Discovery Section × 1..n
 - C02: 共通フッター
 
+## 関連機能
+- F01: discovery section
+- 
 ## アクション
 なし
 
