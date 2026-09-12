@@ -1,4 +1,4 @@
-# C06 dropdown menu
+# C07 dropdown menu
 ## 機能概要
 指定されたグループ条件に基づくDiscoveryのまとまりを、タイトルとC04 Discovery Listで表示する。
 
