@@ -1,7 +1,7 @@
 # ex-day 論理エンティティ設計書 v0.1
 
 - 作成日：2026-09-15
-- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版
+- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness追補反映）
 - 対象：論理属性、責務、関係、多重度、代表シナリオによる整合性確認
 - 対象外：物理DB、UUID、FK、index、PostGIS、pgvector、API、画面、具体的な推定アルゴリズム
 
@@ -30,6 +30,11 @@
 8. 情報の出所、根拠、意味の確信度、事実の信頼度、人気を混同しない。
 9. Subjectが増えただけでDiscoveryを分割しない。新しいDiscoveryは独立した発見・参加対象として成立するかを人が判断する。
 10. 不明、推定、異説、反証、保留を表現できる余地を残す。
+11. Contributionには、時間経過によって現在性（Freshness）が変化する情報を表現できる。現在性が低下してもContribution自体は削除せず、過去の記録として保持する。
+12. 開始または告知開始を伝えるContributionは、公開後速やかにDiscoveryの現在状態へ反映できるようにする。一方、終了期限・数量・残量等は投稿時点の情報であり、実際の状況と異なる可能性を明示する。
+13. Reactionは関心だけでなく、「今日行ってきた」「買えた」等、ContributionやDiscoveryの現在性を補強するシグナルとして利用できる。ただし、Reactionだけで事実や営業・在庫状況を保証しない。
+14. Seasonは例年の旬・反復時期等からDiscoveryを「今見る価値がありそうな対象」として浮上させるトリガーであり、今年・今日の実状を示すリアルタイム情報そのものではない。
+15. Discoveryの現在状態は固定属性として断定的に保持するのではなく、Season等の反復時間と、直近のContribution・Reactionから動的に形成する。
 
 ## 3. 全体関係図
 
@@ -111,13 +116,13 @@ classDiagram
 
 **責務**：ユーザーが独立して発見・参加できる意味のある話題・事象を表す。問いかけ中や情報不足でも成立でき、Contributionにより成長し、別Discoveryへ派生・関連し得る。
 
-**主要論理属性**：識別子、ユーザー向け表題、現在の要約、知識状態（問いかけ中・調査中・情報不足・複数説等を表現可能）、公開・推薦上の状態、成立時点、作成・更新時点。
+**主要論理属性**：識別子、ユーザー向け表題、現在の要約、知識状態（問いかけ中・調査中・情報不足・複数説等を表現可能）、公開・推薦上の状態、成立時点、作成・更新時点。表示上の「開催予定／開催中らしい／今シーズンの情報あり」等の現在状態は導出情報であり、固定的な事実属性とは区別する。
 
 **主な関係**：Contributionと多対多、Subject・Place・TimeExpressionと多対多、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。
 
-**論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、積極推薦を分ける。
+**論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、積極推薦を分ける。Discoveryの現在状態は、直近のContributionとReaction、対象期間、Season等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
 
-**要検討**：状態一覧と遷移、要約履歴、作成・編集権限、統合・分割後の扱い、Contributionがない場合の表現。
+**要検討**：状態一覧と遷移、要約履歴、作成・編集権限、統合・分割後の扱い、Contributionがない場合の表現、現在状態の導出・保存・再計算方法、表示文言と更新頻度、現在性が不足する場合の表現。
 
 ### 4.3 Contribution
 
@@ -125,27 +130,27 @@ classDiagram
 
 **責務**：知識、疑問、資料、証言、体験、記憶、写真等、Discoveryを形成・成長させる材料を原文性と出所を保って表す。
 
-**主要論理属性**：識別子、提供User、本文または説明、内容分類候補、公開状態、作成・更新時点、推定・不確実性に関する表示情報。
+**主要論理属性**：識別子、提供User、本文または説明、内容分類候補、公開状態、作成・更新時点、推定・不確実性に関する表示情報。時間に関わる情報として、投稿・公開時点とは別に、情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠を表現できる余地を持つ。
 
 **主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*、Subject・Place・TimeExpression 0..*、Media 0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
 
-**論理制約**：投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。
+**論理制約**：投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わるContributionは、Freshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の情報は公開後速やかに現在状態へ反映できるようにする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
 
-**要検討**：一投稿の単位、返信・引用、編集・訂正履歴、Discovery成立前の保持、外部情報のContribution化、自由文とReactionの境界。
+**要検討**：一投稿の単位、返信・引用、編集・訂正履歴、Discovery成立前の保持、外部情報のContribution化、自由文とReactionの境界、対象期間とFreshnessの具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
 
 ### 4.4 Reaction
 
 **種別**：永続Entity（確定）
 
-**責務**：UserによるDiscoveryまたはContributionへの簡潔な関心・共感・行動意欲等を表す。
+**責務**：UserによるDiscoveryまたはContributionへの簡潔な関心・共感・行動意欲等を表す。反応種別と対象時点によっては、対象が最近も現実と一致している可能性を示す現在性補強シグナルとして利用できる。
 
 **主要論理属性**：識別子、User、対象、反応種別、状態、作成・変更時点。
 
 **主な関係**：User 1、対象はDiscoveryまたはContributionのいずれか1、各対象からReaction 0..*。
 
-**論理制約**：一つのReactionが同時に両対象を持たない。Reaction数を事実の信頼度としない。品質ランキングや星評価を目的にしない。
+**論理制約**：一つのReactionが同時に両対象を持たない。Reaction数を事実の信頼度としない。品質ランキングや星評価を目的にしない。「行ってきた」「買えた」等をFreshness補強に利用する場合も、営業中・開催中・在庫あり等の保証へ置き換えず、反応の発生時点と意味を区別する。
 
-**要検討**：反応種別、取消・変更、同一Userの重複、保存・訪問を含めるか、ReactionからUserInterestを更新する規則。
+**要検討**：反応種別、取消・変更、同一Userの重複、保存・訪問を含めるか、ReactionからUserInterestを更新する規則、どの反応をFreshness補強に利用するか、対象時点、重み、減衰、不正・重複対策、Contributionとの境界。
 
 ## 5. 興味・意味概念
 
@@ -289,11 +294,15 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **季節・反復時間の主要属性候補**：季節、旬、曜日、月日範囲、時間帯、繰り返し規則、適用期間、例外、表示文。
 
+本書ではSeasonを独立した中核Entityとして確定せず、TimeExpressionが表す季節・旬・反復時間の役割名として扱う。Seasonは、現在時刻との一致によりDiscoveryを再浮上させ、今年のContributionを集めたり確認したりする契機を作る。Season一致だけでは、今年の開始、当日の開催、営業、在庫等のリアルタイムな実状を意味しない。
+
+Contributionの時間情報では、投稿・公開時点と、そのContributionが表す事象の対象期間を分ける。事前告知は公開時点から参照可能で、対象開始前は「開催予定」等、開始後は期間と直近シグナルに基づく状態として扱える。終了日時や「なくなり次第終了」、数量・残量等は投稿時点情報として保持し、現実との一致を継続保証しない。
+
 **主な関係**：Discovery・Contribution・UserInterestから0..*。一対象に歴史的時間と反復時間が併存できる。
 
-**論理制約**：中世であることから現在訪問可能とは判断しない。反復時間は現在有効である根拠や適用期間を必要とし得る。
+**論理制約**：中世であることから現在訪問可能とは判断しない。反復時間は現在有効である根拠や適用期間を必要とし得る。Season一致と、今年・今日のContributionによる現在性を区別する。投稿・公開時点、対象開始、対象終了、Freshnessの失効を同一の日時にまとめない。
 
-**要検討**：時代マスタ、曖昧・複数説、暦、タイムゾーン、反復規則、現在性の確認、共通Entityとして識別する範囲。
+**要検討**：時代マスタ、曖昧・複数説、暦、タイムゾーン、反復規則、現在性の確認、共通Entityとして識別する範囲、Seasonを独立Entity／関連Entity／TimeExpressionの区分のどれで実装するか、告知・対象期間・Freshnessの値表現、終了未定と例外日の扱い。
 
 ### 7.3 SearchContext
 
@@ -367,6 +376,8 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 - DiscoveryとSubject、ContributionとSubjectは多対多。関連固有の確信度・付与元を持ち得る。
 - DiscoveryとPlace／TimeExpression、ContributionとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。
 - Reactionは一つのDiscoveryまたは一つのContributionを対象とする。
+- Discoveryの現在状態は、Season等の反復時間と、直近のContribution・Reactionから導出する。これはDiscoveryの恒常的な意味や存在期間とは別である。
+- Contributionの投稿・公開時点、対象期間、Freshnessは別概念である。現在性が失効してもContributionとの関連は保持する。
 - DiscoveryRelationは二つのDiscovery間の明示的関係を表す。Subject由来の関連候補とは別である。
 - DiscoveryDecisionは複数Contribution・複数既存Discoveryを比較し、0件以上の結果Discoveryへつながり得る。保留なら結果Discoveryがない場合もある。
 - Media／Source／ContributionはEvidenceの根拠になり得るが、Evidence対象となる「主張」の粒度は要検討。
@@ -414,6 +425,17 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **検証結果**：ThemeからSubjectへの具体化、UserInterestの由来、Subjectの可視化、本人による訂正、行動履歴と推定結果の保持境界を表現できる。
 
+### 10.5 船橋の梨：Seasonと現在性のあるContribution
+
+1. Discovery「船橋の梨」は、Place「船橋」、Subject「梨」「直売」等と、Seasonに相当する反復時間「例年8〜10月頃」に関連する。
+2. 9月になるとSeason一致をトリガーにDiscoveryが浮上する。この時点で示せるのは「例年なら今が関係する時期」であり、今年の販売開始や在庫を保証しない。
+3. 梨園等から「本日から直売開始」、または事前に「9月20日から直売開始予定」というContributionが公開された場合、告知・開始情報として速やかにDiscoveryの現在状態へ反映する。
+4. 「なくなり次第終了」「本日100箱」等は投稿時点情報として保持し、実際の終了・残量と異なる可能性を明示する。
+5. Userの「今日買えた」「行ってきた」等のReactionはFreshnessを補強できるが、販売・在庫の保証には使わない。新しいContribution、Reaction、明示的終了情報、時間経過により現在状態を更新する。
+6. Freshnessが低下・失効したContributionは現在状態の材料から外れ得るが、過去の記録としてDiscoveryとの関係を保持する。翌年は同じDiscoveryがSeasonにより再浮上し、その年のContributionから新しい現在状態を形成する。
+
+**検証結果**：Seasonによる反復的な浮上と、今年・今日の実状を示す直近シグナルを分離できる。Discoveryを作り直さず、時間経過で変わる現在状態、事前告知、開始の即時反映、終了・数量の非保証、履歴保持を同じモデルで説明できる。
+
 ## 11. 現時点の要検討事項
 
 優先度が高い論点は次のとおりである。
@@ -425,13 +447,16 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 5. UserInterestの尺度・履歴・減衰・明示的興味なしの期限と近似概念への波及。
 6. 興味推定に使う一時行動の種類、保持期間、ユーザーへの説明、同意・削除・監査。
 7. Placeの複数地点・経路・曖昧範囲・旧地名・時間変化。
-8. Timeの歴史的時間と反復時間の具体構造、曖昧さ、現在性、例外。
+8. Timeの歴史的時間と反復時間の具体構造、Seasonの実装形、曖昧さ、現在性、例外。
 9. Evidenceの対象となる主張の粒度、支持・反証・異説、事実信頼度の表現。
 10. Media／Sourceの版、権利、原資料・複製、外部URL、削除時の出所保持。
 11. ContentReportの対象、状態、モデレーション権限、異議申立て。
-12. Reaction種別、Contributionとの境界、UserInterest推定への利用規則。
-13. 個人以外の活動主体、未登録利用者、退会User、代理投稿。
+12. Reaction種別、Contributionとの境界、UserInterest推定への利用規則、Freshness補強へ利用する反応・対象時点・減衰・不正対策。
+13. 個人以外の活動主体、未登録利用者、退会User、代理投稿。特にProvider（団体・事業者・施設等）をUserの一種、別Entity、役割のいずれで扱うか。
 14. Subject Clusterを保存する必要があるか、都度導出するか。
+15. Contributionの対象期間、Freshness、告知・開始・終了・終了未定・数量等の具体属性と更新規則。開始／告知開始を速やかに反映する処理と、終了・数量の非保証表示。
+16. SourceとContributionの境界、外部情報をContribution化する主体・方法、Source自身の更新・取得時点を現在性へどう利用するか。
+17. Provider、Contribution提供者、Sourceの作成者・発行者・管理者の関係。公式情報またはofficial relationを独立関連として持つか、誰が何に対して公式であるか、認証・代理投稿・取消・履歴をどう表現するか。
 
 ## 12. 後続設計への引き継ぎ条件
 
@@ -441,3 +466,11 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 - 自動処理を導入しても、MVPの人によるDiscovery成立・統合・関連判断を暗黙に置き換えない。
 - 要検討事項を物理都合だけで確定した場合は、論理設計へのフィードバックと決定記録を残す。
 
+## 13. 今回の追補変更点
+
+- 時間経過で現在性が変わるContributionと、投稿・公開時点／対象期間／Freshnessの分離を追記した。
+- 開始・告知開始は速やかにDiscoveryへ反映し、終了期限・数量・残量は投稿時点情報として実状との差を明示する方針を追記した。
+- ReactionをFreshness補強シグナルとして利用できる一方、事実・営業・在庫等の保証には使わない制約を追記した。
+- SeasonをDiscovery浮上のトリガーとし、リアルタイム情報そのものとは区別した。
+- Discoveryの現在状態を、Seasonと直近Contribution／Reactionから形成される導出情報として明記した。
+- Contribution／Source／Provider／official relation等の未決事項を確定せず、「要検討」として明示的に保持した。
