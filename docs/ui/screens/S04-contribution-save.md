@@ -7,17 +7,17 @@
 - モバイル
 
 ## 表示項目
-- C01: 共通ヘッダー
-- 投稿種別
-  - 知識
-  - 疑問
-- 画像
-- 場所
-- 時間
-- 季節
-- 本文
-- 保存ボタン
-- C02: 共通フッター
+| 論理名       | 物理名                               | 種別      | 繰り返し | 親 | データ元 | データ項目 | 対象端末    | 備考      |
+|--------------|--------------------------------------|-----------|----------|----|----------|------------|-------------|-----------|
+| 共通ヘッダー | → [C01](../components/C01-header.md) | component | -        | -  | -        | -          | PC/モバイル |           |
+| 投稿種別     | contribution_type                    | -         | -        | -  | API      | type       | PC/モバイル | 知識/疑問 |
+| 画像         | contribution_picture                 | image     | -        | -  | API      | picture    | PC/モバイル |           |
+| 場所         | contribution_place                   | map       | -        | -  | API      | place      | PC/モバイル |           |
+| 時間         | contribution_time                    | text      | -        | -  | API      | time       | PC/モバイル |           |
+| 季節         | contribution_season                  | text      | -        | -  | API      | season     | PC/モバイル |           |
+| 本文         | contribution_body                    | text      | -        | -  | API      | body       | PC/モバイル |           |
+| 保存ボタン   | -                                    | button    | -        | -  | -        | -          | PC/モバイル |           |
+| 共通フッター | → [C02](../components/C02-footer.md) | component | -        | -  | -        | -          | PC/モバイル |           |
 
 ## アクション
 - 初期表示時

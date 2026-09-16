@@ -7,16 +7,18 @@
 - モバイル
 
 ## 表示項目
-- C01: 共通ヘッダー
-- ニックネーム
-- よく知っている地域
-- 興味のある地域
-- 年代
-- 性別
-- 興味のあるジャンル
-- 更新
-- 削除
-- C02: 共通フッター
+| 論理名             | 物理名                               | 種別       | 繰り返し | 親 | データ元 | データ項目     | 対象端末    | 備考 |
+|--------------------|--------------------------------------|------------|----------|----|----------|----------------|-------------|------|
+| 共通ヘッダー       | → [C01](../components/C01-header.md) | component  | -        | -  | -        | -              | PC/モバイル |      |
+| ニックネーム       | user_nickname                        | text       | -        | -  | API      | nickname       | PC/モバイル |      |
+| よく知っている地域 | user_area                            | text       | -        | -  | API      | area           | PC/モバイル |      |
+| 興味のある地域     | user_interest_areas                  | text       | -        | -  | API      | interest_area  | PC/モバイル |      |
+| 年代               | user_generation                      | text       | -        | -  | API      | generation     | PC/モバイル |      |
+| 性別               | user_sex                             | text       | -        | -  | API      | sex            | PC/モバイル |      |
+| 興味のあるジャンル | user_interest_genre                  | text       | -        | -  | API      | interest_genre | PC/モバイル |      |
+| 更新               | -                                    | label/link | -        | -  | -        | -              | PC/モバイル |      |
+| 削除               | -                                    | label/link | -        | -  | -        | -              | PC/モバイル |      |
+| 共通フッター       | → [C02](../components/C02-footer.md) | component  | -        | -  | -        | -              | PC/モバイル |      |
 
 ## アクション
 - 更新押下時
