@@ -1,7 +1,7 @@
 # ex-day 論理エンティティ設計書 v0.1
 
 - 作成日：2026-09-15
-- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness追補反映）
+- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition追補反映）
 - 対象：論理属性、責務、関係、多重度、代表シナリオによる整合性確認
 - 対象外：物理DB、UUID、FK、index、PostGIS、pgvector、API、画面、具体的な推定アルゴリズム
 
@@ -33,8 +33,9 @@
 11. Contributionには、時間経過によって現在性（Freshness）が変化する情報を表現できる。現在性が低下してもContribution自体は削除せず、過去の記録として保持する。
 12. 開始または告知開始を伝えるContributionは、公開後速やかにDiscoveryの現在状態へ反映できるようにする。一方、終了期限・数量・残量等は投稿時点の情報であり、実際の状況と異なる可能性を明示する。
 13. Reactionは関心だけでなく、「今日行ってきた」「買えた」等、ContributionやDiscoveryの現在性を補強するシグナルとして利用できる。ただし、Reactionだけで事実や営業・在庫状況を保証しない。
-14. Seasonは例年の旬・反復時期等からDiscoveryを「今見る価値がありそうな対象」として浮上させるトリガーであり、今年・今日の実状を示すリアルタイム情報そのものではない。
-15. Discoveryの現在状態は固定属性として断定的に保持するのではなく、Season等の反復時間と、直近のContribution・Reactionから動的に形成する。
+14. Seasonは例年の旬・反復時期等から該当Valueを通じてDiscoveryを「今見る価値がありそうな対象」として浮上させるトリガーであり、今年・今日の実状を示すリアルタイム情報そのものではない。
+15. Discoveryの現在状態は固定属性として断定的に保持するのではなく、該当ValueのSeason等の反復時間と、直近のContribution・Reactionから動的に形成する。
+16. Discoveryは複数のValueを持ち、Time／Season等は原則として各Valueが成立・推薦されるConditionとして扱う。Conditionを持たない軸はその軸に依存しない。
 
 ## 3. 全体関係図
 
@@ -45,6 +46,8 @@ classDiagram
     class Theme
     class Subject
     class Discovery
+    class Value
+    class Condition
     class Contribution
     class Reaction
     class DiscoveryDecision
@@ -69,7 +72,10 @@ classDiagram
     Contribution "0..*" --> "0..*" Subject : 意味を持つ
     Discovery "0..*" --> "0..*" Place : 関わる
     Contribution "0..*" --> "0..*" Place : 関わる
-    Discovery "0..*" --> "0..*" TimeExpression : 関わる
+    Discovery "1" --> "1..*" Value : 持つ
+    Value "1" --> "0..*" Condition : 成立・推薦条件
+    Condition "0..*" --> "0..1" TimeExpression : 時間・季節等を表す
+    Discovery "0..*" --> "0..*" TimeExpression : 話題の歴史的時間等
     Contribution "0..*" --> "0..*" TimeExpression : 関わる
 
     User "1" --> "0..*" Contribution : 提供する
@@ -118,11 +124,39 @@ classDiagram
 
 **主要論理属性**：識別子、ユーザー向け表題、現在の要約、知識状態（問いかけ中・調査中・情報不足・複数説等を表現可能）、公開・推薦上の状態、成立時点、作成・更新時点。表示上の「開催予定／開催中らしい／今シーズンの情報あり」等の現在状態は導出情報であり、固定的な事実属性とは区別する。
 
-**主な関係**：Contributionと多対多、Subject・Place・TimeExpressionと多対多、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。
+**主な関係**：Value 1..*、Contributionと多対多、Subject・Place・TimeExpressionと多対多、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。DiscoveryとTimeExpressionの直接の関係は、話題の歴史的時間等を説明するものであり、Valueの成立・推薦条件とは区別する。
 
-**論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、積極推薦を分ける。Discoveryの現在状態は、直近のContributionとReaction、対象期間、Season等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
+**論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、積極推薦を分ける。Time／Seasonは原則としてDiscovery全体の一律の推薦条件ではなく、各Valueの成立・推薦条件である。Discoveryの現在状態は、直近のContributionとReaction、対象期間、該当ValueのSeason等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
 
 **要検討**：状態一覧と遷移、要約履歴、作成・編集権限、統合・分割後の扱い、Contributionがない場合の表現、現在状態の導出・保存・再計算方法、表示文言と更新頻度、現在性が不足する場合の表現。
+
+#### 4.2.1 Value
+
+**種別**：Discoveryに属する論理Entity（概念と多重度は確定、永続形は要検討）。本書の「Value Object」とは異なり、Discoveryごとの発見価値・魅力を指す。
+
+**責務**：同じDiscoveryから得られる個々の発見・体験の価値を表し、その価値に固有のConditionを持てるようにする。
+
+**主要論理属性候補**：価値の説明、表示・推薦上の状態、作成・更新時点。
+
+**主な関係**：一つのDiscoveryにValue 1..*。各ValueはCondition 0..*を持つ。
+
+**論理制約**：異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
+
+**要検討**：Valueの識別・編集単位、Contributionとの対応、表示用要約との関係、永続化の形。
+
+#### 4.2.2 Condition
+
+**種別**：Valueに属する論理的な条件（概念と多重度は確定、物理表現は要検討）。
+
+**責務**：Valueが成立・推薦されるTime／Season等の条件を表す。
+
+**主要論理属性候補**：条件の軸、条件の内容、適用期間、例外、説明。Time／Seasonの表現には必要に応じてTimeExpressionを利用する。
+
+**主な関係**：一つのValueにCondition 0..*。
+
+**論理制約**：ある軸のConditionがないことは、そのValueがその軸に依存しないことを意味し、検索対象から除外しない。Discovery Subjectの「中世」のような話題の意味属性と、現在の訪問・推薦条件を混同しない。
+
+**要検討**：条件軸の範囲、同一軸に複数条件がある場合の解釈、条件間の組み合わせ、適用期間・例外・不明の表現。条件なしの物理表現はNULL、Conditionレコードを持たない方式、ANY／ALL等の明示値を候補とし、実装設計で確定する。
 
 ### 4.3 Contribution
 
@@ -294,11 +328,11 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **季節・反復時間の主要属性候補**：季節、旬、曜日、月日範囲、時間帯、繰り返し規則、適用期間、例外、表示文。
 
-本書ではSeasonを独立した中核Entityとして確定せず、TimeExpressionが表す季節・旬・反復時間の役割名として扱う。Seasonは、現在時刻との一致によりDiscoveryを再浮上させ、今年のContributionを集めたり確認したりする契機を作る。Season一致だけでは、今年の開始、当日の開催、営業、在庫等のリアルタイムな実状を意味しない。
+本書ではSeasonを独立した中核Entityとして確定せず、TimeExpressionが表す季節・旬・反復時間の役割名として扱う。ValueのConditionとしてのSeasonは、現在時刻との一致により該当Valueを通じてDiscoveryを再浮上させ、今年のContributionを集めたり確認したりする契機を作る。Season一致だけでは、今年の開始、当日の開催、営業、在庫等のリアルタイムな実状を意味しない。
 
 Contributionの時間情報では、投稿・公開時点と、そのContributionが表す事象の対象期間を分ける。事前告知は公開時点から参照可能で、対象開始前は「開催予定」等、開始後は期間と直近シグナルに基づく状態として扱える。終了日時や「なくなり次第終了」、数量・残量等は投稿時点情報として保持し、現実との一致を継続保証しない。
 
-**主な関係**：Discovery・Contribution・UserInterestから0..*。一対象に歴史的時間と反復時間が併存できる。
+**主な関係**：Discovery・Contribution・UserInterestから0..*。ValueのConditionからもTime／Seasonの表現として参照し得る。一対象に歴史的時間と反復時間が併存できる。
 
 **論理制約**：中世であることから現在訪問可能とは判断しない。反復時間は現在有効である根拠や適用期間を必要とし得る。Season一致と、今年・今日のContributionによる現在性を区別する。投稿・公開時点、対象開始、対象終了、Freshnessの失効を同一の日時にまとめない。
 
@@ -313,6 +347,10 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 **主要論理属性候補**：探索地点・範囲、探索日時・期間、移動・時間制約、明示的な興味条件、状況、並び替え等の要求。
 
 **論理制約**：永続的なUserInterestと同一視しない。「今・ここ」と未指定の興味からも構成できる。
+
+**Value／Conditionの検索上の扱い**：SearchContextと各ValueのConditionを照らし合わせる。Contextと一致するConditionを持つValueは推薦順位を高める。ConditionがないValueはその軸に依存せず、検索・推薦候補から除外しない。明示的に指定された条件は、推薦の順位付けとは別に絞り込みとして扱う場合がある。その際も、Conditionがないことだけを理由にValueを除外しない。明示条件の具体的な意味と、他の条件による絞り込み範囲は後続設計で定める。
+
+条件なしをNULLで表す場合の概念例は `season = :season OR season IS NULL` である。これは検索上の意味を示す例であり、NULLの採用を確定しない。具体SQL、インデックス、候補抽出、スコアリング、性能担保は詳細設計事項とする。
 
 **要検討**：UserInterestとの重み付け、未知の興味を残す探索戦略、イベントログを別途残す場合の保持方針。
 
@@ -374,9 +412,10 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - UserInterestは一つの興味対象を指す。対象はTheme・Subject・Place・TimeExpression等のいずれかであり、実装方式は要検討。
 - DiscoveryとContributionはContributionDiscoveryを介する多対多。一つのContributionが複数Discoveryの材料になり得る。
 - DiscoveryとSubject、ContributionとSubjectは多対多。関連固有の確信度・付与元を持ち得る。
-- DiscoveryとPlace／TimeExpression、ContributionとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。
+- DiscoveryはValueを1件以上持ち、各ValueはTime／Season等のConditionを0件以上持てる。Conditionがない軸には依存しない。
+- DiscoveryとPlace／TimeExpression、ContributionとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。ただし、Discoveryの話題を説明する歴史的時間と、Valueの成立・推薦条件としてのTime／Seasonを区別する。
 - Reactionは一つのDiscoveryまたは一つのContributionを対象とする。
-- Discoveryの現在状態は、Season等の反復時間と、直近のContribution・Reactionから導出する。これはDiscoveryの恒常的な意味や存在期間とは別である。
+- Discoveryの現在状態は、該当ValueのSeason等の反復時間と、直近のContribution・Reactionから導出する。これはDiscoveryの恒常的な意味や存在期間とは別である。
 - Contributionの投稿・公開時点、対象期間、Freshnessは別概念である。現在性が失効してもContributionとの関連は保持する。
 - DiscoveryRelationは二つのDiscovery間の明示的関係を表す。Subject由来の関連候補とは別である。
 - DiscoveryDecisionは複数Contribution・複数既存Discoveryを比較し、0件以上の結果Discoveryへつながり得る。保留なら結果Discoveryがない場合もある。
@@ -386,13 +425,14 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 ### 10.1 小机城址：同一Discoveryの成長
 
-1. Discovery「小机城址」が成立し、PlaceのPoint「小机城址」とArea「小机周辺」、歴史的Time「中世」、Subject「城址」「城郭」等に関連する。
+1. Discovery「小机城址」が成立し、PlaceのPoint「小机城址」とArea「小机周辺」、Subject「城址」「城郭」「中世」等に関連する。「中世」は歴史的な話題を示すSubject側の属性であり、現在の訪問・推薦条件ではない。
 2. User Aの「現在は公園として歩ける」というContributionと、User Bの写真MediaがContributionDiscoveryを介して同じDiscoveryへ追加される。
 3. Contribution Subject「公園」「丘」「散歩」と歴史的Time／現在の観察が加わる。
 4. 既存の話題と意味的に両立し、独立Discoveryにする必要がないため、DiscoveryDecisionは既存への統合／成長と判断する。
 5. 城に関心のあるUserにも散歩に関心のあるUserにも異なる入口を提供するが、興味の違いだけではDiscoveryを分割しない。
+6. Valueとして「城址の歴史を知る」「公園を歩く」等を持てる。この例ではいずれにもTime／SeasonのConditionを付けないため、季節・時間帯の指定だけを理由に候補から除外しない。
 
-**検証結果**：一つのDiscoveryが複数Subject・Timeを持って成長でき、Contribution原文・Media提供者・判断理由を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
+**検証結果**：一つのDiscoveryが複数Subject・Valueを持って成長でき、条件なしのValueも探索できる。Contribution原文・Media提供者・判断理由を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
 
 ### 10.2 浜松町：疑問から成立し、根拠で成長
 
@@ -427,14 +467,14 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 ### 10.5 船橋の梨：Seasonと現在性のあるContribution
 
-1. Discovery「船橋の梨」は、Place「船橋」、Subject「梨」「直売」等と、Seasonに相当する反復時間「例年8〜10月頃」に関連する。
-2. 9月になるとSeason一致をトリガーにDiscoveryが浮上する。この時点で示せるのは「例年なら今が関係する時期」であり、今年の販売開始や在庫を保証しない。
+1. Discovery「船橋の梨」は、Place「船橋」、Subject「梨」「直売」等に関連する。Value「旬の梨を楽しむ」にSeasonのCondition「例年8〜10月頃」を付ける。別のValueを追加する場合は、そのValueごとにConditionの有無を決める。
+2. 9月になると該当ValueのSeason一致をトリガーにDiscoveryが浮上する。この時点で示せるのは「例年なら今が関係する時期」であり、今年の販売開始や在庫を保証しない。
 3. 梨園等から「本日から直売開始」、または事前に「9月20日から直売開始予定」というContributionが公開された場合、告知・開始情報として速やかにDiscoveryの現在状態へ反映する。
 4. 「なくなり次第終了」「本日100箱」等は投稿時点情報として保持し、実際の終了・残量と異なる可能性を明示する。
 5. Userの「今日買えた」「行ってきた」等のReactionはFreshnessを補強できるが、販売・在庫の保証には使わない。新しいContribution、Reaction、明示的終了情報、時間経過により現在状態を更新する。
-6. Freshnessが低下・失効したContributionは現在状態の材料から外れ得るが、過去の記録としてDiscoveryとの関係を保持する。翌年は同じDiscoveryがSeasonにより再浮上し、その年のContributionから新しい現在状態を形成する。
+6. Freshnessが低下・失効したContributionは現在状態の材料から外れ得るが、過去の記録としてDiscoveryとの関係を保持する。翌年は同じDiscoveryがValueのSeason条件により再浮上し、その年のContributionから新しい現在状態を形成する。
 
-**検証結果**：Seasonによる反復的な浮上と、今年・今日の実状を示す直近シグナルを分離できる。Discoveryを作り直さず、時間経過で変わる現在状態、事前告知、開始の即時反映、終了・数量の非保証、履歴保持を同じモデルで説明できる。
+**検証結果**：ValueごとのSeasonによる反復的な浮上と、今年・今日の実状を示す直近シグナルを分離できる。Discoveryを作り直さず、時間経過で変わる現在状態、事前告知、開始の即時反映、終了・数量の非保証、履歴保持を同じモデルで説明できる。
 
 ## 11. 現時点の要検討事項
 
@@ -457,6 +497,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 15. Contributionの対象期間、Freshness、告知・開始・終了・終了未定・数量等の具体属性と更新規則。開始／告知開始を速やかに反映する処理と、終了・数量の非保証表示。
 16. SourceとContributionの境界、外部情報をContribution化する主体・方法、Source自身の更新・取得時点を現在性へどう利用するか。
 17. Provider、Contribution提供者、Sourceの作成者・発行者・管理者の関係。公式情報またはofficial relationを独立関連として持つか、誰が何に対して公式であるか、認証・代理投稿・取消・履歴をどう表現するか。
+18. Value／Conditionの永続化、条件なしの物理表現（NULL、Conditionレコードなし、ANY／ALL等）、条件間の組み合わせ、明示条件による絞り込みの意味。
 
 ## 12. 後続設計への引き継ぎ条件
 
@@ -465,6 +506,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - Subjectの推定理由、UserInterestの由来、Discovery形成材料、出所、判断理由をユーザーまたは運営が辿れる状態を維持する。
 - 自動処理を導入しても、MVPの人によるDiscovery成立・統合・関連判断を暗黙に置き換えない。
 - 要検討事項を物理都合だけで確定した場合は、論理設計へのフィードバックと決定記録を残す。
+- ValueのConditionなしを検索候補から落とさず、Context一致による推薦順位の向上と明示条件による絞り込みを区別する。具体SQL、インデックス、候補抽出、スコアリング、性能担保は詳細設計で定める。
 
 ## 13. 今回の追補変更点
 
@@ -474,3 +516,4 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - SeasonをDiscovery浮上のトリガーとし、リアルタイム情報そのものとは区別した。
 - Discoveryの現在状態を、Seasonと直近Contribution／Reactionから形成される導出情報として明記した。
 - Contribution／Source／Provider／official relation等の未決事項を確定せず、「要検討」として明示的に保持した。
+- Discoveryの複数ValueとValueごとの0件以上のConditionを追加し、Time／Seasonの適用先、条件なしの検索上の意味、物理表現の未確定事項を明記した。小机城址と船橋の梨のシナリオをこの関係に合わせて更新した。
