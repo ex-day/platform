@@ -81,7 +81,19 @@ UserInterestが結び付け得る対象はTheme・Subject・Place・Time等で�
 
 **検討中**：作成・編集の権限、公開や推薦の判断、ContributionがまだないDiscoveryの表現、形成後の要約方法。成立と重複抑制の原則は4.4節、具体的な判定方法・運用は9.1節に分ける。
 
-**Value：確定（今回の設計方針）**。ValueはDiscoveryにおいて再利用可能な魅力・体験価値として成立した情報であり、Contributionそのものではない。関連するContributionを根拠として成立・更新され得る。ValueごとのTime／Season等のConditionは論理Entity設計に従う。Valueの成立と、Discoveryの成立・事実確定・積極推薦は区別する。
+#### 3.2.1 Value
+
+**定義：確定（今回の設計方針）**。Valueは、一つのDiscoveryで知る・見る・体験することのできる価値や魅力を表す、再利用可能なドメイン概念である。Discoveryは複数のValueを持ち得る。論理Entity設計では、DiscoveryはValueを1件以上持つ。異なるValueがあるだけでDiscoveryを分割しない。Valueは画面上の表示単位やContributionの別名ではなく、Discoveryに蓄積される比較的安定した知識・価値である。Valueの論理的な保持と物理的な永続化方式は区別する。
+
+**Subjectとの関係：確定（意味上の役割）**。各ValueはSubjectによって「何についての価値か」を意味付けされる。例えば同じDiscovery「小机城址」に、「中世の城郭跡を見る」と「公園を歩く」という異なるValueを置ける。SubjectはValueに結び付けて読む。一方、既存のDiscovery Subjectは「そのDiscovery全体が現在何についての話題か」を示し、Contribution Subjectは投稿の意味を示す（5.3A〜5.5節）。これらを同じSubject概念の異なる役割として扱い、Discovery Subjectを各ValueのSubjectと同一視しない。ValueとSubjectの対応を論理Entity上でどう保持し、Discovery Subjectとの関係をどう導出・更新するかは**要検討**とし、既存のDiscovery／ContributionとSubjectの関連をこの節だけで置き換えない。
+
+**Contributionとの関係：確定（今回の設計方針）**。Contributionは疑問・知識・体験・観測等の情報であり、それ自体をValueとはしない。Contributionの蓄積、既存情報、根拠等からValueが形成・更新・補強され得るが、単一Contributionの登録だけで新しいValueを必ず成立させない。例えば「夕焼けが綺麗だった」という一件はまず観測・体験である。複数のContributionや根拠を踏まえて「夕焼けを楽しめる」というValueが成立・補強され、夕方というConditionが付く可能性がある。形成・更新の判断方法、根拠の対応関係、信頼性の評価方法は**要検討**とする。Valueの成立と、Discoveryの成立・事実確定・積極推薦も区別する。
+
+#### 3.2.2 Condition
+
+**定義：確定（今回の設計方針）**。ConditionはValueごとに0件以上持ち得る、その価値が成立する・利用できる・推薦価値が高まる条件である。Time／Season等をDiscovery全体に一律に付けるのではなく、基本的に該当ValueのConditionとして扱う。条件の軸や組み合わせ、成立条件と推薦上の条件の詳細な区分は論理Entity設計でも**要検討**であり、ここで新たな分類を確定しない。Seasonの一致は例年の旬等を示し得るが、今年・今日の実状を保証しない。
+
+ある軸のConditionがないことは、そのValueがその軸に依存しないという意味であり、「いつでも成立する」という積極的な主張とは異なる。`ALL_YEAR`等の明示値を採るなら、通年で価値があるという別の意味を持ち得る。条件なしの物理表現や明示値の採否は**要検討**とする。「中世」のような歴史的時代は話題やSubject／contentの意味を説明する時間であり、現在いつ推薦するかというConditionのTime／Seasonとは区別する（5.10節）。
 
 ### 3.3 Contribution
 
@@ -121,12 +133,15 @@ UserInterestが結び付け得る対象はTheme・Subject・Place・Time等で�
 
 ### 4.1 Mermaid classDiagram
 
-次の図は概念間の関係を表す。属性・操作・物理的な保持方法を表さず、多重度も未確定のため指定しない。矢印は関係の読み方向であり、処理順序や所有関係ではない。
+次の図は概念間の関係を表す。属性・操作・物理的な保持方法を表さない。ValueとSubjectの線は意味上の関係であり、既存のDiscovery Subjectを置き換える関連の保存形を指定しない。多重度は図に指定しない。矢印は関係の読み方向であり、処理順序や所有関係ではない。
 
 ```mermaid
 classDiagram
     class User
     class Discovery
+    class Value
+    class Subject
+    class Condition
     class Contribution
     class Reaction
  
@@ -136,6 +151,9 @@ classDiagram
     Reaction --> Discovery : 対象となり得る
     Reaction --> Contribution : 対象となり得る
     Contribution --> Discovery : 形成や成長に寄与する
+    Discovery --> Value : 価値を持つ
+    Value --> Subject : 何についての価値か
+    Value --> Condition : 成立・推薦の条件
     Discovery --> Discovery : 明示的な関係を持ち得る
 ```
 
@@ -229,6 +247,8 @@ flowchart TD
 
 SearchContextは一回の検索・探索要求を組み立てる一時モデル／Value Objectであり、永続Entityとはしない。監査・分析・障害調査等のために検索イベントを別途記録する可能性は否定しないが、それはSearchContextをドメイン上の永続Entityへ変更することを意味しない。行動ログの保持方針は3.1A節に従う。
 
+**ValueとRecommendationの責務分離：確定（今回の設計方針）**。ValueはDiscoveryに蓄積・保持する価値である。Recommendationは永続Entityではなく、Valueと一回のDiscovery Context（現在地、現在時刻、季節、興味、明示検索条件等）を評価して都度生成する推薦結果であり、Domain上の保存対象としない。ここでのDiscovery Contextは探索時の文脈を指し、本節のSearchContextを含む。ValueのConditionとContextの一致は推薦の適合度や順位に使える。明示的な検索条件は別途filter／hard conditionとして絞り込みに使い得るが、Conditionがない軸だけを理由にValueを候補から除外しない。明示条件の厳密な意味、候補抽出、順位付けは**要検討**とし、論理Entity設計7.3節の方針に従う。
+
 ### 5.2 Discovery／Contribution側のPlace・Time・Theme等
 
 **区別は確定（今回の設計方針）、各概念の構造は仮定義・検討中**。
@@ -280,6 +300,8 @@ Subjectは単一の固定カテゴリに限定しない。主対象・部位・�
 ### 5.5 Discovery Subject
 
 **定義：確定（今回の設計方針）**。Contribution群から形成される「このDiscoveryが現在何についての発見と考えられているか」という意味情報。Contribution Subjectの単純コピーや件数集計ではなく、複数Contributionの内容と関係を解釈して形成する。[U]
+
+Discovery SubjectはDiscovery全体の話題の意味を表す。各Valueが何についての価値かを示すSubjectとの対応は3.2.1節のとおり区別し、既存のDiscovery Subjectの役割は維持する。
 
 成立時には最初のContributionを手掛かりとした候補でもよく、複数Contributionが揃うまで成立を待つという意味ではない。その後、Contributionの蓄積や見直しに伴い、Subjectの構成・確からしさが変化し得る。確からしさが必ず単調に増すとは限らない。
 
@@ -591,6 +613,7 @@ flowchart TD
 21. PlaceはPoint／Areaを、Timeは歴史的時間／季節・反復時間を区別する。詳細表現は要検討とする。[U]
 22. DiscoveryDecision、ContributionDiscovery、DiscoveryRelationにより人の判断・形成材料・明示的関係を追跡可能にする。ContributionOriginおよび関係種別の詳細は要検討とする。[U]
 23. Media、Source、Evidence、ContentReportを、資産・由来・根拠関係・通報という別責務として整理する。最終構造は要検討とする。[U]
+24. ValueはDiscoveryに蓄積される個々の価値で、Subjectがその意味を示し、Conditionが成立・推薦条件を表す。ContributionはValueの材料であり、RecommendationはValueと一回のContextから都度生成する結果として保存対象にしない。Value／Subjectの関連の保持方法とConditionの詳細表現は要検討とする。[U]
 
 ## 9. 優先して検討する事項
 
@@ -644,6 +667,12 @@ Actionは現地訪問・食事に加えて調査や疑問投稿等も含むサ�
   設計上の判断が必要になった場合は、対象となる検討事項と根拠を併記して提案し、本書の確定事項との差分を追えるようにする。
 
 ## 11. 改訂履歴
+
+### Value概念の明文化（2026-09-19）
+
+- Valueの定義とDiscovery・Subject・Condition・Contributionとの関係を3.2節に明記した。
+- Valueを保持する概念とRecommendationを都度生成する結果として区別し、検索Contextとの接続を5.1節に追記した。
+- Value／Subjectの関連の保持方法、Conditionの詳細な意味区分、Value形成・根拠評価の方法は未決のまま残した。
 
 ### v0.5追補（2026-09-15）
 
