@@ -74,6 +74,7 @@ classDiagram
     Contribution "0..*" --> "0..*" Place : 関わる
     Discovery "1" --> "1..*" Value : 持つ
     Value "1" --> "0..*" Condition : 成立・推薦条件
+    Value ..> Contribution : 根拠・関連になり得る
     Condition "0..*" --> "0..1" TimeExpression : 時間・季節等を表す
     Discovery "0..*" --> "0..*" TimeExpression : 話題の歴史的時間等
     Contribution "0..*" --> "0..*" TimeExpression : 関わる
@@ -134,15 +135,15 @@ classDiagram
 
 **種別**：Discoveryに属する論理Entity（概念と多重度は確定、永続形は要検討）。本書の「Value Object」とは異なり、Discoveryごとの発見価値・魅力を指す。
 
-**責務**：同じDiscoveryから得られる個々の発見・体験の価値を表し、その価値に固有のConditionを持てるようにする。
+**責務**：同じDiscoveryにおいて再利用可能な個々の魅力・体験価値として成立した情報を表し、その価値に固有のConditionを持てるようにする。関連するContributionを根拠として成立・更新され得る。
 
 **主要論理属性候補**：価値の説明、表示・推薦上の状態、作成・更新時点。
 
-**主な関係**：一つのDiscoveryにValue 1..*。各ValueはCondition 0..*を持つ。
+**主な関係**：一つのDiscoveryにValue 1..*。各ValueはCondition 0..*を持つ。関連Contributionと根拠・関連の関係を持ち得るが、対応の保持方法は未確定とする。
 
-**論理制約**：異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
+**論理制約**：ValueはContributionそのものではなく、Contribution登録時に新しいValueが必ず成立するわけではない。異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
 
-**要検討**：Valueの識別・編集単位、Contributionとの対応、表示用要約との関係、永続化の形。
+**要検討**：Valueの識別・編集単位、Contributionとの根拠・関連関係の表現、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
 
 #### 4.2.2 Condition
 
@@ -162,15 +163,15 @@ classDiagram
 
 **種別**：永続Entity（確定）
 
-**責務**：知識、疑問、資料、証言、体験、記憶、写真等、Discoveryを形成・成長させる材料を原文性と出所を保って表す。
+**責務**：知識、疑問、資料、証言、体験、記憶、写真等、Discoveryに関連付けられ、Valueを成立・成長させ得る材料を原文性と出所を保って表す。Contributionの論理名は「知識・疑問」とする。
 
 **主要論理属性**：識別子、提供User、本文または説明、内容分類候補、公開状態、作成・更新時点、推定・不確実性に関する表示情報。時間に関わる情報として、投稿・公開時点とは別に、情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠を表現できる余地を持つ。
 
 **主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*、Subject・Place・TimeExpression 0..*、Media 0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
 
-**論理制約**：投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わるContributionは、Freshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の情報は公開後速やかに現在状態へ反映できるようにする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
+**論理制約**：ContributionをValueへ自動変換せず、登録時点でValueの成立を必須としない。投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わるContributionは、Freshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の情報は公開後速やかに現在状態へ反映できるようにする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
 
-**要検討**：一投稿の単位、返信・引用、編集・訂正履歴、Discovery成立前の保持、外部情報のContribution化、自由文とReactionの境界、対象期間とFreshnessの具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
+**要検討**：自然文ContributionからのValueの抽出・生成・更新方法、直接Value化できないContributionの扱い、一投稿の単位、返信・引用、編集・訂正履歴、Discovery成立前の保持、外部情報のContribution化、自由文とReactionの境界、対象期間とFreshnessの具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
 
 ### 4.4 Reaction
 
