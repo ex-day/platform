@@ -14,3 +14,8 @@
 | C11    | [Discovery Sections](ui/components/C11-discovery-sections.md)             | モバイル時タブ管理と、PC時のSection管理を行う      |
 | C12    | [Discovery Value](ui/components/C12-discovery-value.md)                   | Discoveryの魅力を表示する                          |
 | C13    | [Discovery Recommendation](ui/components/C13-discovery-recommendation.md) | Discoveryの魅力を表示する                          |
+| C14    | [知識・疑問内容](ui/components/C14-contribution-content.md)               | 投稿原文・添付資料・投稿情報を表示                 |
+| C15    | [Discovery関連情報](ui/components/C15-related-discovery.md)               | 確定した関連Discoveryを表示                        |
+| C16    | [知識・疑問の現在状態](ui/components/C16-contribution-status.md)          | 投稿者本人に現在の状態を表示                       |
+| C17    | [知識・疑問の成果](ui/components/C17-contribution-impact.md)              | 投稿者本人に確定した成果を表示                     |
+| C18    | [確認・補完導線](ui/components/C18-contribution-confirmation.md)          | 確認が必要な投稿者本人に表示                       |
