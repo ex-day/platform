@@ -121,7 +121,7 @@ classDiagram
 
 **種別**：永続Entity（確定）
 
-**責務**：ユーザーが独立して発見・参加できる意味のある話題・事象を表す。問いかけ中や情報不足でも成立でき、Contributionにより成長し、別Discoveryへ派生・関連し得る。
+**責務**：一つ以上のContributionを起点として成立し、ユーザーが独立して発見・参加できる意味のある話題・事象を表す。問いかけ中や情報不足でも成立でき、Contributionにより成長し、別Discoveryへ派生・関連し得る。
 
 **主要論理属性**：識別子、ユーザー向け表題、現在の要約、知識状態（問いかけ中・調査中・情報不足・複数説等を表現可能）、公開・推薦上の状態、成立時点、作成・更新時点。表示上の「開催予定／開催中らしい／今シーズンの情報あり」等の現在状態は導出情報であり、固定的な事実属性とは区別する。
 
@@ -129,13 +129,15 @@ classDiagram
 
 **論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、積極推薦を分ける。Time／Seasonは原則としてDiscovery全体の一律の推薦条件ではなく、各Valueの成立・推薦条件である。Discoveryの現在状態は、直近のContributionとReaction、対象期間、該当ValueのSeason等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
 
-**要検討**：状態一覧と遷移、要約履歴、作成・編集権限、統合・分割後の扱い、Contributionがない場合の表現、現在状態の導出・保存・再計算方法、表示文言と更新頻度、現在性が不足する場合の表現。
+**状態の利用**：既存の知識状態、公開・推薦上の状態、現在性の導出情報を、表示とValueのCondition評価から参照できるようにする。Discovery Statusはこれらの総称であり、単一の列挙型や新たな独立Entityを確定しない。
+
+**要検討**：状態一覧と遷移、要約履歴、作成・編集権限、統合・分割後の扱い、形成の起点となったContributionが非公開・削除・関連取消となった場合の扱い、現在状態の導出・保存・再計算方法、表示文言と更新頻度、現在性が不足する場合の表現。
 
 #### 4.2.1 Value
 
 **種別**：Discoveryに属する論理Entity（概念と多重度は確定、永続形は要検討）。本書の「Value Object」とは異なり、Discoveryごとの発見価値・魅力を指す。
 
-**責務**：同じDiscoveryにおいて再利用可能な個々の魅力・体験価値として成立した情報を表し、その価値に固有のConditionを持てるようにする。関連するContributionを根拠として成立・更新され得る。
+**責務**：同じDiscoveryにおいて再利用可能な個々の魅力・体験価値として成立した情報を表し、その価値に固有のConditionを持てるようにする。関連するContributionを根拠として成立・更新され得る。疑問起点でも場所・Subject・内容等から、気付きや一緒に考える価値を定義し、未確定の答えを事実として扱わない。各ValueのSubjectは「何についての価値か」を意味付けする。
 
 **主要論理属性候補**：価値の説明、表示・推薦上の状態、作成・更新時点。
 
@@ -143,13 +145,13 @@ classDiagram
 
 **論理制約**：ValueはContributionそのものではなく、Contribution登録時に新しいValueが必ず成立するわけではない。異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
 
-**要検討**：Valueの識別・編集単位、Contributionとの根拠・関連関係の表現、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
+**要検討**：ValueとSubjectの対応の保持方法およびDiscovery Subjectとの導出・更新関係、Valueの識別・編集単位、Contributionとの根拠・関連関係の表現、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
 
 #### 4.2.2 Condition
 
 **種別**：Valueに属する論理的な条件（概念と多重度は確定、物理表現は要検討）。
 
-**責務**：Valueが成立・推薦されるTime／Season等の条件を表す。
+**責務**：Valueの成立条件を表す。場所・時間・季節・Subject・Discovery状態等が条件になり得る。既存の推薦適合度・順位への利用も維持するが、成立条件と推薦順位上の条件の詳細な区分は未確定とする。
 
 **主要論理属性候補**：条件の軸、条件の内容、適用期間、例外、説明。Time／Seasonの表現には必要に応じてTimeExpressionを利用する。
 
@@ -157,7 +159,19 @@ classDiagram
 
 **論理制約**：ある軸のConditionがないことは、そのValueがその軸に依存しないことを意味し、検索対象から除外しない。Discovery Subjectの「中世」のような話題の意味属性と、現在の訪問・推薦条件を混同しない。
 
+「通年」はValueの種別ではなく、時間的な成立条件が常時成立することを表す。他の条件の成立や今年・今日の実状まで保証しない。条件なし・不明・通年を意味上区別し、物理表現は確定しない。
+
 **要検討**：条件軸の範囲、同一軸に複数条件がある場合の解釈、条件間の組み合わせ、適用期間・例外・不明の表現。条件なしの物理表現はNULL、Conditionレコードを持たない方式、ANY／ALL等の明示値を候補とし、実装設計で確定する。
+
+#### 4.2.3 Recommendation
+
+**種別**：非永続の評価結果（一時モデル）。Domain 5.1節の既存定義を論理Entity設計にも明記する。
+
+**責務**：Valueの成立条件と現在のDiscovery Contextを、必要なDiscovery状態も参照して評価した結果を表す。現在成立するValueを対象とし、対象Valueとおすすめ理由を辿れるようにする。Value自体やDiscoveryの状態と同一視せず、永続Entityにしない。
+
+**論理制約**：成立条件の評価と適合度・順位付けを区別する。条件のない軸だけを理由に候補から除外しない。現在成立しないValueも保持する。情報不足による評価不能を成立・不成立と推測しない。Season一致だけで営業・在庫等を保証しない。
+
+**要検討**：結果の具体的な属性・多重度、Context未指定時の基準、評価不能の表現、再評価の契機、順位付け、公開・推薦上の制約との優先関係。ValueのCondition評価とDiscoveryの現在状態の導出が相互参照する場合の評価順序も未確定とする。
 
 ### 4.3 Contribution
 
@@ -275,6 +289,8 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **多重度**：Contribution 1 : ContributionDiscovery 0..*、Discovery 1 : ContributionDiscovery 0..*。結果としてContributionとDiscoveryは多対多。
 
+**成立時の論理制約**：新規Discoveryの成立には、一つ以上の起点Contributionが必要であり、形成材料を辿れるようにする。図の0..*は関連の取消等を含む汎用の多重度であり、起点Contributionなしの新規成立を許可するものではない。成立後の削除・非公開・関連取消時の保持方法は未確定とする。
+
 **要検討**：関係種別、同じContributionの複数Discovery利用時の表示、関係の取消、Discovery形成前候補との関連。
 
 ### 6.3 DiscoveryRelation
@@ -351,7 +367,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 **論理制約**：永続的なUserInterestと同一視しない。「今・ここ」と未指定の興味からも構成できる。
 
-**Value／Conditionの検索上の扱い**：SearchContextと各ValueのConditionを照らし合わせる。Contextと一致するConditionを持つValueは推薦順位を高める。ConditionがないValueはその軸に依存せず、検索・推薦候補から除外しない。明示的に指定された条件は、推薦の順位付けとは別に絞り込みとして扱う場合がある。その際も、Conditionがないことだけを理由にValueを除外しない。明示条件の具体的な意味と、他の条件による絞り込み範囲は後続設計で定める。
+**Value／Conditionの検索上の扱い**：SearchContextと各ValueのConditionを照らし合わせる。成立条件の評価と順位付けを区別し、現在成立するValueについてRecommendationを生成する。Contextとの一致は推薦順位にも利用できる。評価不能は不成立と同一視しない（4.2.3節）。ConditionがないValueはその軸に依存せず、検索・推薦候補から除外しない。明示的に指定された条件は、推薦の順位付けとは別に絞り込みとして扱う場合がある。その際も、Conditionがないことだけを理由にValueを除外しない。明示条件の具体的な意味と、他の条件による絞り込み範囲は後続設計で定める。
 
 条件なしをNULLで表す場合の概念例は `season = :season OR season IS NULL` である。これは検索上の意味を示す例であり、NULLの採用を確定しない。具体SQL、インデックス、候補抽出、スコアリング、性能担保は詳細設計事項とする。
 
@@ -428,7 +444,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 ### 10.1 小机城址：同一Discoveryの成長
 
-1. Discovery「小机城址」が成立し、PlaceのPoint「小机城址」とArea「小机周辺」、Subject「城址」「城郭」「中世」等に関連する。「中世」は歴史的な話題を示すSubject側の属性であり、現在の訪問・推薦条件ではない。
+1. 小机城址の存在を伝えるContributionを起点としてDiscovery「小机城址」が成立し、PlaceのPoint「小机城址」とArea「小机周辺」、Subject「城址」「城郭」「中世」等に関連する。「中世」は歴史的な話題を示すSubject側の属性であり、現在の訪問・推薦条件ではない。
 2. User Aの「現在は公園として歩ける」というContributionと、User Bの写真MediaがContributionDiscoveryを介して同じDiscoveryへ追加される。
 3. Contribution Subject「公園」「丘」「散歩」と歴史的Time／現在の観察が加わる。
 4. 既存の話題と意味的に両立し、独立Discoveryにする必要がないため、DiscoveryDecisionは既存への統合／成長と判断する。
@@ -441,7 +457,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 1. User Aが「この建物の入口が道路より低いのはなぜ？」という疑問Contributionと写真Mediaを投稿する。
 2. ContributionにはPlaceの建物Pointと周辺Area、Subject「建物」「入口」「道路」「高低差」が関連する。投稿時点では「道路嵩上げ」を事実として付与しない。
-3. DiscoveryDecisionが既存候補を比較し、同じ話題がなければ新規Discoveryを成立させる。Discoveryは問いかけ中／情報不足でよい。
+3. DiscoveryDecisionが既存候補を比較し、同じ話題がなければ新規Discoveryを成立させる。Discoveryは問いかけ中／情報不足でよい。場所・Subject・疑問内容から、例えば「身近な高低差に気付き、その理由を一緒に考える」というValueを持ち、原因の確定を待たない。
 4. 後続のContributionが古地図Sourceや写真Mediaを示し、Evidenceとして道路面変化の説明を支持または反証する。
 5. Discovery Subjectと要約は根拠に応じて成長するが、Subject確信度と原因の事実信頼度を分ける。
 
@@ -520,3 +536,9 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - Discoveryの現在状態を、Seasonと直近Contribution／Reactionから形成される導出情報として明記した。
 - Contribution／Source／Provider／official relation等の未決事項を確定せず、「要検討」として明示的に保持した。
 - Discoveryの複数ValueとValueごとの0件以上のConditionを追加し、Time／Seasonの適用先、条件なしの検索上の意味、物理表現の未確定事項を明記した。小机城址と船橋の梨のシナリオをこの関係に合わせて更新した。
+
+### S03 Heroレビュー反映（2026-09-19）
+
+- Contribution起点の成立制約と疑問起点のValueを追記し、既存のValue 1..*、Condition 0..*を維持した。
+- Discovery状態の表示・評価での利用、Conditionの軸の例、通年の意味、非永続Recommendationを補足した。
+- Statusの種類・遷移、Condition構造、状態導出と条件評価の順序、評価不能の扱いは未確定のまま残した。
