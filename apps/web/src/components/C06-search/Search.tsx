@@ -1,31 +1,16 @@
 // see docs/ui/components/C06-search.md
-//
-// S03モックではHeader表示のためのプレースホルダーとして配置する。
-// 検索・絞り込みの実際の挙動はC06の実装issueで検討する(このIssue #8のスコープ外)。
-// モバイルではワイヤーフレーム(docs/ui/wireframe/S03/Mobile-Main.png)に合わせ、
-// アイコン起点の簡易表現とする(C06検討事項: モバイルでは主要検索条件を1行程度に収める)。
-import { SearchIcon } from "lucide-react";
+// Issue #14では条件UIの比較に限定する。条件変更後の同画面更新/S02遷移は
+// Non-blockingな判断待ちのため、検索結果を変更する処理は持たせない。
+"use client";
+
+import { ChevronDownIcon, MapPinIcon } from "lucide-react";
 
 export function Search() {
-  return (
-    <>
-      <button
-        type="button"
-        disabled
-        aria-label="Discoveryを検索"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-muted-foreground disabled:cursor-not-allowed sm:hidden"
-      >
-        <SearchIcon className="h-4 w-4" aria-hidden />
-      </button>
-      <div className="hidden max-w-md items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-muted-foreground sm:flex">
-        <SearchIcon className="h-4 w-4 shrink-0" aria-hidden />
-        <input
-          type="text"
-          placeholder="Discoveryを検索"
-          disabled
-          className="w-full bg-transparent outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-        />
-      </div>
-    </>
-  );
+  return <div className="flex w-full items-center gap-1.5 text-xs md:max-w-4xl md:gap-2 md:text-sm">
+    <button type="button" className="flex h-9 shrink-0 items-center gap-1 rounded-md border px-2 hover:bg-accent md:px-3"><MapPinIcon className="h-3.5 w-3.5" aria-hidden /><span className="md:hidden">現在地</span><span className="hidden md:inline">検索対象位置</span></button>
+    <button type="button" className="h-9 shrink-0 rounded-md border px-2 hover:bg-accent md:px-3">範囲</button>
+    <button type="button" className="h-9 shrink-0 rounded-md border px-2 hover:bg-accent md:px-3">時間</button>
+    <label className="min-w-0 flex-1"><span className="sr-only">自然文で検索</span><input type="text" placeholder="自然文で検索" className="h-9 w-full rounded-md border bg-background px-2 outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring md:px-3" /></label>
+    <button type="button" aria-label="詳細条件" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border hover:bg-accent md:w-auto md:rounded-md md:px-3"><span className="hidden md:inline">詳細条件</span><ChevronDownIcon className="h-4 w-4 md:hidden" aria-hidden /></button>
+  </div>;
 }

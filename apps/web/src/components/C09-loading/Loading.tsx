@@ -1,0 +1,4 @@
+// see docs/ui/components/C09-loading.md
+export function Loading({ cardCount = 4 }: { cardCount?: number }) {
+  return <div role="status" aria-label="読み込み中" className="flex flex-col gap-4"><div className="flex items-center gap-2 text-sm text-muted-foreground"><span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" aria-hidden />読み込み中…</div><div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">{Array.from({ length: cardCount }, (_, index) => <div key={index} className="animate-pulse rounded-lg border p-3" aria-hidden><div className="h-28 rounded bg-muted" /><div className="mt-3 h-4 w-2/3 rounded bg-muted" /><div className="mt-2 h-3 w-full rounded bg-muted" /><div className="mt-2 h-3 w-1/2 rounded bg-muted" /></div>)}</div></div>;
+}
