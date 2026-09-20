@@ -6,7 +6,8 @@
 //
 // Recommendationが0件の場合のHero表示は別の検討事項であり、現在成立しない
 // Valueからの補完はしない方針(docs/ui/screens/S03-discovery-detail.md)。
-// モックでは0件時にHero自体を表示しない扱いとし、Non-blockingとして引き継ぐ。
+// docs/ui/wireframe/S03/PC-HeroVariants.pngのD(非表示)/E(最小表示)の2案のうち、
+// モックではD(Hero自体を表示しない)を採用し、Non-blockingとして引き継ぐ。
 "use client";
 
 import { useState } from "react";

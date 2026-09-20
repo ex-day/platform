@@ -1,4 +1,4 @@
-// see docs/ui/screens/S03-discovery-detail.md
+// see docs/ui/screens/S03-discovery-detail.md, docs/ui/wireframe/S03/*.png
 //
 // モック用の仮ルート。[id]はモック用の仮ID(例: sample-1, sample-2, sample-3。
 // 未知のidはsample-1相当の内容にフォールバックする)であり、本番のDiscovery
@@ -143,11 +143,11 @@ export default async function DiscoveryDetailPage({
         href={`/discovery/${id}/contributions`}
         className="text-sm font-medium text-primary underline underline-offset-2"
       >
-        知識・疑問一覧を見る
+        知識・疑問一覧を見る →
       </Link>
 
       <RelatedDiscoveryRail
-        heading="このDiscoveryのもとになった発見"
+        heading="この発見のもとになったDiscovery"
         items={discovery.derivedFrom}
         placeVariant={place}
         seeMoreHref={`/discovery/${id}/related/derived-from`}

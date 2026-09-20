@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { MenuIcon } from "lucide-react";
+import { UserIcon } from "lucide-react";
 import { useMockAuth } from "@/lib/mock-auth";
 
 export function UserMenu() {
@@ -28,9 +28,9 @@ export function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
+        className="flex h-9 w-9 items-center justify-center rounded-full border hover:bg-accent"
       >
-        <MenuIcon className="h-5 w-5" aria-hidden />
+        <UserIcon className="h-5 w-5" aria-hidden />
       </button>
       {open ? (
         <div

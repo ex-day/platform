@@ -2,6 +2,8 @@
 //
 // 場所表示(text／map案)は検討事項のため、Issue #8ではplaceVariantで
 // 両案をトグル実装し、比較できる状態にする。採用案の決定はIssue #8で人間が行う。
+// 表示項目の並び順はdocs/ui/wireframe/S03/PC-ComponentVariants.pngに合わせた
+// ([title] → [subject]/[value] → 場所)。
 import Link from "next/link";
 import { ImageIcon, MapPinIcon } from "lucide-react";
 import type { RelatedDiscoverySummary } from "@/lib/mock-data/discovery";
@@ -29,10 +31,9 @@ export function DiscoveryCard({
         {item.picture ?? "no image"}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
-        <span className="text-xs text-muted-foreground">{item.subject}</span>
         <h4 className="text-sm font-semibold">{item.title}</h4>
         <p className="line-clamp-2 text-xs text-muted-foreground">
-          {item.value}
+          {item.subject} / {item.value}
         </p>
         {placeVariant === "map" ? (
           <div className="mt-1 flex h-16 items-center justify-center gap-1 rounded bg-muted text-[11px] text-muted-foreground">

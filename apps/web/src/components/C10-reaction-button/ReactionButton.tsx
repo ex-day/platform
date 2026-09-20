@@ -3,26 +3,22 @@
 // リアクションの種類・表現方法、単一/複数の可否は検討事項のため、
 // Issue #8ではvariantで両案をトグル実装し、比較できる状態にする。
 // 採用案の決定はIssue #8で人間が行う。
+// 複数リアクション案の絵文字(👍/😮/♥)はdocs/ui/wireframe/S03/PC-ComponentVariants.png
+// の案2に合わせた。
 "use client";
 
 import { useState } from "react";
-import { HeartIcon, LightbulbIcon, SparklesIcon, type LucideIcon } from "lucide-react";
+import { HeartIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMockAuth } from "@/lib/mock-auth";
 
 type ReactionVariant = "single" | "multiple";
 
-type ReactionType = {
-  key: string;
-  label: string;
-  icon: LucideIcon;
-};
-
-const REACTION_TYPES: ReactionType[] = [
-  { key: "like", label: "行きたい", icon: HeartIcon },
-  { key: "insight", label: "なるほど", icon: LightbulbIcon },
-  { key: "curious", label: "気になる", icon: SparklesIcon },
-];
+const REACTION_TYPES = [
+  { key: "like", emoji: "👍" },
+  { key: "surprised", emoji: "😮" },
+  { key: "love", emoji: "♥" },
+] as const;
 
 function useReactionState(initialCount: number) {
   const [active, setActive] = useState(false);
@@ -40,13 +36,11 @@ function useReactionState(initialCount: number) {
 }
 
 function ReactionChip({
-  icon: Icon,
-  label,
+  emoji,
   isLoggedIn,
   onRequireLogin,
 }: {
-  icon: LucideIcon;
-  label: string;
+  emoji: string;
   isLoggedIn: boolean;
   onRequireLogin: () => void;
 }) {
@@ -64,9 +58,8 @@ function ReactionChip({
           : "border-input text-foreground hover:bg-accent",
       )}
     >
-      <Icon className="h-4 w-4" aria-hidden />
-      <span>{label}</span>
-      <span className="text-muted-foreground">{count}</span>
+      <span aria-hidden>{emoji}</span>
+      <span>{count}</span>
     </button>
   );
 }
@@ -87,8 +80,7 @@ export function ReactionButton({
         {REACTION_TYPES.map((type) => (
           <ReactionChip
             key={type.key}
-            icon={type.icon}
-            label={type.label}
+            emoji={type.emoji}
             isLoggedIn={!!user}
             onRequireLogin={openLogin}
           />
