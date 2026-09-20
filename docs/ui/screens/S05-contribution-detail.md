@@ -20,14 +20,14 @@
 | リアクション         | → [C10](../components/C10-reaction-button.md)           | component | -        | -  | -        | -          | PC/モバイル | 通常閲覧時に表示。リアクション可能な公開投稿を対象とする                 |
 | Discovery関連情報    | → [C15](../components/C15-related-discovery.md)         | component | -        | -  | -        | -          | PC/モバイル | 関連Discoveryが確定して存在する場合に表示。両閲覧コンテキスト共通        |
 | 知識・疑問の現在状態 | → [C16](../components/C16-contribution-status.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示                           |
-| 知識・疑問の成果     | → [C17](../components/C17-contribution-impact.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示。Discoveryごとに確定した成果を対応付けて表示 |
+| この投稿から見つかった価値 | → [C17](../components/C17-contribution-impact.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示。Contributionからex-dayが解釈・形成した価値を、Discoveryごとの確定した成果と対応付けて表示 |
 | 確認・補完導線       | → [C18](../components/C18-contribution-confirmation.md) | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、投稿者本人、かつ確認が必要な項目がある場合に表示     |
 | 共通フッター         | → [C02](../components/C02-footer.md)                    | component | -        | -  | -        | -          | PC/モバイル | 常に表示                                                                 |
 
 ## アクション
 - 初期表示時
   - 閲覧コンテキスト、投稿者本人か、Contributionの現在状態、確定した関連・成果を取得し、上記条件に従ってComponentを組み立てる。
-  - C17では、一つのContributionがImpactを与えたDiscoveryごとにC20を表示し、対象Discoveryと、そのDiscoveryへ提供したValueおよび利用結果を対応付ける。
+  - C17はContributionからex-dayが解釈・形成した価値をまとめるContribution全体のセクション／コンテナとし、ユーザー向け見出し「この投稿から見つかった価値」を表示する。一つのContributionがImpactを与えたDiscoveryごとにC20を0..n件表示し、各C20では対象Discoveryを識別情報／見出しとして、そのDiscoveryへ提供したValue、利用結果、Discoveryにつながった人数を対応付ける。「DiscoveryごとのImpact」「Discovery Impact」等の内部構造名はC20の固定見出しとして表示しない。
   - Valueが未成立・未特定、またはDiscovery全体への寄与である場合は、その状態を区別し、対象Valueなしを全Valueへの寄与と解釈して表示しない。
   - 未確定の場所・分類・Discovery候補を確定済みの事実として表示しない。AI解析候補の生ログや信頼度は表示しない。
 - 通常閲覧時
@@ -39,3 +39,4 @@
 ## 検討事項
 - 通常閲覧と自分の投稿の確認でパスを分け、同じS05のComponent構成を制御する案がある。具体的なURLと権限チェック方法は実装設計で決める。
 - 投稿後の場所・Discovery候補などをS04→S11以外の専用フローで確認する必要があるかは、実装設計で検討する。
+- C20の対象Discoveryの具体的な表示形式と、C15で同一Discoveryが重複表示される場合の見せ方は、次回のS05 Wireframeで検証する。対象DiscoveryからS03への遷移は維持し、現時点ではC15を統合・削除せず、対象DiscoveryをDiscovery Cardへ変更しない。

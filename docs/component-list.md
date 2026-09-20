@@ -17,7 +17,7 @@
 | C14    | [知識・疑問内容](ui/components/C14-contribution-content.md)                       | 投稿原文・添付資料・投稿情報を表示                                                     |
 | C15    | [Discovery関連情報](ui/components/C15-related-discovery.md)                       | 確定した関連Discoveryを表示                                                            |
 | C16    | [知識・疑問の現在状態](ui/components/C16-contribution-status.md)                  | 投稿者本人に現在の状態を表示                                                           |
-| C17    | [知識・疑問の成果](ui/components/C17-contribution-impact.md)                      | Contribution全体のImpactセクションとして、投稿者本人にDiscoveryごとのC20を表示          |
+| C17    | [この投稿から見つかった価値](ui/components/C17-contribution-impact.md)              | Contributionからex-dayが解釈・形成した価値をまとめるセクションとして、投稿者本人にDiscovery単位のC20を0..n件表示 |
 | C18    | [確認・補完導線](ui/components/C18-contribution-confirmation.md)                  | 確認が必要な投稿者本人に表示                                                           |
 | C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md)                  | 評価済みRecommendationから今伝えたい価値を直感的に提示 |
-| C20    | [Discovery Impact](ui/components/C20-discovery-impact.md)                         | 一つのContributionが一つのDiscoveryへ与えたImpactを、Value・利用結果・到達人数とともに表示 |
+| C20    | [Discovery Impact](ui/components/C20-discovery-impact.md)                         | 一つのContribution × 一つのDiscoveryのImpactを1単位とし、対象Discoveryを識別情報／見出しとしてValue・利用結果・到達人数とともに表示 |
