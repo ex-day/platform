@@ -46,12 +46,13 @@ export function DiscoverySections() {
             id={`${section.id}-tab`}
             type="button"
             role="tab"
+            data-state={selected ? "active" : "inactive"}
             aria-selected={selected}
             aria-controls="discovery-section-panel"
             tabIndex={selected ? 0 : -1}
             onClick={() => setActiveId(section.id)}
             onKeyDown={(event) => selectAdjacentTab(event, index)}
-            className={`shrink-0 border-b-2 px-1 pb-3 text-sm ${selected ? "border-foreground font-semibold" : "border-transparent text-muted-foreground"}`}
+            className={`shrink-0 rounded-t-md border-b-4 px-3 py-2 text-sm transition-colors ${selected ? "border-foreground bg-muted font-bold text-foreground" : "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
           >{section.title}</button>;
         })}
       </div>
