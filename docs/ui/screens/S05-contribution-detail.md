@@ -27,7 +27,7 @@
 ## アクション
 - 初期表示時
   - 閲覧コンテキスト、投稿者本人か、Contributionの現在状態、確定した関連・成果を取得し、上記条件に従ってComponentを組み立てる。
-  - C17では、一つのContributionがImpactを与えたDiscoveryごとにC20を表示し、対象Discoveryと、そのDiscoveryへ提供したValueおよび利用結果を対応付ける。
+  - C17はContribution全体のImpactをまとめるセクション／コンテナとし、一つのContributionがImpactを与えたDiscoveryごとにC20を0..n件表示する。各C20では対象Discoveryを識別情報／見出しとして、そのDiscoveryへ提供したValueおよび利用結果と対応付け、「DiscoveryごとのImpact」「Discovery Impact」等の固定見出しは表示しない。
   - Valueが未成立・未特定、またはDiscovery全体への寄与である場合は、その状態を区別し、対象Valueなしを全Valueへの寄与と解釈して表示しない。
   - 未確定の場所・分類・Discovery候補を確定済みの事実として表示しない。AI解析候補の生ログや信頼度は表示しない。
 - 通常閲覧時
@@ -39,3 +39,4 @@
 ## 検討事項
 - 通常閲覧と自分の投稿の確認でパスを分け、同じS05のComponent構成を制御する案がある。具体的なURLと権限チェック方法は実装設計で決める。
 - 投稿後の場所・Discovery候補などをS04→S11以外の専用フローで確認する必要があるかは、実装設計で検討する。
+- C20の対象Discoveryの具体的な表示形式と、C15で同一Discoveryが重複表示される場合の見せ方は、次回のS05 Wireframeで検証する。対象DiscoveryからS03への遷移は維持し、現時点ではC15を統合・削除せず、対象DiscoveryをDiscovery Cardへ変更しない。
