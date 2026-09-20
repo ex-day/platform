@@ -100,6 +100,14 @@ export function UserMenu() {
               >
                 新規ユーザー登録
               </Link>
+              <div className="my-1 h-px bg-border" />
+              <Link
+                href="/contributions/new"
+                role="menuitem"
+                className="block rounded px-3 py-2 hover:bg-accent"
+              >
+                新規知識登録
+              </Link>
             </>
           )}
           <div className="my-1 h-px bg-border" />
