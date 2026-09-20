@@ -135,12 +135,8 @@ export default async function DiscoveryDetailPage({
         </div>
       ) : null}
 
-      {/*
-        S06 知識・疑問一覧のURLは screen-list.md に未記載のため、
-        Discovery配下の仮パスとして扱う(Non-blocking)。
-      */}
       <Link
-        href={`/discovery/${id}/contributions`}
+        href="/contributions"
         className="text-sm font-medium text-primary underline underline-offset-2"
       >
         知識・疑問一覧を見る →
@@ -150,19 +146,19 @@ export default async function DiscoveryDetailPage({
         heading="この発見のもとになったDiscovery"
         items={discovery.derivedFrom}
         placeVariant={place}
-        seeMoreHref={`/discovery/${id}/related/derived-from`}
+        seeMoreHref={`/discoveries/${id}/related/derived-from`}
       />
       <RelatedDiscoveryRail
         heading="この発見から広がったDiscovery"
         items={discovery.derivedTo}
         placeVariant={place}
-        seeMoreHref={`/discovery/${id}/related/derived-to`}
+        seeMoreHref={`/discoveries/${id}/related/derived-to`}
       />
       <RelatedDiscoveryRail
         heading="関連するDiscovery"
         items={discovery.related}
         placeVariant={place}
-        seeMoreHref={`/discovery/${id}/related/related`}
+        seeMoreHref={`/discoveries/${id}/related/related`}
       />
     </div>
   );

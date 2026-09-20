@@ -20,7 +20,7 @@ export function DiscoveryCard({
 }) {
   return (
     <Link
-      href={`/discovery/${item.id}`}
+      href={`/discoveries/${item.id}`}
       className={cn(
         "flex flex-col overflow-hidden rounded-lg border transition-colors hover:border-primary",
         className,

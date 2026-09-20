@@ -2,6 +2,10 @@
 ## 画面概要
 指定されたDiscoveryを、評価済みRecommendationに基づき「今ユーザーに最も伝えたい価値」を直感的に提示するHeroを中心に表示する。Heroは画像・映像がなくてもテキスト中心で成立する。Recommendationが0件の場合のHeroの扱いは未確定とする。
 
+## 画面パス
+- `/discoveries/[id]`
+- `[id]`はモックでは仮ID（例: `sample-1`）を使用する。本番のDiscovery識別子の形式は別途決定する。
+
 ## 対象端末
 - PC
 - モバイル

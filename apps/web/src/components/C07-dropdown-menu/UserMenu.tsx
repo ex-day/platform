@@ -43,14 +43,14 @@ export function UserMenu() {
                 {user.name}さん
               </div>
               <Link
-                href="/users/me/contributions"
+                href="/account/contributions"
                 role="menuitem"
                 className="block rounded px-3 py-2 hover:bg-accent"
               >
                 自分の投稿一覧
               </Link>
               <Link
-                href="/users/me/edit"
+                href="/account"
                 role="menuitem"
                 className="block rounded px-3 py-2 hover:bg-accent"
               >
