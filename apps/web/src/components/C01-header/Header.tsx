@@ -6,11 +6,11 @@ import { UserMenu } from "@/components/C07-dropdown-menu/UserMenu";
 export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2 sm:h-16 sm:flex-nowrap sm:gap-4 sm:py-0">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2 md:h-16 md:flex-nowrap md:gap-4 md:py-0">
         <Link href="/" className="shrink-0 text-lg font-bold tracking-tight">
           ex-day
         </Link>
-        <div className="order-3 w-full min-w-0 sm:order-none sm:flex-1">
+        <div className="order-3 w-full min-w-0 md:order-none md:flex-1">
           <Search />
         </div>
         <div className="ml-auto shrink-0"><UserMenu /></div>
