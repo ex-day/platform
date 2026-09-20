@@ -18,7 +18,7 @@
 
 ## 表示単位・制約
 - 一つのC20は一つのContributionと一つのDiscoveryの組み合わせを表す。同じContributionが複数DiscoveryへImpactを与えた場合は、C17配下にDiscoveryごとのC20を表示する。
-- 「DiscoveryごとのImpact」「Discovery Impact」等の固定見出しは表示せず、対象Discoveryを各表示単位の識別情報／見出しとして扱う。
+- C17のユーザー向け見出しは「この投稿から見つかった価値」とする。各C20には「DiscoveryごとのImpact」「Discovery Impact」等の内部構造名を固定見出しとして表示せず、対象Discoveryを各表示単位の識別情報／見出しとして扱う。
 - ContributionDiscoveryに対象Valueがある場合、そのValueは対象Discoveryに属するものだけを表示する。同じDiscoveryの複数Valueへ利用された場合は、提供したValueを0..n件表示し、それぞれの利用結果との対応を保つ。
 - 対象Valueなしは、Value未成立・未特定またはDiscovery全体への寄与を含み得る。全Valueへの寄与と解釈せず、確定した状態の範囲だけを表示する。
 - Discoveryにつながった人数を、Contribution全体や別Discoveryの人数と合算した単独指標として表示しない。
