@@ -13,7 +13,7 @@ Discoveryの推薦された魅力を要約して表示する。
 | 価値     | discovery_value   | text  | -        | -  | API      | value      | PC/モバイル |                                                                                                    |
 | 写真     | discovery_picture | image | -        | -  | API      | picture    | PC/モバイル |                                                                                                    |
 | タイトル | discovery_title   | text  | -        | -  | API      | title      | PC/モバイル |                                                                                                    |
-| 場所     | discovery_place   | map   | -        | -  | API      | place      | PC/モバイル |                                                                                                    |
+| 場所     | discovery_place   | text  | -        | -  | API      | place      | PC/モバイル | 地図を埋め込まずテキストで表示                                                                     |
 
 ## アクション
 - 初期表示
@@ -25,4 +25,4 @@ Discoveryの推薦された魅力を要約して表示する。
 - 写真に複数の写真が登録されていた場合、どれを表示するか今後検討
 - PC・モバイルでの可視領域の差から要約の表示、文字数はデザイン時点で検討する
 - データ取得元は実装設計で確定する
-- [S03 Discovery詳細](../screens/S03-discovery-detail.md)のモバイルの関係Discovery 3枠では、横スクロールを基本候補とする。そこでのカード幅・次カードの見せ方は、Next.jsモックおよびS02との整合確認後に決定する。件数に応じた表示と末尾の一覧導線の方針はS03を参照する。この方針をPCや他画面のカード表示へ一律に適用しない。
+- [S03 Discovery詳細](../screens/S03-discovery-detail.md)のモバイルの関係Discovery 3枠では、横スクロールを採用する。そこでのカード幅・次カードの見せ方は、Next.jsモックおよびS02との整合確認後に決定する。件数に応じた表示と末尾の一覧導線の方針はS03を参照する。この方針をPCや他画面のカード表示へ一律に適用しない。
