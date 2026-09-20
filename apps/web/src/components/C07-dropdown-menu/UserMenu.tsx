@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { UserIcon } from "lucide-react";
+import { MenuIcon, UserIcon } from "lucide-react";
 import { useMockAuth } from "@/lib/mock-auth";
 
 export function UserMenu() {
@@ -31,7 +31,11 @@ export function UserMenu() {
         aria-expanded={open}
         className="flex h-9 w-9 items-center justify-center rounded-full border hover:bg-accent"
       >
-        <UserIcon className="h-5 w-5" aria-hidden />
+        {user ? (
+          <UserIcon className="h-5 w-5" aria-hidden />
+        ) : (
+          <MenuIcon className="h-5 w-5" aria-hidden />
+        )}
       </button>
       {open ? (
         <div
