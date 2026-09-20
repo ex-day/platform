@@ -1,7 +1,7 @@
 # ex-day ドメイン論理設計書 v0.5
 
-- 作成日：2026-09-13（v0.5改訂：2026-09-15）
-- 状態：v0.5追補版。成立・成長・派生の原則を維持し、UserInterest、Theme／Subject、Place／Time、判断・出所・根拠・通報の補助概念を論理Entity設計と整合させた。仮定義・要検討事項を併記する。
+- 作成日：2026-09-13（v0.5改訂：2026-09-15、最終追補：2026-09-20）
+- 状態：v0.5追補版。成立・成長・派生の原則を維持し、UserInterest、Theme／Subject、Place／Time、判断・出所・根拠・通報、およびContributionから複数DiscoveryへのValue提供関係を論理Entity設計と整合させた。仮定義・要検討事項を併記する。
 - 用途：複数AIおよび設計者が、同じ概念・責務・境界を前提に後続設計を行うための共通インプット
 ## 1. 根拠と本書の位置付け
 
@@ -91,7 +91,7 @@ UserInterestが結び付け得る対象はTheme・Subject・Place・Time等で�
 
 **Subjectとの関係：確定（意味上の役割）**。各ValueはSubjectによって「何についての価値か」を意味付けされる。例えば同じDiscovery「小机城址」に、「中世の城郭跡を見る」と「公園を歩く」という異なるValueを置ける。SubjectはValueに結び付けて読む。一方、既存のDiscovery Subjectは「そのDiscovery全体が現在何についての話題か」を示し、Contribution Subjectは投稿の意味を示す（5.3A〜5.5節）。これらを同じSubject概念の異なる役割として扱い、Discovery Subjectを各ValueのSubjectと同一視しない。ValueとSubjectの対応を論理Entity上でどう保持し、Discovery Subjectとの関係をどう導出・更新するかは**要検討**とし、既存のDiscovery／ContributionとSubjectの関連をこの節だけで置き換えない。
 
-**Contributionとの関係：確定（今回の設計方針）**。Contributionは疑問・知識・体験・観測等の情報であり、それ自体をValueとはしない。Contributionの蓄積、既存情報、根拠等からValueが形成・更新・補強され得るが、単一Contributionの登録だけで新しいValueを必ず成立させない。例えば「夕焼けが綺麗だった」という一件はまず観測・体験である。複数のContributionや根拠を踏まえて「夕焼けを楽しめる」というValueが成立・補強され、夕方というConditionが付く可能性がある。形成・更新の判断方法、根拠の対応関係、信頼性の評価方法は**要検討**とする。Valueの成立と、Discoveryの成立・事実確定・積極推薦も区別する。
+**Contributionとの関係：確定（今回の設計方針）**。Contributionは疑問・知識・体験・観測等の情報であり、それ自体をValueとはしない。Contributionの蓄積、既存情報、根拠等からValueが形成・更新・補強され得るが、単一Contributionの登録だけで新しいValueを必ず成立させない。一つのContributionは複数のDiscoveryに関連し、それぞれのDiscoveryで異なるValueの形成・向上に利用され得る。このとき「どのContributionが、どのDiscoveryに、どのValueを提供したか」を対応付けて辿れるようにする。Valueが未成立・未特定の形成材料やDiscovery全体への寄与も許容し、対象Valueがないことを、そのDiscoveryのすべてのValueへの寄与とは解釈しない。例えば「夕焼けが綺麗だった」という一件はまず観測・体験である。複数のContributionや根拠を踏まえて「夕焼けを楽しめる」というValueが成立・補強され、夕方というConditionが付く可能性がある。形成・更新の判断方法、信頼性の評価方法は**要検討**とする。Valueの成立と、Discoveryの成立・事実確定・積極推薦も区別する。
 
 #### 3.2.2 Condition
 
@@ -107,7 +107,7 @@ UserInterestが結び付け得る対象はTheme・Subject・Place・Time等で�
 
 疑問もContributionに含む。質問への回答だけでなく、情報追加、資料追加、一緒に調べることにつながる情報の提供を扱う。会話では複数のContributionが互いの内容を受けて展開する。
 
-**Valueとの関係：確定（今回の設計方針）**。Contributionは疑問・体験・観測・知識等としてDiscoveryに関連付けられ、Valueを成立・成長させる材料となり得る。登録時点でValueが成立する必要はない。Discoveryの状態と既存・追加Contributionとの関係を評価した結果、疑問・観測としての蓄積、既存Valueの根拠、信頼性向上、修正、新しいValueの成立等につながり得る。自然文ContributionからValueへの自動変換は前提としない。
+**Valueとの関係：確定（今回の設計方針）**。Contributionは疑問・体験・観測・知識等としてDiscoveryに関連付けられ、Valueを成立・成長させる材料となり得る。一つのContributionは複数のDiscoveryに関連し、それぞれのDiscoveryで異なるValueの形成・向上に利用され得る。このとき「どのContributionが、どのDiscoveryに、どのValueを提供したか」を対応付けて辿れるようにする。登録時点でValueが成立する必要はなく、Valueが未成立・未特定の形成材料やDiscovery全体への寄与も許容する。対象Valueがないことを、そのDiscoveryのすべてのValueへの寄与とは解釈しない。Discoveryの状態と既存・追加Contributionとの関係を評価した結果、疑問・観測としての蓄積、既存Valueの根拠、信頼性向上、修正、新しいValueの成立等につながり得る。自然文ContributionからValueへの自動変換は前提としない。
 
 **仮定義**：知識・疑問・写真・資料・証言・体験はContributionの内容を説明する分類例であり、確定した排他的な種別や継承クラスではない。一つの投稿に写真と疑問が含まれる場合の単位は検討中である。
 
@@ -115,7 +115,7 @@ UserInterestが結び付け得る対象はTheme・Subject・Place・Time等で�
 
 **確定（今回の設計方針）**：品質評価そのものを主目的とした投稿（星評価、ランキング、店舗比較、優劣判定、口コミサイト的な評価機能）はContributionの対象としない。ただし、「美味しい／まずい」等の主観的な感想が内容に含まれること自体は妨げない。体験、記憶、資料、証言、疑問、関心等を対象とし、例えば「昔食べた青柳は美味しかった」のように、体験・証言・記憶の一部として主観的な感想が含まれる内容はContributionとして許容する。単純な同意・共感の表現とContributionの境界については3.4節を参照。[U]
 
-**検討中**：自然文ContributionからValueを抽出・生成・更新する方法、直接Value化できないContributionの扱い、返信関係の表現、Discovery未形成時のContributionの置き場所、一つのContributionを複数Discoveryに関連付ける方法、編集・訂正・出典の管理。外部情報をすべてUser投稿のContributionへ変換するかも未確定である。[R: 第18〜21節]
+**検討中**：自然文ContributionからValueを抽出・生成・更新する方法、直接Value化できないContributionの扱い、返信関係の表現、Discovery未形成時のContributionの置き場所、Value成立前の関係を成立後にどう対応付けるか、関係の取消・履歴、編集・訂正・出典の管理。外部情報をすべてUser投稿のContributionへ変換するかも未確定である。[R: 第18〜21節]
 
 ### 3.4 Reaction
 
@@ -374,7 +374,7 @@ flowchart TD
 論理Entity設計では、Discoveryの成立・統合・関連・保留に関する人の判断を **DiscoveryDecision** として記録する。これは新たな中核ドメインではなく、4.4節のMVP運用を追跡可能にする補助Entityである。
 
 - **DiscoveryDecision（確定）**：ContributionまたはDiscovery候補について、既存へ統合、新規成立、関連する新規、保留等の判断と理由を残す。判断者、判断時点、対象候補、比較した既存Discovery、結果、理由を論理属性として持ち得る。
-- **ContributionDiscovery（確定）**：ContributionとDiscoveryの多対多の関係を表し、「形成材料」「成長への寄与」「根拠・反証」「関連資料」等、どのように寄与したかを辿れるようにする。関係種別の確定一覧は要検討とする。
+- **ContributionDiscovery（確定）**：ContributionとDiscoveryの多対多の関係を表し、「形成材料」「成長への寄与」「根拠・反証」「関連資料」等、どのように寄与したかを辿れるようにする。対象Valueを任意で持ち、一つのContributionが複数DiscoveryでそれぞれどのValueの形成・向上に利用されたかを対応付ける。対象Valueを持つ場合、そのValueは同じ関係が指すDiscoveryに属する。同じDiscoveryの複数Valueへ利用される場合はValueごとの関係として表現する。Value未成立・未特定またはDiscovery全体への寄与では対象Valueを持たなくてよい。関係種別の確定一覧、複数指定、取消・履歴は要検討とする。
 - **DiscoveryRelation（確定）**：派生元／派生先等、Discovery間に明示的に保持すべき関係を表す。Subjectを介して都度導出できる意味的関連を、すべて保存するためのEntityではない。関係種別、方向・対称性、複数起点、付与・取消権限は要検討とする。
 - **ContributionOrigin（仮定義）**：Contributionがどこから生じたかを表す。Userによる直接提供、別Contributionへの応答、外部Sourceの参照、Discoveryからの派生検討等を説明できる。ただし、ContributionOriginをContribution自身への自己参照関係として独立保持する範囲、ContributionDiscoveryやSourceとの重複の整理は要検討とする。
 
@@ -618,6 +618,7 @@ flowchart TD
 22. DiscoveryDecision、ContributionDiscovery、DiscoveryRelationにより人の判断・形成材料・明示的関係を追跡可能にする。ContributionOriginおよび関係種別の詳細は要検討とする。[U]
 23. Media、Source、Evidence、ContentReportを、資産・由来・根拠関係・通報という別責務として整理する。最終構造は要検討とする。[U]
 24. ValueはDiscoveryに蓄積される個々の価値で、Subjectがその意味を示し、Conditionが成立・推薦条件を表す。ContributionはValueの材料であり、RecommendationはValueと一回のContextから都度生成する結果として保存対象にしない。Value／Subjectの関連の保持方法とConditionの詳細表現は要検討とする。[U]
+25. 一つのContributionは複数Discoveryに対し、それぞれ異なるValueの形成・向上に利用され得る。ContributionDiscoveryによりContribution・Discovery・Valueの対応を追跡し、Value未成立・未特定の関係も保持する。[U]
 
 ## 9. 優先して検討する事項
 
@@ -628,6 +629,8 @@ flowchart TD
 ### 9.2 Contributionと会話の構造
 
 Discoveryがまだない疑問や資料をどこから受け入れるか。一つのContributionの単位をどう区切るか。返信・引用・根拠の関係をどう扱うか。形成前後の材料とDiscoveryのつながりをどう保つか。
+
+Contribution・Discovery・Valueの対応はContributionDiscoveryで保持する。後続では、Value成立前の関係を成立後に対応付ける運用、同一Contributionが同一Discoveryの複数Valueへ利用される場合の関係種別、取消・履歴を定める。S05／C17ではDiscoveryごとのValue利用を確認可能にするが、Value Card等の具体的なUI表現は画面・コンポーネント設計で決定する。
 
 Valueの信頼性は関連Contribution等の根拠を踏まえて検討し得るが、尺度・属性・算出方式は確定しない。投稿数、写真、公式情報、複数Userの一致、鮮度、反証等をどう評価するかは今後の実装設計で扱う。
 
@@ -664,6 +667,7 @@ Actionは現地訪問・食事に加えて調査や疑問投稿等も含むサ�
 - 同じ建物について表現の異なる疑問は統合候補に、地域全体の道路面の変化は関連候補になり得ること。
 - Subjectの推定・意味形成と事実の裏付けを区別し、Themeとの境界や具体的な判定閾値を確定済みにしないこと。
 - 疑問や体験証言をContributionとして扱い、Reactionとの違いを説明できること。
+- 一つのContributionが複数Discoveryに利用された場合、Discoveryごとに異なるValueの形成・向上への利用を対応付けて辿れること。Value未成立・未特定の関係を、全Valueへの寄与と誤認しないこと。
 - 検索する人の場所・時間と、資料や話題が示す場所・時代を混同しないこと。
 - 未確認の伝聞や「今食べられるか」という疑問を、史実や提供中の体験へ自動的に読み替えないこと。
 - 図の関連線から、未決定の所有関係、多重度、削除連鎖、返信構造、AIによる自動形成を推測して確定しないこと。
@@ -671,6 +675,13 @@ Actionは現地訪問・食事に加えて調査や疑問投稿等も含むサ�
   設計上の判断が必要になった場合は、対象となる検討事項と根拠を併記して提案し、本書の確定事項との差分を追えるようにする。
 
 ## 11. 改訂履歴
+
+### Contributionから複数DiscoveryへのValue提供関係（2026-09-20）
+
+- 一つのContributionが複数Discoveryに対し、それぞれ異なるValueの形成・向上に利用され得ることを明記した。
+- 新規Entityを追加せず、既存のContributionDiscoveryに任意の対象Valueを持たせてContribution・Discovery・Valueの対応を表現した。
+- Value未成立・未特定またはDiscovery全体への寄与を保持し、対象Valueなしを全Valueへの寄与と解釈しない制約を追加した。
+- S05／C17へ、DiscoveryごとのValue利用を確認可能にする要件を引き継いだ。具体的なUI形式は確定していない。
 
 ### Value概念の明文化（2026-09-19）
 

@@ -1,7 +1,8 @@
 # ex-day 論理エンティティ設計書 v0.1
 
 - 作成日：2026-09-15
-- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition追補反映）
+- 最終追補日：2026-09-20
+- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition、Contributionから複数DiscoveryへのValue提供関係の追補反映）
 - 対象：論理属性、責務、関係、多重度、代表シナリオによる整合性確認
 - 対象外：物理DB、UUID、FK、index、PostGIS、pgvector、API、画面、具体的な推定アルゴリズム
 
@@ -74,7 +75,7 @@ classDiagram
     Contribution "0..*" --> "0..*" Place : 関わる
     Discovery "1" --> "1..*" Value : 持つ
     Value "1" --> "0..*" Condition : 成立・推薦条件
-    Value ..> Contribution : 根拠・関連になり得る
+    ContributionDiscovery "0..*" --> "0..1" Value : 対象Value
     Condition "0..*" --> "0..1" TimeExpression : 時間・季節等を表す
     Discovery "0..*" --> "0..*" TimeExpression : 話題の歴史的時間等
     Contribution "0..*" --> "0..*" TimeExpression : 関わる
@@ -141,11 +142,11 @@ classDiagram
 
 **主要論理属性候補**：価値の説明、表示・推薦上の状態、作成・更新時点。
 
-**主な関係**：一つのDiscoveryにValue 1..*。各ValueはCondition 0..*を持つ。関連Contributionと根拠・関連の関係を持ち得るが、対応の保持方法は未確定とする。
+**主な関係**：一つのDiscoveryにValue 1..*。各ValueはCondition 0..*を持つ。関連ContributionとはContributionDiscoveryを介して関係し、一つのValueに複数Contribution、一つのContributionに複数DiscoveryのValueが関係し得る。
 
 **論理制約**：ValueはContributionそのものではなく、Contribution登録時に新しいValueが必ず成立するわけではない。異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
 
-**要検討**：ValueとSubjectの対応の保持方法およびDiscovery Subjectとの導出・更新関係、Valueの識別・編集単位、Contributionとの根拠・関連関係の表現、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
+**要検討**：ValueとSubjectの対応の保持方法およびDiscovery Subjectとの導出・更新関係、Valueの識別・編集単位、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
 
 #### 4.2.2 Condition
 
@@ -181,7 +182,7 @@ classDiagram
 
 **主要論理属性**：識別子、提供User、本文または説明、内容分類候補、公開状態、作成・更新時点、推定・不確実性に関する表示情報。時間に関わる情報として、投稿・公開時点とは別に、情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠を表現できる余地を持つ。
 
-**主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*、Subject・Place・TimeExpression 0..*、Media 0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
+**主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*および各DiscoveryのValue 0..*、Subject・Place・TimeExpression 0..*、Media 0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
 
 **論理制約**：ContributionをValueへ自動変換せず、登録時点でValueの成立を必須としない。投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わるContributionは、Freshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の情報は公開後速やかに現在状態へ反映できるようにする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
 
@@ -283,15 +284,17 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **種別**：永続関連Entity（確定）
 
-**責務**：一つのContributionが一つ以上のDiscoveryへ、どのように形成・成長・説明・反証等で寄与したかを表す。
+**責務**：一つのContributionが一つ以上のDiscoveryへ、どのように形成・成長・説明・反証等で寄与したかを表す。Valueが成立している場合は、どのDiscoveryのどのValueの形成・向上に利用されたかを対応付ける。
 
-**主要論理属性**：Contribution、Discovery、関係種別、関係の説明、付与主体、作成・更新時点。
+**主要論理属性**：Contribution、Discovery、対象Value（任意）、関係種別、関係の説明、付与主体、作成・更新時点。
 
-**多重度**：Contribution 1 : ContributionDiscovery 0..*、Discovery 1 : ContributionDiscovery 0..*。結果としてContributionとDiscoveryは多対多。
+**多重度**：Contribution 1 : ContributionDiscovery 0..*、Discovery 1 : ContributionDiscovery 0..*、Value 1 : ContributionDiscovery 0..*。一つのContributionDiscoveryが参照するValueは0..1。結果としてContributionとDiscoveryは多対多であり、一つのContributionは、複数Discoveryに属するそれぞれ異なるValueへ利用され得る。同じDiscovery内の複数Valueへ利用される場合も、ValueごとのContributionDiscoveryとして表現する。
+
+**論理制約**：対象Valueを持つ場合、そのValueは同じContributionDiscoveryが参照するDiscoveryに属さなければならない。Valueが未成立の形成材料、Discovery全体への寄与、または対象Valueをまだ特定できない関係では、対象Valueを持たなくてよい。対象Valueなしを「そのDiscoveryの全Valueへの寄与」と解釈しない。同じContribution・Discovery・Valueへの関係を重複登録しない。ただし関係種別を複数持たせる表現方法は後続設計で定める。
 
 **成立時の論理制約**：新規Discoveryの成立には、一つ以上の起点Contributionが必要であり、形成材料を辿れるようにする。図の0..*は関連の取消等を含む汎用の多重度であり、起点Contributionなしの新規成立を許可するものではない。成立後の削除・非公開・関連取消時の保持方法は未確定とする。
 
-**要検討**：関係種別、同じContributionの複数Discovery利用時の表示、関係の取消、Discovery形成前候補との関連。
+**要検討**：関係種別の一覧と複数指定方法、同じContributionの複数Discovery／複数Value利用時の表示、Value成立前の関係を成立後にどう対応付けるか、関係の取消・履歴、Discovery形成前候補との関連。
 
 ### 6.3 DiscoveryRelation
 
@@ -429,7 +432,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 - Userは0件以上のUserInterestを持つ。興味未指定でも探索できる。
 - UserInterestは一つの興味対象を指す。対象はTheme・Subject・Place・TimeExpression等のいずれかであり、実装方式は要検討。
-- DiscoveryとContributionはContributionDiscoveryを介する多対多。一つのContributionが複数Discoveryの材料になり得る。
+- DiscoveryとContributionはContributionDiscoveryを介する多対多。一つのContributionが複数Discoveryの材料になり、各Discoveryで異なるValueの形成・向上に利用され得る。対象Valueは任意であり、指定する場合はそのDiscoveryに属するValueでなければならない。
 - DiscoveryとSubject、ContributionとSubjectは多対多。関連固有の確信度・付与元を持ち得る。
 - DiscoveryはValueを1件以上持ち、各ValueはTime／Season等のConditionを0件以上持てる。Conditionがない軸には依存しない。
 - DiscoveryとPlace／TimeExpression、ContributionとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。ただし、Discoveryの話題を説明する歴史的時間と、Valueの成立・推薦条件としてのTime／Seasonを区別する。
@@ -469,6 +472,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 2. 「青柳を干して食べた」「子供のおやつだった」「料理屋で扱った」等のContribution Subjectが食文化のSubject Clusterを形成する。Clusterは導出・判断用で、永続Entityとは確定しない。
 3. 人が既存Discoveryを比較し、「生麦の食文化」が独立して発見・参加できる話題だとDiscoveryDecisionで判断する。
 4. Discovery B「生麦の食文化」が成立し、ContributionDiscoveryにより形成材料をAとBの双方から辿れる。DiscoveryRelationによりAからBへの明示的な派生を表す。
+   同じContributionがAでは「地域の暮らしを知る」Valueの向上に、Bでは「青柳の食文化を知る」Valueの形成に利用された場合、それぞれのDiscovery・Valueを指す別のContributionDiscoveryとして保持する。
 5. BはSubject「青柳」「干して食べる」「郷土食」「子供のおやつ」等を持つが、各Subjectを別Discoveryに分割しない。
 6. Subject「青柳を干して食べる」を介して別地域の近似Discoveryを探索できる。これは派生関係でなければDiscoveryRelationとして保存する必要はない。
 
@@ -522,13 +526,18 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 - 物理設計では、論理上の多態的対象を安易な汎用IDへ確定せず、整合性・参照制約を比較する。
 - ベクトル類似度や地理空間検索は実現手段であり、Subject、Place、DiscoveryDecisionを置き換えない。
-- Subjectの推定理由、UserInterestの由来、Discovery形成材料、出所、判断理由をユーザーまたは運営が辿れる状態を維持する。
+- Subjectの推定理由、UserInterestの由来、Discovery形成材料、Contributionが利用されたDiscoveryとValueの対応、出所、判断理由をユーザーまたは運営が辿れる状態を維持する。
+- S05／C17では、一つのContributionに関係するDiscoveryを列挙するだけでなく、各DiscoveryでどのValueの形成・向上に利用されたかを対応付けて確認できるようにする。対象Valueが未成立・未特定の場合を、Valueなしまたは全Valueへの寄与と誤認させない。具体的なカード等のUI形式は本書では定めない。
 - 自動処理を導入しても、MVPの人によるDiscovery成立・統合・関連判断を暗黙に置き換えない。
 - 要検討事項を物理都合だけで確定した場合は、論理設計へのフィードバックと決定記録を残す。
 - ValueのConditionなしを検索候補から落とさず、Context一致による推薦順位の向上と明示条件による絞り込みを区別する。具体SQL、インデックス、候補抽出、スコアリング、性能担保は詳細設計で定める。
 
 ## 13. 今回の追補変更点
 
+- 一つのContributionが複数Discoveryに対し、それぞれ異なるValueの形成・向上に利用され得ることを明記した。
+- 新規Entityは追加せず、既存のContributionDiscoveryに任意の対象Valueを持たせ、Contribution・Discovery・Valueの対応を表現した。
+- Value未成立・未特定またはDiscovery全体への寄与を維持できるよう対象Valueを任意とし、対象Valueなしを全Valueへの寄与とは解釈しない制約を追加した。
+- 後続のS05／C17でDiscoveryごとのValue利用を確認可能にする引き継ぎ条件を追加した。
 - 時間経過で現在性が変わるContributionと、投稿・公開時点／対象期間／Freshnessの分離を追記した。
 - 開始・告知開始は速やかにDiscoveryへ反映し、終了期限・数量・残量は投稿時点情報として実状との差を明示する方針を追記した。
 - ReactionをFreshness補強シグナルとして利用できる一方、事実・営業・在庫等の保証には使わない制約を追記した。
