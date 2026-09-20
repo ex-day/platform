@@ -26,7 +26,7 @@ export function DiscoveryCard({
         className,
       )}
     >
-      <div className="flex h-24 items-center justify-center gap-2 bg-muted text-xs text-muted-foreground">
+      <div className="flex h-40 items-center justify-center gap-2 bg-muted text-xs text-muted-foreground sm:h-32">
         <ImageIcon className="h-4 w-4" aria-hidden />
         {item.picture ?? "no image"}
       </div>
