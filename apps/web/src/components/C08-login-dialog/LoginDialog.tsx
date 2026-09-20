@@ -25,6 +25,15 @@ export function LoginDialog() {
     });
   }, [closeLogin]);
 
+  const loginAndRestoreFocus = (provider: string) => {
+    login(provider);
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(
+        '[aria-label="ユーザーメニュー"]',
+      )?.focus();
+    });
+  };
+
   useEffect(() => {
     if (!isLoginDialogOpen) return;
 
@@ -80,7 +89,7 @@ export function LoginDialog() {
               key={provider}
               ref={provider === PROVIDERS[0] ? firstButtonRef : undefined}
               variant="outline"
-              onClick={() => login(provider)}
+              onClick={() => loginAndRestoreFocus(provider)}
             >
               {provider}でログイン（モック）
             </Button>

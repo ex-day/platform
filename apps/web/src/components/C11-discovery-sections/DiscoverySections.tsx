@@ -47,7 +47,7 @@ export function DiscoverySections() {
             type="button"
             role="tab"
             aria-selected={selected}
-            aria-controls={`${section.id}-panel`}
+            aria-controls="discovery-section-panel"
             tabIndex={selected ? 0 : -1}
             onClick={() => setActiveId(section.id)}
             onKeyDown={(event) => selectAdjacentTab(event, index)}
@@ -55,7 +55,7 @@ export function DiscoverySections() {
           >{section.title}</button>;
         })}
       </div>
-      <div id={`${activeSection.id}-panel`} role="tabpanel" aria-labelledby={`${activeSection.id}-tab`} tabIndex={0}>
+      <div id="discovery-section-panel" role="tabpanel" aria-labelledby={`${activeSection.id}-tab`} tabIndex={0}>
         {isLoading ? <Loading cardCount={1} /> : <DiscoverySection section={activeSection} hideTitle />}
       </div>
     </div>
