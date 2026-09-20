@@ -20,13 +20,15 @@
 | リアクション         | → [C10](../components/C10-reaction-button.md)           | component | -        | -  | -        | -          | PC/モバイル | 通常閲覧時に表示。リアクション可能な公開投稿を対象とする                 |
 | Discovery関連情報    | → [C15](../components/C15-related-discovery.md)         | component | -        | -  | -        | -          | PC/モバイル | 関連Discoveryが確定して存在する場合に表示。両閲覧コンテキスト共通        |
 | 知識・疑問の現在状態 | → [C16](../components/C16-contribution-status.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示                           |
-| 知識・疑問の成果     | → [C17](../components/C17-contribution-impact.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示。確定した成果のみ個別表示 |
+| 知識・疑問の成果     | → [C17](../components/C17-contribution-impact.md)       | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、かつ投稿者本人の場合に表示。Discoveryごとに確定した成果を対応付けて表示 |
 | 確認・補完導線       | → [C18](../components/C18-contribution-confirmation.md) | component | -        | -  | -        | -          | PC/モバイル | 自分の投稿の確認時、投稿者本人、かつ確認が必要な項目がある場合に表示     |
 | 共通フッター         | → [C02](../components/C02-footer.md)                    | component | -        | -  | -        | -          | PC/モバイル | 常に表示                                                                 |
 
 ## アクション
 - 初期表示時
   - 閲覧コンテキスト、投稿者本人か、Contributionの現在状態、確定した関連・成果を取得し、上記条件に従ってComponentを組み立てる。
+  - C17では、一つのContributionがImpactを与えたDiscoveryごとにC20を表示し、対象Discoveryと、そのDiscoveryへ提供したValueおよび利用結果を対応付ける。
+  - Valueが未成立・未特定、またはDiscovery全体への寄与である場合は、その状態を区別し、対象Valueなしを全Valueへの寄与と解釈して表示しない。
   - 未確定の場所・分類・Discovery候補を確定済みの事実として表示しない。AI解析候補の生ログや信頼度は表示しない。
 - 通常閲覧時
   - C10からリアクションを行う。S06から本人の投稿へ来た場合も通常閲覧の構成を維持する。
