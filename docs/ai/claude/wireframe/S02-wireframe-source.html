@@ -72,6 +72,11 @@ body{margin:0;background:var(--pg);color:var(--ink);font:14px/1.7 'Noto Sans JP'
 .rail .card .ph{height:70px}
 .more{width:110px;flex:none;border:1.5px dashed #c0392b;border-radius:3px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;color:#c0392b;padding:6px}
 .cnd{display:inline-flex;gap:6px;align-items:center;border:1.5px solid #1a1a1a;border-radius:14px;padding:3px 10px;font-size:12px;background:#f3f3f3}
+.cta{border:1.5px dashed #1a1a1a;border-radius:3px;background:#fafafa;padding:14px;display:flex;flex-direction:column;gap:8px;align-items:flex-start;position:relative;min-width:0}
+.cta b{font-size:14px}
+.cta .txt{font-size:12.5px;color:#333}
+.cta .k2{font:10.5px 'IBM Plex Mono','DejaVu Sans Mono',monospace;color:#b24a3a}
+.notice{background:#eef3f7;border:1px solid #9fb6c8;color:#2c4a63;font-size:12.5px;padding:8px 12px;border-radius:3px}
 </style>
 
 <div class="wrap">
@@ -85,15 +90,17 @@ body{margin:0;background:var(--pg);color:var(--ink);font:14px/1.7 'Noto Sans JP'
     <li><a href="#pc-layout">PC-LayoutVariants</a></li>
     <li><a href="#mobile-layout">Mobile-LayoutVariants</a></li>
     <li><a href="#relations">S03-RelationsEntryVariants</a></li>
+    <li><a href="#cta-variants">C21 Contribution CTA</a></li>
   </ul>
 
   <section class="sec"><h2 id="pc-main-h">1. PC-Main — S01「もっと見る」から条件を引き継いだ探索一覧</h2><p class="cap">S02はPC/Mobile共通の責務(探索意思が生じた後の能動的な探索)。S01のC05「もっと見る」から提案テーマの条件を引き継いだ状態。C04は4列グリッド(S01 PC-Mainの採用表現と同じ)。</p><div class="scroll"><div id="pc-main" class="board" style="width:1440px"></div></div></section>
   <section class="sec"><h2>2. Mobile-Main — S01「もっと見る」から条件を引き継いだ探索一覧</h2><p class="cap">PR #29の責務境界により、モバイルのTOPはS01(タブ+縦方向)。S02はPCと同じ探索一覧の責務で、モバイルの表示を描いています。</p><div class="scroll"><div id="mobile-main" class="board" style="width:375px"></div></div></section>
-  <section class="sec"><h2>3. PC-StateVariants — 件数・取得状態の比較</h2><p class="cap">少数件 / 0件 / 取得中 / 取得失敗 / 条件なし直接アクセス。0件・失敗・条件なしの表示は設計書に定義がなく、比較用の仮置きです。</p><div class="scroll"><div id="pc-states" class="board" style="width:1460px"></div></div></section>
-  <section class="sec"><h2>4. Mobile-StateVariants — 入口(条件の出どころ)と状態の比較</h2><p class="cap">S01から引き継いだ条件 / C06で指定した条件 / 少数件 / 0件 / 取得中 / 取得失敗 / 条件なし直接アクセス(未定義)。</p><div class="scroll"><div id="mobile-states" class="board" style="width:1290px"></div></div></section>
+  <section class="sec"><h2>3. PC-StateVariants — 件数・取得状態の比較</h2><p class="cap">少数件 / 0件 / 取得中 / 取得失敗 / 条件なし直接アクセス。失敗の表示は設計書に定義がなく仮置き。既定条件・拡大表示・CTA CardはIssue #28の判断記録に基づく比較用の例です。</p><div class="scroll"><div id="pc-states" class="board" style="width:1460px"></div></div></section>
+  <section class="sec"><h2>4. Mobile-StateVariants — 入口(条件の出どころ)と状態の比較</h2><p class="cap">S01から引き継いだ条件 / C06で指定した条件 / 少数件 / 拡大しても0件 / 取得中 / 取得失敗 / 既定条件 / 範囲拡大表示。</p><div class="scroll"><div id="mobile-states" class="board" style="width:1290px"></div></div></section>
   <section class="sec"><h2>5. PC-LayoutVariants — C03/C04 レイアウト比較</h2><p class="cap">カード幅・表示方向・情報量の比較(後続検討事項の整理用)。</p><div class="scroll"><div id="pc-layout" class="board" style="width:1440px"></div></div></section>
   <section class="sec"><h2>6. Mobile-LayoutVariants — C03/C04 レイアウト比較</h2><p class="cap">縦型1列 / 横型 / 2列コンパクト。</p><div class="scroll"><div id="mobile-layout" class="board" style="width:1290px"></div></div></section>
   <section class="sec"><h2>7. S03-RelationsEntryVariants — 関係Discovery「さらに見る」の遷移先比較</h2><p class="cap">S02の条件付き表示として再利用する案と、関係Discovery専用の一覧とする案の比較材料。どちらも未採用です。</p><div class="scroll"><div id="relations" class="board" style="width:1440px"></div></div></section>
+  <section class="sec"><h2>8. C21 Contribution CTA — 0件・情報不足時の投稿導線</h2><p class="cap">C21(定義書: C21-contribution-cta.md、PR #30)。表示位置の3案を比較。</p><div class="scroll"><div id="cta-variants" class="board" style="width:1290px"></div></div></section>
 </div>
 
 <script>
@@ -116,6 +123,11 @@ function card(o){o=o||{};var k=o.k!==false,v=o.v||'v';
 }
 function cards(n,o){var s='';for(var i=0;i<n;i++){var oo=Object.assign({},o||{});if(i!==0){oo.go=false;oo.hi=false}s+=card(oo)}return s}
 function skel(v){return '<div class="card"><div class="sk" style="height:'+(v==='c'?90:150)+'px"></div><div class="sk" style="height:14px;width:70%"></div><div class="sk" style="height:12px;width:90%"></div><div class="sk" style="height:12px;width:50%"></div></div>'}
+
+
+function cta(o){o=o||{};return '<div class="cta" style="'+(o.st||'')+'"><span class="k2">C21 Contribution CTA '+(o.tag||'')+'</span><b>周辺に今のおすすめが見つかりません</b><span class="txt">周辺の情報を投稿してみませんか?</span><span class="btn">知識・疑問を投稿する → S04</span>'+(o.wording===false?'':'<span>'+asm('文言は仮(最後に決定)')+'</span>')+'</div>'}
+function notice(){return '<div class="notice">ⓘ 周辺には見つからなかったため、範囲を広げて表示しています <span class="k">(文言は仮)</span></div>'}
+function defChip(){return '<div class="row" style="gap:6px;flex-wrap:wrap"><span class="cnd">既定条件: 現在地(または既定エリア) ＋ 既定半径</span>'+asm('既定値は実装時に決定')+'</div>'}
 
 /* Headers */
 function search(v){ // C06 (PC row)
@@ -158,26 +170,28 @@ $('mobile-main').innerHTML='<div style="padding:12px;display:flex;flex-direction
 /* ---------- 3. PC-StateVariants ---------- */
 function pcPanel(title,badge,body){return '<div class="panel" style="width:690px"><div class="ph-h"><span>'+title+'</span>'+(badge?'<span class="assume">'+badge+'</span>':'')+'</div><div class="body">'+body+'</div></div>'}
 function pcStub(){return '<div class="row" style="justify-content:space-between;border:1px dashed #9a9a9a;padding:8px 10px;margin-bottom:10px"><b>ex-day</b><span class="k">C01 header + C06 search (省略)</span><div class="hamb" style="width:26px;height:26px;font-size:12px">☰</div></div>'}
-$('pc-states').innerHTML='<div style="padding:20px 24px"><div class="note" style="margin-bottom:14px">S02 / PC 状態比較。ヘッダーは省略。0件・取得失敗の文言・部品は設計書にないため仮置き(コンポーネント化する場合は定義追加とC番号の採番が必要 — 採番は人間)。</div>'+
+$('pc-states').innerHTML='<div style="padding:20px 24px"><div class="note" style="margin-bottom:14px">S02 / PC 状態比較(Issue #28の判断記録に基づく)。ヘッダーは省略。既定条件・拡大範囲・CTA Cardの文言は仮。CTA CardはC21 Contribution CTA。</div>'+
  '<div style="display:flex;flex-wrap:wrap;gap:20px">'+
  pcPanel('A. 少数件 (2件)','','<div class="g4">'+cards(2,{k:false,ph:'height:110px'})+'<div></div><div></div></div><div style="margin-top:10px" class="k">残りの列は空けたまま(引き伸ばさない)。件数に応じた見せ方はNon-blocking</div>')+
- pcPanel('B. 0件','仮置き',pcStub()+'<div class="empty"><b>該当するDiscoveryがありません</b><span style="font-size:12.5px">条件を変更すると一覧が更新されます(C06)</span><span class="btn">条件をリセット</span></div>')+
+ pcPanel('B. 拡大しても0件','C21(案B: 一覧の代わり)',pcStub()+cta({st:'align-items:center;text-align:center;padding:28px 16px',tag:'案B'}))+
  pcPanel('C. 取得中','C09 loading',pcStub()+'<div class="g4">'+skel()+skel()+skel()+skel()+'</div><div class="row" style="justify-content:center;margin-top:10px;gap:8px"><div class="spin"></div><span class="k">C09 loading(画面内表示の例)</span></div>')+
  pcPanel('D. 取得失敗','仮置き',pcStub()+'<div class="empty"><b>Discoveryを取得できませんでした</b><span style="font-size:12.5px">通信状況を確認して、もう一度お試しください</span><span class="btn">再読み込み</span></div>')+
- pcPanel('E. 条件なしで直接アクセス','設計書に定義なし',pcStub()+'<div class="empty"><b>表示内容が未定義</b><span style="font-size:12.5px">/discoveries を条件なしで開いた場合。候補: 条件入力を促す / 既定条件で表示 / S01へ誘導</span></div>')+
+ pcPanel('E. 条件なしで直接アクセス → 既定条件で表示','決定: 既定条件',pcStub()+defChip()+'<div class="g4" style="margin-top:10px">'+cards(4,{k:false,ph:'height:90px'})+'</div>')+
+ pcPanel('F. 既定条件で0件 → 範囲を拡大して表示','決定: 拡大表示',pcStub()+notice()+'<div class="g4" style="margin-top:10px">'+cards(3,{k:false,ph:'height:90px'})+cta({st:'height:100%',tag:'案A: 一覧内'})+'</div>')+
  '</div></div>';
 
 /* ---------- 4. Mobile-StateVariants ---------- */
 function mPanel(title,badge,body,hdr){return '<div class="phone"><div class="row" style="justify-content:space-between"><b style="font-size:13px">'+title+'</b>'+(badge?'<span class="assume">'+badge+'</span>':'')+'</div>'+mHeader(hdr)+body+'</div>'}
-$('mobile-states').innerHTML='<div style="padding:20px"><div class="note" style="margin-bottom:14px">S02 / Mobile 状態比較(375px)。S02はPCと共通の責務(探索意思が生じた後の探索)。A=S01から引き継いだ条件、B=C06で指定した条件、の入口の違いと状態差を確認する。フッターは省略。</div>'+
+$('mobile-states').innerHTML='<div style="padding:20px"><div class="note" style="margin-bottom:14px">S02 / Mobile 状態比較(375px)。S02はPCと共通の責務(探索意思が生じた後の探索)。入口の違い(A/B)、Issue #28の判断記録に基づく既定条件・拡大範囲・CTA Cardを確認する。フッターは省略。</div>'+
  '<div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">'+
  mPanel('A. S01「もっと見る」から','引き継ぎ例','<div class="row" style="gap:6px;flex-wrap:wrap"><span class="cnd">引き継ぎ条件: Section名 A ✕</span>'+asm('表示有無は未定義')+'</div><div class="col">'+cards(2,{k:false,go:true,hi:true})+'</div><div class="k" style="text-align:center">⋮</div>',{on:true})+
  mPanel('B. C06で検索した後','指定条件の例','<div class="col">'+cards(2,{k:false})+'</div><div class="k" style="text-align:center">⋮</div>',{on:true,text:'(入力した検索語)'})+
  mPanel('C. 少数件 (1〜2件)','','<div class="col">'+cards(1,{k:false})+'</div><div class="k" style="text-align:center;margin-top:6px">件数に応じて自然な表示(引き伸ばさない)</div>')+
- mPanel('D. 0件','仮置き','<div class="empty"><b>該当するDiscoveryがありません</b><span style="font-size:12.5px">条件を変更してみてください</span><span class="btn">条件をリセット</span></div>')+
+ mPanel('D. 拡大しても0件','C21(案B: 一覧の代わり)',cta({st:'align-items:center;text-align:center;padding:28px 14px',tag:'案B'}))+
  mPanel('E. 取得中','C09 loading','<div class="col">'+skel()+skel()+'</div><div class="row" style="justify-content:center;gap:8px"><div class="spin"></div><span class="k">C09 loading</span></div>')+
  mPanel('F. 取得失敗','仮置き','<div class="empty"><b>Discoveryを取得できませんでした</b><span style="font-size:12.5px">通信状況を確認して、もう一度お試しください</span><span class="btn">再読み込み</span></div>')+
- mPanel('G. 条件なしで直接アクセス','設計書に定義なし','<div class="empty"><b>表示内容が未定義</b><span style="font-size:12.5px">/discoveries を条件なしで開いた場合。S02は条件を引き継ぐか指定した後の画面のため、候補: 条件入力を促す / 既定条件で表示 / S01へ誘導</span></div>')+
+ mPanel('G. 条件なしで直接アクセス → 既定条件','決定: 既定条件',defChip()+'<div class="col">'+cards(1,{k:false})+'</div><div class="k" style="text-align:center">⋮</div>')+
+ mPanel('H. 既定条件で0件 → 範囲を拡大','決定: 拡大表示',notice()+'<div class="col">'+cards(1,{k:false})+cta({tag:'案A: 一覧内'})+'</div>')+
  '</div></div>';
 
 /* ---------- 5. PC-LayoutVariants ---------- */
@@ -222,6 +236,18 @@ $('relations').innerHTML='<div style="padding:24px 32px">'+
  '<tr><td>設計書への影響</td><td>S02の表示項目・アクション・条件の引き継ぎ仕様の追記</td><td>screen-list / screen-transition / 新規画面定義の追加</td></tr>'+
  '</tbody></table>'+
  '<div style="margin-top:10px;font-size:12px;color:#7a5b00">※ 本表は判断材料であり、どちらも未採用です。決定はNext.jsモックとS02の責務との整合確認後に人間が行います(S03検討事項)。</div></div>';
+
+/* ---------- 8. CTA card variants ---------- */
+function cp(title,badge,note,body){return '<div class="panel" style="width:400px"><div class="ph-h"><span>'+title+'</span><span class="badge" style="font-size:11px">'+badge+'</span></div><div class="body">'+body+'<div style="margin-top:10px;font-size:12px;color:#444">'+note+'</div></div></div>'}
+$('cta-variants').innerHTML='<div style="padding:20px 24px"><div class="note" style="margin-bottom:14px">C21 Contribution CTA: Discoveryが見つからない/少ないときの「投稿してみませんか」導線(遷移先S04)。Discoveryではないため C03 は再利用しない。表示条件(0件のみ/少数件も/拡大後も不足時)・表示場所は未確定で、3案を比較する。文言は最後に決定。S01のタブが0件のときも同じ部品を使うかは未確定。</div>'+
+ '<div style="display:flex;gap:20px;align-items:flex-start">'+
+ cp('案A: 一覧内のカード','一覧に混在','拡大範囲のDiscoveryに続けて、末尾に1枚置く。少数件でも出せる。Discoveryと混同されないよう見た目を変える。',
+   '<div class="col">'+cards(2,{k:false,v:'c'})+cta({tag:'案A'})+'</div>')+
+ cp('案B: 一覧の代わりに表示','0件専用','拡大しても0件のときだけ、一覧の領域全体に表示。表示条件が最も単純だが、少数件では出ない。',
+   cta({st:'align-items:center;text-align:center;padding:36px 14px',tag:'案B'}))+
+ cp('案C: 一覧上部のバナー','常時/条件付き','拡大表示の通知と並べて上部に置く。Discoveryが見えている状態でも投稿へ誘導できるが、一覧の先頭を占有する。',
+   notice()+'<div style="height:10px"></div><div class="cta" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px"><div><span class="k2">C21 Contribution CTA 案C</span><br><span class="txt"><b style="font-size:13px">周辺情報を投稿してみませんか?</b></span></div><span class="btn">投稿する → S04</span></div><div style="height:10px"></div><div class="col">'+cards(1,{k:false,v:'c'})+'</div>')+
+ '</div></div>';
 })();
 </script>
 </body></html>
