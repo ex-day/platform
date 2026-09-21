@@ -21,3 +21,4 @@
 | C18    | [確認・補完導線](ui/components/C18-contribution-confirmation.md)                  | 確認が必要な投稿者本人に表示                                                           |
 | C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md)                  | 評価済みRecommendationから今伝えたい価値を直感的に提示 |
 | C20    | [Discovery Impact](ui/components/C20-discovery-impact.md)                         | 一つのContribution × 一つのDiscoveryのImpactを1単位とし、対象Discoveryを識別情報／見出しとしてValue・利用結果・到達人数とともに表示 |
+| C21    | [Contribution CTA](ui/components/C21-contribution-cta.md)                         | Discoveryの探索結果等を契機として知識・疑問などのContribution投稿を促し、S04へ案内 |

@@ -14,7 +14,7 @@
 | 共通ヘッダー   | → [C01](../components/C01-header.md)         | component | -        | -    | -        | -          | PC/モバイル |      |
 | discovery list | → [C04](../components/C04-discovery-list.md) | component | -        | -    | -        | -          | PC/モバイル |      |                                                               |
 | 範囲拡大表示   | expandedRangeNotice                          | text      | -        | -    | -        | -          | PC/モバイル | 既定条件の0件を受けて探索範囲を広げた場合に表示 |
-| 投稿促進CTA    | draft-contribution-cta-card                  | component | -        | -    | -        | -          | PC/モバイル | 0件・情報不足時の新規コンポーネント候補。C番号は未採番 |
+| 投稿促進CTA    | → [C21](../components/C21-contribution-cta.md) | component | -        | -    | -        | -          | PC/モバイル | 表示場所・表示条件はWireframeで比較中 |
 | 共通フッター   | → [C02](../components/C02-footer.md)         | component | -        | -    | -        | -          | PC/モバイル |      |
 
 ## アクション
@@ -24,13 +24,13 @@
   - 指定した検索条件に基づいて一覧を更新する。他画面で実行した場合は条件を引き継いでS02へ遷移する
 - 条件なしで直接アクセス
   - 現在地（取得できない場合は既定エリア）と既定半径で一覧表示する。0件の場合は探索範囲を広げ、拡大中であることを表示する
-- 0件・情報不足時の投稿促進CTAを押下
+- 投稿促進CTAを押下
   - S04 知識・疑問登録へ遷移する
 - S03から戻る
   - 一覧のスクロール位置を復元する
 
 ## 検討事項
 - 既定半径、探索範囲を拡大する刻み、現在地を取得できない場合の既定エリアは実装時に決定する。
-- 投稿促進CTAの文言、採用可否、C番号はWireframeの `draft-` 比較案を人間が確認して決定する。C03 Discovery Cardは再利用しない。
+- C21 Contribution CTAの表示場所は一覧末尾、0件時の一覧代替、一覧上部をWireframeで比較中とする。0件の場合のみ表示するか、少数件の場合にも表示するか、および具体的な文言は未確定とする。C03 Discovery Cardは再利用しない。
 - S03へ遷移後、時間を置いて戻った場合の順位・鮮度、再取得の基準、保持中に非公開となったDiscoveryの扱いは実装時に決定する。
 - [S03 Discovery詳細](./S03-discovery-detail.md)のモバイルの関係Discovery 3枠で、表示上限を超える場合の末尾の一覧導線を検討している。遷移先としてS02の条件付き表示を再利用するか、関係Discovery専用の一覧とするかは未確定。Next.jsモックおよびS02の責務との整合確認後に決定する。
