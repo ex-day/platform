@@ -1,44 +1,54 @@
-# S05 知識・疑問詳細 Wireframe 作成メモ (Issue #17 用)
+# S05 知識・疑問詳細 Wireframe 作成メモ (Issue #17 用) v2
 
 担当: Claude (Maker) / Reviewer: 未実施(別AIレビュー待ち) / 人間レビュー: 未実施
 
-## 成果物
+v2は、PR #19(ドメイン論理設計書・論理エンティティ設計書)とPR #20(C17改訂・C20新設・S05/S09)の反映後に再作成した。初版(v1)は設計検討材料として保持する。
 
-正式成果物(`docs/ui/wireframe/`配下)
+## 今回の変更点(v1からの差分)
 
-- `screens/S05/PC-Main.png` 通常閲覧(知識)。C14 + C10 + C15
-- `screens/S05/PC-OwnCheck.png` 自分の確認(疑問, C18あり)。C14 + C15 + C16 + C17 + C18
-- `screens/S05/Mobile-Main.png` / `Mobile-OwnCheck.png` 上記のMobile版
-- `screens/S05/PC-StateVariants.png` / `Mobile-StateVariants.png` 状態差・配置の比較案
-- `components/C10-reaction-button-s05-variants.png` (既存の`C10-reaction-button-variants.png`とは別ファイル)
-- `components/C14-contribution-content-variants.png`
-- `components/C15-related-discovery-variants.png`
-- `components/C16-contribution-status-states.png`
-- `components/C17-contribution-impact-states.png`
-- `components/C18-contribution-confirmation-states.png`
+- C17: 見出しを「この投稿から見つかった価値」に変更。Discoveryごとに確定した関係のみC20を0..n件並べる。0件は「現在確認中です」。
+- C20 (discovery-impact) を新規に作成。1つのContributionと1つのDiscoveryの組み合わせを1単位とする。固定見出し(「Impact」等)は置かず、対象Discoveryを先頭に識別情報として表示する。
+- 自分の確認の配置: 主カラムに C14 → C17 → C15、右カラムに C18 → C16 とした。
+- v1にあった矛盾を解消した。「Discoveryが未決定」のC16とC15(関連Discovery)を同時に表示していた。関係が未確定の状態ではC15を非表示にした。
 
-Main採用案は「案1」表記。他案の採否は人間レビューで決定する。
+## 成果物(`docs/ui/wireframe/`配下)
 
-## 設計書確認結果
+更新: `screens/S05/PC-OwnCheck.png`, `Mobile-OwnCheck.png`, `PC-StateVariants.png`, `Mobile-StateVariants.png`, `components/C17-contribution-impact-states.png`
+新規: `components/C20-discovery-impact-variants.png`, `screens/S05/PC-OwnCheck-C15-C20-Variants.png`
+変更なし: PC-Main, Mobile-Main(通常閲覧はC14/C10/C15のみで、今回の設計変更の影響なし)、C10/C14/C15/C16/C18の比較図
 
-**Blocking事項: なし。** 以下はすべてNon-blocking。
+## 設計書が「Wireframeで検証する」としていた事項への結果
 
-1. 「自分の確認」経路で、投稿者以外が開いた場合のC10表示が未定義。Wireframeでは通常閲覧のみC10を配置し、C16/C17/C18は投稿者のみ表示とした。
-2. 未ログイン投稿(未公開)のS05表示が未定義。S11保存後にS05へ戻る際、通常閲覧か自分の確認かも未定義。
-3. 疑問への回答・議論のUI/仕様が設計書にない(C10のみ)。知識/疑問の差は種別ラベルとC16のステータス文言以外に記載がなく、Wireframeも同程度の差にとどめた。
-4. C15〜C18のセクション見出し文言が未定義(プレースホルダー使用)。
-5. C14の場所表示(テキストか地図か)が未確定。テキスト+ピンで表現。
-6. 自分の確認のレイアウト(1カラム/2カラム、Mobile: C18上部固定/下部固定)は比較案として提示。人間選択待ち。
-7. 繰り越し: S02概要の「mobile = TOP」の不整合(S01/C11と食い違い)。
+1. 対象Discoveryの表示形式(C20): 案1 テキストリンクのみ / 案2 リンク+簡易サマリー([場所]/[Subject])。Discovery Cardへの変更はしていない。採否は人間判断。
+2. 複数Valueの見せ方(C20): 案A 行で表示 / 案B 小カードで表示。
+3. C20が複数ある場合(C17): 縦に並べる(順位・大小を示さない)/ 要約+先頭のみ展開(要約文言はTBD)。
+4. C15とC20の重複: C15(閲覧者向け)とC20(投稿者向け)は目的が違うため、C15の統合・削除は行わず、見せ方のみ3案を比較した(C15をC17の前/後、C15を名称リンク/Discovery Card)。
+
+## Blocking
+
+なし。
+
+## Non-blocking
+
+1. 特定済みValueと、Value未特定(Discovery全体)の寄与が同じDiscoveryに併存する場合のC20の表示が未定義(`value_pending`は0..1)。Wireframeでは「要確認」として両方を並べた。
+2. 人数(`discovery_reach`)はDiscovery単位で1件だが、S09の文言例は「この価値を通じて」とValue単位に読める。複数Valueに使われた場合の人数の単位を要確認。人数には集計期間を併記し、他Discoveryと合算しない形で描いた。
+3. 「自分の確認」経路で、投稿者以外が開いた場合のC10表示が未定義(C16/C17/C18は非表示とした)。
+4. 未ログイン投稿(未公開)のS05表示、S11保存後のS05がどちらの閲覧コンテキストかが未定義。
+5. 疑問への回答・議論のUIが設計書にない(C10のみ)。知識と疑問の差は種別ラベルとC16の文言のみ。
+6. C15/C16/C18の見出し文言、C20の利用結果の文言、C17の要約文言は未定義(プレースホルダー)。C14の場所はテキスト+ピンで表現。
+7. C20の「親」列が表示名(「提供したValue」)になっている(物理名 `provided_value` が他の記載と揃う)。用語「成果」と「Impact」の混在も残る。
+8. 自分の確認のレイアウト(1/2カラム、Mobile: C18上部/下部固定)は比較案として提示。人間選択待ち。
+9. 繰り越し: S02概要の「mobile = TOP」の不整合(S01/C11と食い違い)。
 
 ## S04(登録・編集)への引き継ぎ事項
 
-- C14に表示する項目(種別, 本文, 写真, 添付, 場所, 時期, 季節)はS04の入力項目と対応させる必要がある。「投稿者が指定した内容」と「後から変わる解釈」は分けて表示している。
-- C16 → S04(編集)、C18 → S04 → S11 の導線で、確認対象(場所/関連Discovery/情報補足)をS04側へ渡す仕様が必要。
+- C14の表示項目(種別・本文・写真・添付・場所・時期・季節)とS04の入力項目の対応。「投稿者が指定した内容」と「後から変わる解釈・価値」は分けて表示している。
+- 投稿者が指定する場所・時期・季節・関連Discoveryが、C20のDiscovery・Valueへの関係(ContributionDiscovery+対象Value)にどう影響するかの整理。登録時にValueを指定させる必要はない(登録時点でValue成立は必須ではない)。
+- C16 → S04(編集)、C18 → S04 → S11の導線での確認対象の受け渡し。
 - 未ログイン投稿の紐付け・公開フロー(S11/C08)とS05の表示状態の整合。
-- 疑問投稿の入力項目のうち、知識との差(回答受付など)の有無をS04で決める必要がある。
+- 疑問投稿の入力項目における知識との差の有無。
 
 ## 作成時の仮定
 
-- 設計書にない独自仕様は追加していない。
-- 未採番コンポーネントは作成していない。
+- 設計書にない独自仕様は追加していない。未採番コンポーネントは作成していない。
+- ダミー文言(Discovery名・Value名・利用結果の文言)はプレースホルダー。利用結果の文言は設計書・S09の例に沿った。
