@@ -1,6 +1,7 @@
 // see docs/ui/components/C14-contribution-content.md
 import { ImageIcon, PaperclipIcon } from "lucide-react";
 import type { Contribution } from "@/lib/mock-data/contribution";
+import { MockLink } from "./MockLink";
 
 const TYPE_LABEL: Record<Contribution["type"], string> = {
   knowledge: "知識",
@@ -55,14 +56,10 @@ export function ContributionContent({ contribution }: { contribution: Contributi
       </p>
       <PictureGrid pictures={contribution.pictures} />
       {contribution.attachment ? (
-        <a
-          href="#"
-          onClick={(event) => event.preventDefault()}
-          className="inline-flex w-fit items-center gap-1.5 text-sm text-primary underline underline-offset-2"
-        >
+        <MockLink className="inline-flex w-fit items-center gap-1.5 text-sm text-primary underline underline-offset-2">
           <PaperclipIcon className="h-4 w-4" aria-hidden />
           {contribution.attachment.name}
-        </a>
+        </MockLink>
       ) : null}
       {hasSpecifiedContext ? (
         <div className="flex flex-col gap-1 border-t pt-3 text-xs text-muted-foreground">
@@ -93,13 +90,9 @@ export function ContributionContent({ contribution }: { contribution: Contributi
         <span>投稿日時: {contribution.postedAt}</span>
         <span>
           投稿者:{" "}
-          <a
-            href="#"
-            onClick={(event) => event.preventDefault()}
-            className="text-primary underline underline-offset-2"
-          >
+          <MockLink className="text-primary underline underline-offset-2">
             {contribution.author}
-          </a>
+          </MockLink>
         </span>
       </div>
     </section>
