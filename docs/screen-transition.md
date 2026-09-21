@@ -1,7 +1,7 @@
 ```mermaid
 flowchart TD
-TOP[TOP]
-LIST[Discovery一覧]
+TOP[S01 Discovery提案<br/>サービスTOP]
+LIST[S02 Discovery探索一覧]
 DETAIL[Discovery詳細]
 ADD[S04 知識・疑問登録]
 CONFIRM[S11 知識・疑問登録確認]

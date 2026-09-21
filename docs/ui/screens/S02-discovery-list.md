@@ -1,7 +1,7 @@
-# S02 discovery list
+# S02 Discovery探索一覧
 ## 画面概要
-モバイルでは本サービスのTOPとして、 PCではDiscovery Sectionから遷移する一覧画面として、
-条件に応じたDiscoveryを一覧表示する。
+ユーザーの明示的な探索意図・検索条件に基づいてDiscoveryを一覧表示し、Discoveryの探索を支援する。
+この責務はPC／モバイルで共通とする。検索フォームは共通ヘッダー（C01）内のC06に集約する。
 ## 対象端末
 - PC
 - モバイル
