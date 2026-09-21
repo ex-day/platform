@@ -10,6 +10,7 @@ CONFIRM[S11 知識・疑問登録確認]
     TOP --> DETAIL
     TOP -->|新規知識登録| ADD
     LIST --> DETAIL
+    DETAIL -->|関係Discoveryをさらに見る| LIST
 
     DETAIL -->|知識を追加| ADD
     ADD --> CONFIRM
