@@ -13,20 +13,29 @@ export function DiscoveryCard({
   item,
   placeVariant,
   className,
+  layout = "a",
 }: {
   item: RelatedDiscoverySummary;
   placeVariant: "text" | "map";
   className?: string;
+  // S02のレイアウト比較案(Issue #31)。a: 縦型(既定) / b: Mobileのみ横型 / c: PC横型・Mobile 2列コンパクト
+  layout?: "a" | "b" | "c";
 }) {
   return (
     <Link
       href={`/discoveries/${item.id}`}
       className={cn(
         "flex flex-col overflow-hidden rounded-lg border transition-colors hover:border-primary",
+        layout === "b" && "max-md:flex-row",
+        layout === "c" && "md:flex-row",
         className,
       )}
     >
-      <div className="flex h-40 items-center justify-center gap-2 bg-muted text-xs text-muted-foreground md:h-32">
+      <div className={cn(
+        "flex h-40 items-center justify-center gap-2 bg-muted text-xs text-muted-foreground md:h-32",
+        layout === "b" && "max-md:h-auto max-md:w-28 max-md:shrink-0",
+        layout === "c" && "h-24 md:h-auto md:w-40 md:shrink-0",
+      )}>
         <ImageIcon className="h-4 w-4" aria-hidden />
         {item.picture ?? "no image"}
       </div>
