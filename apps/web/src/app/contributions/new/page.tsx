@@ -92,6 +92,11 @@ export default async function ContributionNewPage({ searchParams }: Props) {
         ) : null}
       </div>
       <ContributionEditor
+        // [Mock確認用]の比較バーはpreset間の切り替えであり、同一ルート内の
+        // searchParams変更だけではContributionEditor(Client Component)の
+        // useStateは再初期化されない(propsの変更はReactの再マウントを伴わない)。
+        // presetの組み合わせをkeyにして、切り替え時に確実に再マウントさせる。
+        key={`${from}-${type}-${disclosure}-${media}-${source}-${auth}`}
         initialDraft={draft}
         initialDisclosureOpen={disclosure === "open"}
         initialAuth={auth}
