@@ -6,7 +6,7 @@ import Link from "next/link";
 import { PencilLineIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const CONTRIBUTION_CTA_HREF = "/contributions/new"; // S04は未実装。入口のみの暫定
+export const CONTRIBUTION_CTA_HREF = "/contributions/new";
 
 // 仮文言(最終文言は実装時に確定)
 const MESSAGES = {
