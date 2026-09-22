@@ -22,3 +22,6 @@
 | C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md)                  | 評価済みRecommendationから今伝えたい価値を直感的に提示 |
 | C20    | [Discovery Impact](ui/components/C20-discovery-impact.md)                         | 一つのContribution × 一つのDiscoveryのImpactを1単位とし、対象Discoveryを識別情報／見出しとしてValue・利用結果・到達人数とともに表示 |
 | C21    | [Contribution CTA](ui/components/C21-contribution-cta.md)                         | Discoveryの探索結果等を契機として知識・疑問などのContribution投稿を促し、S04へ案内 |
+| C22    | [場所入力](ui/components/C22-location-input.md)                                   | 地点またはエリアを、現在地・地図・住所や施設名等の検索から入力するダイアログ |
+| C23    | [資料出典登録ダイアログ](ui/components/C23-media-source-dialog.md)                | Contributionへ追加した資料ごとに出典状態と出典情報を登録・編集するダイアログ |
+| C24    | [時期・期間入力（Time Period Input）](ui/components/C24-time-period-input.md) | 時期・日付・期間・時間From-Toを入力し、解釈前の情報を保持する共通コンポーネント。初期利用はDialog内を想定 |
