@@ -650,7 +650,7 @@ flowchart TD
 - 投稿者の権限・信頼性を利用する場合のルール、確認主体・タイミング・権限。
 - 運用コストを抑える自動判定方針の具体化と、将来の投稿ガイドライン・利用規約との関係。
 
-Contribution／Valueへの還元操作・関係分類は[Issue #26](https://github.com/ex-day/platform/issues/26)、成立・公開・確認・推薦の状態境界は[Issue #36](https://github.com/ex-day/platform/issues/36)、既存Discovery同士の統合・分割・関連変更の副作用、再審・取消・履歴は[Issue #37](https://github.com/ex-day/platform/issues/37)と連携する。本書は原則を定めるものであり、具体的な判定ルールや状態遷移、MVP実装範囲を確定しない。既存MVPスコープの運営手動判断・自動成立対象外の規定と今回の原則との差分は、Issue #36および判断ルール設計で整理し、実装着手前に適用範囲を明文化する。
+Contribution／Valueへの還元操作・関係分類は[Issue #26](https://github.com/ex-day/platform/issues/26)、成立・公開・確認・推薦の状態境界は[Issue #36](https://github.com/ex-day/platform/issues/36)、既存Discovery同士の統合・分割・関連変更の副作用、再審・取消・履歴は[Issue #37](https://github.com/ex-day/platform/issues/37)と連携する。本書は原則を定めるものであり、具体的な判定ルールや状態遷移、MVP実装範囲を確定しない。MVPスコープも同じ判断原則に従う。具体的な判定条件・自動化の適用範囲はIssue #46、成立・公開・確認・推薦の状態境界はIssue #36で明文化し、判定処理の実装前に関連設計へ反映する。
 
 ### 9.2 Contributionと会話の構造
 
