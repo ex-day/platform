@@ -2,6 +2,8 @@
 ## 画面概要
 S04で入力した知識・疑問の本文と添付資料、場所・時間・季節を確認し、解析された内容分類や関連Discoveryの候補を必要に応じて選択・修正して投稿する。候補を確定できない項目は未確定のまま投稿できる。
 
+[S04](./S04-contribution-save.md)の時間入力2グループと[C24](../components/C24-time-period-input.md)の詳細情報は、[DEC-0002](../../decisions/DEC-0002-contribution-temporal-information.md)に従い、選択内容・入力原文を欠落なく引き継ぐ。以下の確認項目の詳細整合は[Issue #40](https://github.com/ex-day/platform/issues/40)で扱い、S11のMockおよびDiscovery／Valueへの具体的な変換規則は本変更では確定しない。
+
 ## 対象端末
 - PC
 - モバイル
