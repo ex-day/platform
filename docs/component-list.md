@@ -25,3 +25,5 @@
 | C22    | [場所入力](ui/components/C22-location-input.md)                                   | 地点またはエリアを、現在地・地図・住所や施設名等の検索から入力するダイアログ |
 | C23    | [資料出典登録ダイアログ](ui/components/C23-media-source-dialog.md)                | Contributionへ追加した資料ごとに出典状態と出典情報を登録・編集するダイアログ |
 | C24    | [時期・期間入力（Time Period Input）](ui/components/C24-time-period-input.md) | 時期・日付・期間・時間From-Toを入力し、解釈前の情報を保持する共通コンポーネント。初期利用はDialog内を想定 |
+| C25    | [わかってきたこと（Discovery Emerging Terms）](ui/components/C25-discovery-emerging-terms.md) | 議論中にContributionから継続的に抽出された未確定語句を提示。DEC-0005の継続的な価値抽出に対応 |
+| C26    | [コメント（Contribution Thread）](ui/components/C26-contribution-thread.md)       | Discoveryに紐づくContributionを時系列に表示し、その場でコメント投稿できる。DEC-0005によりS03上で完結 |
