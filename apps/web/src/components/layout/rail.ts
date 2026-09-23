@@ -2,7 +2,9 @@
 // 「モバイルは横スクロール・PC(md以上)はグリッド」の表示方式
 // (docs/ui/screens/S03-discovery-detail.md 構成方針)。
 //
-// 件数が少ない場合(RAIL_MIN_COUNT未満)は横スクロールらしい表現にせず折り返し表示にする。
+// 関係Discovery(RelatedDiscoveryRail)は、件数が少ない場合(RAIL_MIN_COUNT未満)は
+// 横スクロールらしい表現にせず折り返し表示にする。その他の魅力はWireframeに合わせ
+// 件数によらず横スクロールとする。
 // 閾値・列数はNext.jsモックとしての仮の値(S03 未確定事項)。
 
 export const RAIL_MIN_COUNT = 3;

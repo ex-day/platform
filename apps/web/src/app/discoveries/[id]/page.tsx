@@ -20,12 +20,7 @@ import { DiscoveryValue } from "@/components/C12-discovery-value/DiscoveryValue"
 import { DiscoveryEmergingTerms } from "@/components/C25-discovery-emerging-terms/DiscoveryEmergingTerms";
 import { ContributionThread } from "@/components/C26-contribution-thread/ContributionThread";
 import { RelatedDiscoveryRail } from "@/components/layout/RelatedDiscoveryRail";
-import {
-  RAIL_CONTAINER_CLASS,
-  RAIL_ITEM_CLASS,
-  WRAP_CONTAINER_CLASS,
-  shouldUseRail,
-} from "@/components/layout/rail";
+import { RAIL_CONTAINER_CLASS, RAIL_ITEM_CLASS } from "@/components/layout/rail";
 import { getDiscoveryById } from "@/lib/mock-data/discovery";
 
 type Props = {
@@ -60,7 +55,6 @@ export default async function DiscoveryDetailPage({
   const place = pickParam(sp.place, PLACE_OPTIONS, "text");
 
   const discovery = getDiscoveryById(id);
-  const valuesUseRail = shouldUseRail(discovery.otherValues.length);
 
   const compareHref = (key: "hero" | "reaction" | "place", value: string) => {
     const next = new URLSearchParams();
@@ -140,12 +134,10 @@ export default async function DiscoveryDetailPage({
       {discovery.otherValues.length > 0 ? (
         <div className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">その他の魅力</h2>
-          <div className={valuesUseRail ? RAIL_CONTAINER_CLASS : WRAP_CONTAINER_CLASS}>
+          {/* Issue #48/#50のWireframeに合わせ、件数によらずモバイルは横スライドとする */}
+          <div className={RAIL_CONTAINER_CLASS}>
             {discovery.otherValues.map((item) => (
-              <div
-                key={item.id}
-                className={valuesUseRail ? `w-64 ${RAIL_ITEM_CLASS}` : "w-full sm:w-72"}
-              >
+              <div key={item.id} className={`w-64 ${RAIL_ITEM_CLASS}`}>
                 <DiscoveryValue item={item} />
               </div>
             ))}
