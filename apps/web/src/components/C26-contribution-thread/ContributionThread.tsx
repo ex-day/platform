@@ -154,6 +154,10 @@ export function ContributionThread({ initialComments }: { initialComments: Disco
       <div className="flex items-baseline gap-2">
         <span className="text-sm font-semibold">{comment.author}</span>
         <span className="text-xs text-muted-foreground">{comment.postedAtLabel}</span>
+        {comment.isOrigin ? (
+          // 起点の示し方はC26で未定義。モック確認用の仮表示
+          <span className="rounded-full border px-2 text-[11px] text-muted-foreground">はじまりの投稿</span>
+        ) : null}
       </div>
       {comment.body ? <p className="whitespace-pre-line text-sm leading-relaxed">{comment.body}</p> : null}
       {comment.media.length > 0 ? (

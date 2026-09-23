@@ -7,7 +7,8 @@
 // Recommendationが0件の場合のHero表示は別の検討事項であり、現在成立しない
 // Valueからの補完はしない方針(docs/ui/screens/S03-discovery-detail.md)。
 // docs/ui/wireframe/S03/PC-HeroVariants.pngのD(非表示)/E(最小表示)の2案のうち、
-// モックではD(Hero自体を表示しない)を採用し、Non-blockingとして引き継ぐ。
+// モックではD(Hero自体を表示しない)を既定とし、Non-blockingとして引き継ぐ。
+// Issue #50で探索開始直後のHeroを比較するため、emptyStyle="minimal"でEも表示できる。
 "use client";
 
 import { useState } from "react";
@@ -18,14 +19,26 @@ import type { DiscoveryRecommendation } from "@/lib/mock-data/discovery";
 export function DiscoveryDetailHero({
   recommendations,
   switchStyle,
+  emptyStyle = "hidden",
 }: {
   recommendations: DiscoveryRecommendation[];
   switchStyle: "arrow" | "thumbnail";
+  /** Recommendation0件時の表示。"hidden"=比較案D(非表示) | "minimal"=比較案E(最小表示) */
+  emptyStyle?: "hidden" | "minimal";
 }) {
   const [index, setIndex] = useState(0);
 
   if (recommendations.length === 0) {
-    return null;
+    if (emptyStyle === "hidden") return null;
+    // 文言はPC-HeroVariants.pngの例示であり確定ではない
+    return (
+      <section
+        aria-label="今伝えたい価値"
+        className="rounded-xl border border-dashed px-6 py-5 text-center text-sm text-muted-foreground"
+      >
+        この発見のおすすめは準備中です
+      </section>
+    );
   }
 
   const current = recommendations[Math.min(index, recommendations.length - 1)];
