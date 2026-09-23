@@ -22,44 +22,12 @@ import {
   TIME_DETAIL_SUGGESTIONS,
   TIME_OF_DAY_OPTIONS,
   describeSourceStatus,
+  filesToDraftMedia,
   readHandoffDraft,
   saveDraftForHandoff,
   type ContributionDraft,
   type ContributionKind,
-  type DraftMedia,
-  type MediaKind,
 } from "@/lib/mock-data/contribution-draft";
-
-function kindFromMime(mime: string): MediaKind {
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("video/")) return "video";
-  if (mime === "application/pdf") return "pdf";
-  return "other";
-}
-
-/**
- * 不適切資料の簡易判定(モック上の仮ルール)。ファイル名(拡張子除く)が単語として
- * "ng"を含む場合に検証用として不適切とみなす。実際の検出方式は
- * Issue #35で確定する(docs/ui/screens/S04-contribution-save.md 検討事項)。
- */
-function isFlaggedName(fileName: string): boolean {
-  const stem = fileName.replace(/\.[^./]+$/, "");
-  return /\bng\b/i.test(stem);
-}
-
-function filesToDraftMedia(files: FileList): DraftMedia[] {
-  return Array.from(files).map((file) => {
-    const kind = kindFromMime(file.type);
-    return {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: file.name,
-      kind,
-      previewUrl: kind === "image" ? URL.createObjectURL(file) : undefined,
-      sourceStatus: "unset",
-      flaggedInappropriate: isFlaggedName(file.name),
-    };
-  });
-}
 
 const TYPE_OPTIONS: { value: ContributionKind; label: string }[] = [
   { value: "knowledge", label: "知識" },
