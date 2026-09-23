@@ -219,6 +219,42 @@ export const TIME_DETAIL_SUGGESTIONS = [
 /** 検証用の禁止ワード(モック用の仮リスト。最終的な語彙・判定方式は未確定) */
 export const MOCK_FORBIDDEN_WORDS = ["死ね", "スパムテスト"];
 
+function kindFromMime(mime: string): MediaKind {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime === "application/pdf") return "pdf";
+  return "other";
+}
+
+/**
+ * 不適切資料の簡易判定(モック上の仮ルール)。ファイル名(拡張子除く)が単語として
+ * "ng"を含む場合に検証用として不適切とみなす。実際の検出方式は
+ * Issue #35で確定する(docs/ui/screens/S04-contribution-save.md 検討事項)。
+ */
+function isFlaggedName(fileName: string): boolean {
+  const stem = fileName.replace(/\.[^./]+$/, "");
+  return /\bng\b/i.test(stem);
+}
+
+/**
+ * 選択されたファイルを出典状態="unset"の資料に変換する。S04(ContributionEditor)と
+ * S03のコメント(C26)で共用し、添付時点で出典登録を求めない(C23「呼び出しのタイミング」)。
+ * ブラウザ上でのみ呼び出す(URL.createObjectURLを使用)。
+ */
+export function filesToDraftMedia(files: FileList): DraftMedia[] {
+  return Array.from(files).map((file) => {
+    const kind = kindFromMime(file.type);
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: file.name,
+      kind,
+      previewUrl: kind === "image" ? URL.createObjectURL(file) : undefined,
+      sourceStatus: "unset",
+      flaggedInappropriate: isFlaggedName(file.name),
+    };
+  });
+}
+
 export function describeSourceStatus(status: MediaSourceStatus): string {
   switch (status) {
     case "self":
