@@ -1,42 +1,40 @@
 // see docs/ui/components/C19-discovery-detail-hero.md
 //
-// Recommendation切替UI(矢印案／サムネイル案)は検討事項のため、Issue #8では
-// switchStyleで両案をトグル実装し、比較できる状態にする。採用案の決定は
-// Issue #8で人間が行う。
+// Recommendation切替UIはサムネイルを採用済み(C19検討事項)。Issue #8で比較した
+// 矢印案もswitchStyleで表示できるよう残している。
 //
-// Recommendationが0件の場合のHero表示は別の検討事項であり、現在成立しない
-// Valueからの補完はしない方針(docs/ui/screens/S03-discovery-detail.md)。
-// docs/ui/wireframe/S03/PC-HeroVariants.pngのD(非表示)/E(最小表示)の2案のうち、
-// モックではD(Hero自体を表示しない)を既定とし、Non-blockingとして引き継ぐ。
-// Issue #50で探索開始直後のHeroを比較するため、emptyStyle="minimal"でEも表示できる。
+// Recommendationが0件の場合も、Heroは非表示にせず標準Heroを表示する(Issue #50で決定。
+// PC-HeroVariants.pngのD「非表示」・E「最小表示」は不採用)。標準Heroのデザイン・文言は
+// Issue #52で検討するため、ここでの表示は仮のもの。現在成立しないValueから補完せず、
+// 対象を推測した画像も用いない。
 "use client";
 
 import { useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, ImageIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, ImageIcon, SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DiscoveryRecommendation } from "@/lib/mock-data/discovery";
 
 export function DiscoveryDetailHero({
   recommendations,
   switchStyle,
-  emptyStyle = "hidden",
 }: {
   recommendations: DiscoveryRecommendation[];
   switchStyle: "arrow" | "thumbnail";
-  /** Recommendation0件時の表示。"hidden"=比較案D(非表示) | "minimal"=比較案E(最小表示) */
-  emptyStyle?: "hidden" | "minimal";
 }) {
   const [index, setIndex] = useState(0);
 
   if (recommendations.length === 0) {
-    if (emptyStyle === "hidden") return null;
-    // 文言はPC-HeroVariants.pngの例示であり確定ではない
+    // 標準Hero(仮表示)。文言・デザインはIssue #52で検討する
     return (
       <section
         aria-label="今伝えたい価値"
-        className="rounded-xl border border-dashed px-6 py-5 text-center text-sm text-muted-foreground"
+        className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border bg-muted p-6 text-center"
       >
-        この発見のおすすめは準備中です
+        <SearchIcon className="h-8 w-8 text-muted-foreground" aria-hidden />
+        <p className="text-lg font-semibold">いま、情報を集めています</p>
+        <p className="text-sm text-muted-foreground">
+          知っていることや手元の資料があれば、コメントで教えてください
+        </p>
       </section>
     );
   }

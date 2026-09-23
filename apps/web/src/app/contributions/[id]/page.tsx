@@ -10,7 +10,8 @@
 // - owner: ctx=own時、投稿者本人か。"self" | "other"。既定値は"self"。
 //   本人でない場合、C16/C17/C18に加えC10の表示も未定義のため(Non-blocking #3)、
 //   モックではC10も含め非表示とする。
-// - reaction: C10の表現。"single" | "multiple"。既定値は"single"(ctx=normal時のみ)。
+// - reaction: C10の表現。"single" | "multiple"。既定値は"multiple"(ctx=normal時のみ)。
+//   複数リアクションはIssue #50のレビューで既決と確認したため既定値とする。
 // - layout: 自分の確認のカラム数。"two-col" | "one-col"。既定値は"two-col"。
 // - c18: Mobile側C18の固定方式。"inline" | "sticky"。既定値は"inline"。
 //   ワイヤーフレームの「上部固定」案は、本文→価値→関連の情報順の決定(Issue #17)と
@@ -89,7 +90,7 @@ export default async function ContributionDetailPage({ params, searchParams }: P
 
   const ctx = pickParam(sp.ctx, CTX_OPTIONS, "normal");
   const owner = pickParam(sp.owner, OWNER_OPTIONS, "self");
-  const reaction = pickParam(sp.reaction, REACTION_OPTIONS, "single");
+  const reaction = pickParam(sp.reaction, REACTION_OPTIONS, "multiple");
   const layout = pickParam(sp.layout, LAYOUT_OPTIONS, "two-col");
   const c18 = pickParam(sp.c18, C18_OPTIONS, "inline");
   const c20target = pickParam(sp.c20target, C20_TARGET_OPTIONS, "link");
