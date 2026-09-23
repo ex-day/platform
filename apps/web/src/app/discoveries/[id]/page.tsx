@@ -6,10 +6,11 @@
 //
 // 検討中の複数表現案はsearchParamsのクエリで切り替える(Issue #8のNon-blockingな
 // 要検討事項)。画面上部の[Mock比較用]バーから切り替えて比較できる。
-// - hero: Hero切替UI。"arrow"(矢印) | "thumbnail"(サムネイル)。既定値は"arrow"。
-// - reaction: リアクションボタン表現。"single"(単一) | "multiple"(複数)。既定値は"single"。
+// - hero: Hero切替UI。"arrow"(矢印) | "thumbnail"(サムネイル)。既定値は"thumbnail"。
+// - reaction: リアクションボタン表現。"single"(単一) | "multiple"(複数)。既定値は"multiple"。
 // - place: 場所表示。"text" | "map"。既定値は"text"。
-// 各案の採用判断はIssue #8で人間が行う(docs/development/ai-collaboration.md §3)。
+// 既定値は決定済みの方針に合わせている(サムネイル=C19、複数リアクション・場所text=
+// S03構成方針、Issue #50のレビューで既決と確認)。他の案は比較用に残している。
 //
 // DEC-0005・Issue #48/#50により、Hero直後にC25(わかってきたこと)を置き、
 // 従来のS06への「知識・疑問一覧を見る」導線をC26(コメント)の埋め込みに置き換えた。
@@ -18,8 +19,8 @@
 // 探索開始直後(exploring-start)／探索中(exploring)／推薦可能(sample-1)を切り替える。
 // 段階の呼び分けはモック上のもので、状態の定義はIssue #36/#46で行う。
 // - origin: 探索開始直後の起点資料。"none" | "photo"。既定値は"none"。
-// - hero0: 探索開始直後のHero。"question"(比較案C 疑問起点) | "hidden"(D 非表示)
-//   | "minimal"(E 最小表示)。既定値は"question"。採用判断は人間が行う(C19検討事項)。
+//   写真ありは起点の写真をHeroに利用し、なしは標準Hero(仮表示、Issue #52)を表示する。
+//   Heroは状態にかかわらず常に表示する(Issue #50で決定。比較案D/Eは不採用)。
 // - related: 探索中の関連Discovery。"none" | "some"。既定値は"none"。
 import Link from "next/link";
 import { DiscoveryDetailHero } from "@/components/C19-discovery-detail-hero/DiscoveryDetailHero";
@@ -40,7 +41,6 @@ const HERO_OPTIONS = ["arrow", "thumbnail"] as const;
 const REACTION_OPTIONS = ["single", "multiple"] as const;
 const PLACE_OPTIONS = ["text", "map"] as const;
 const ORIGIN_OPTIONS = ["none", "photo"] as const;
-const HERO0_OPTIONS = ["question", "hidden", "minimal"] as const;
 const RELATED_OPTIONS = ["none", "some"] as const;
 
 const STAGES = [
@@ -53,12 +53,9 @@ const OPTION_LABELS: Record<string, string> = {
   none: "なし",
   photo: "写真あり",
   some: "あり",
-  question: "C:疑問起点",
-  hidden: "D:非表示",
-  minimal: "E:最小表示",
 };
 
-type ParamKey = "hero" | "reaction" | "place" | "origin" | "hero0" | "related";
+type ParamKey = "hero" | "reaction" | "place" | "origin" | "related";
 
 function pickParam<T extends readonly string[]>(
   value: string | string[] | undefined,
@@ -83,11 +80,10 @@ export default async function DiscoveryDetailPage({
   const sp = await searchParams;
 
   const current: Record<ParamKey, string> = {
-    hero: pickParam(sp.hero, HERO_OPTIONS, "arrow"),
-    reaction: pickParam(sp.reaction, REACTION_OPTIONS, "single"),
+    hero: pickParam(sp.hero, HERO_OPTIONS, "thumbnail"),
+    reaction: pickParam(sp.reaction, REACTION_OPTIONS, "multiple"),
     place: pickParam(sp.place, PLACE_OPTIONS, "text"),
     origin: pickParam(sp.origin, ORIGIN_OPTIONS, "none"),
-    hero0: pickParam(sp.hero0, HERO0_OPTIONS, "question"),
     related: pickParam(sp.related, RELATED_OPTIONS, "none"),
   };
   const hero = current.hero as (typeof HERO_OPTIONS)[number];
@@ -96,7 +92,6 @@ export default async function DiscoveryDetailPage({
 
   const discovery = getDiscoveryById(id, {
     originPhoto: current.origin === "photo",
-    questionHero: current.hero0 === "question",
     withRelated: current.related === "some",
   });
 
@@ -132,12 +127,7 @@ export default async function DiscoveryDetailPage({
             </Link>
           ))}
         </span>
-        {id === "exploring-start" ? (
-          <>
-            {renderToggle("起点の資料", "origin", ORIGIN_OPTIONS)}
-            {renderToggle("Hero", "hero0", HERO0_OPTIONS)}
-          </>
-        ) : null}
+        {id === "exploring-start" ? renderToggle("起点の資料", "origin", ORIGIN_OPTIONS) : null}
         {id === "exploring" ? renderToggle("関連Discovery", "related", RELATED_OPTIONS) : null}
         {renderToggle("Hero切替", "hero", HERO_OPTIONS)}
         {renderToggle("リアクション", "reaction", REACTION_OPTIONS)}
@@ -148,10 +138,9 @@ export default async function DiscoveryDetailPage({
         <h1 className="text-2xl font-bold">{discovery.title}</h1>
         <DiscoveryDetailHero
           // 比較用クエリの切替で選択中のRecommendationをリセットする
-          key={`${discovery.id}-${current.origin}-${current.hero0}`}
+          key={`${discovery.id}-${current.origin}`}
           recommendations={discovery.recommendations}
           switchStyle={hero}
-          emptyStyle={current.hero0 === "minimal" ? "minimal" : "hidden"}
         />
         <DiscoveryEmergingTerms terms={discovery.emergingTerms} />
         {discovery.body ? (

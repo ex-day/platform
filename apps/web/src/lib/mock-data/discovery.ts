@@ -295,8 +295,6 @@ const DISCOVERIES: Record<string, Discovery> = {
 export type DiscoveryMockOptions = {
   /** 探索開始直後: 起点Contributionに写真があるか */
   originPhoto?: boolean;
-  /** 探索開始直後: 起点の問いを疑問起点のRecommendationとしてHeroに出すか(C19 比較案C) */
-  questionHero?: boolean;
   /** 探索中: 関連Discoveryがあるか */
   withRelated?: boolean;
 };
@@ -322,17 +320,18 @@ function buildExploringStart(options: DiscoveryMockOptions): Discovery {
     title: EXPLORING_TITLE,
     body: "",
     place: EXPLORING_PLACE,
-    recommendations:
-      (options.questionHero ?? true)
-        ? [
-            {
-              id: "rec-question",
-              message: "この浜の貝について疑問が寄せられています",
-              participationMessage: "一緒に考えませんか？",
-              media: withPhoto ? { alt: "起点の投稿の写真：浜で貝を干す人々（年代不明・祖母のアルバム）" } : undefined,
-            },
-          ]
-        : [],
+    // 起点の写真がある場合はそれをHeroに利用し、ない場合はRecommendation 0件として
+    // C19の標準Heroを表示する(C19「初期表示(Recommendationが0件の場合)」)
+    recommendations: withPhoto
+      ? [
+          {
+            id: "rec-question",
+            message: "この浜の貝について疑問が寄せられています",
+            participationMessage: "一緒に考えませんか？",
+            media: { alt: "起点の投稿の写真：浜で貝を干す人々（年代不明・祖母のアルバム）" },
+          },
+        ]
+      : [],
     otherValues: [],
     reactionCount: 1,
     emergingTerms: [],
