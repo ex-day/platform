@@ -4,6 +4,8 @@
 // 実際のAPI契約を先取りするものではない(docs/ui/components/C19-discovery-detail-hero.md
 // 「表示に必要な文言・Mediaを用意する担当と具体的なデータ契約は未確定」を参照)。
 
+import type { DraftMedia } from "@/lib/mock-data/contribution-draft";
+
 export type DiscoveryCondition = {
   label: string;
   value: string;
@@ -41,6 +43,19 @@ export type RelatedDiscoverySummary = {
   place: DiscoveryPlace;
 };
 
+/**
+ * S03に埋め込むコメント(C26)。DEC-0005によりContributionを発言(コメント)として扱う。
+ * 添付資料はS04と同じDraftMedia型で持ち、出典状態は"unset"を許容する(C23)。
+ */
+export type DiscoveryComment = {
+  id: string;
+  author: string;
+  /** 相対表現の表示用文字列(モックのため日時計算はしない) */
+  postedAtLabel: string;
+  body: string;
+  media: DraftMedia[];
+};
+
 export type Discovery = {
   id: string;
   title: string;
@@ -49,10 +64,22 @@ export type Discovery = {
   recommendations: DiscoveryRecommendation[];
   otherValues: DiscoveryValueItem[];
   reactionCount: number;
+  /** C25。複数のコメントから抽出された未確定の語句 */
+  emergingTerms: string[];
+  /** C26。時系列(古い→新しい)順 */
+  comments: DiscoveryComment[];
   derivedFrom: RelatedDiscoverySummary[];
   derivedTo: RelatedDiscoverySummary[];
   related: RelatedDiscoverySummary[];
 };
+
+function mockMedia(
+  id: string,
+  name: string,
+  source: Pick<DraftMedia, "sourceStatus" | "sourceType" | "sourceName"> = { sourceStatus: "unset" },
+): DraftMedia {
+  return { id, name, kind: "image", flaggedInappropriate: false, ...source };
+}
 
 function relatedItems(
   prefix: string,
@@ -105,6 +132,50 @@ const DISCOVERIES: Record<string, Discovery> = {
       },
     ],
     reactionCount: 128,
+    emergingTerms: ["後北条氏の支城", "戦国期", "夕景", "桜の名所", "石垣の積み方"],
+    comments: [
+      {
+        id: "comment-1",
+        author: "くみ子",
+        postedAtLabel: "12日前",
+        body: "子どもの頃、祖父とよくここから夕日を見ていました。当時の写真が出てきたので載せます。",
+        media: [mockMedia("comment-1-media-1", "昭和50年代の城跡.jpg")],
+      },
+      {
+        id: "comment-2",
+        author: "みつる",
+        postedAtLabel: "10日前",
+        body: "戦国期には後北条氏の支城だったと聞いたことがあります。",
+        media: [],
+      },
+      {
+        id: "comment-3",
+        author: "はるか",
+        postedAtLabel: "6日前",
+        body: "市の資料館に古い縄張り図がありました。石垣の積み方も時代で違うみたいです。",
+        media: [
+          mockMedia("comment-3-media-1", "縄張り図.jpg", {
+            sourceStatus: "registered",
+            sourceType: "document",
+            sourceName: "○○市郷土資料館 所蔵資料",
+          }),
+        ],
+      },
+      {
+        id: "comment-4",
+        author: "けんじ",
+        postedAtLabel: "2日前",
+        body: "今週末あたり桜が見頃になりそうです。夕方の石垣と一緒に撮ってきました。",
+        media: [mockMedia("comment-4-media-1", "夕景と桜.jpg", { sourceStatus: "self" })],
+      },
+      {
+        id: "comment-5",
+        author: "ゆかり",
+        postedAtLabel: "3時間前",
+        body: "くみ子さんの写真、今と見比べると石垣の上の木がずいぶん育っていますね。",
+        media: [],
+      },
+    ],
     derivedFrom: relatedItems("derived-from", 1, {
       subject: "城下町の街並み",
       value: "城跡の麓に広がる古い街並み",
@@ -135,6 +206,23 @@ const DISCOVERIES: Record<string, Discovery> = {
     ],
     otherValues: [],
     reactionCount: 12,
+    emergingTerms: ["道標？", "供養塔？", "江戸時代"],
+    comments: [
+      {
+        id: "comment-1",
+        author: "たけし",
+        postedAtLabel: "4日前",
+        body: "形からすると道標か供養塔かもしれません。裏側の文字を撮ってきました。",
+        media: [mockMedia("comment-1-media-1", "石碑の裏側.jpg")],
+      },
+      {
+        id: "comment-2",
+        author: "はるか",
+        postedAtLabel: "1日前",
+        body: "年号が読めれば江戸時代のものか分かりそうですね。",
+        media: [],
+      },
+    ],
     derivedFrom: [],
     derivedTo: relatedItems("derived-to", 1, {
       subject: "登山道の分岐点",
@@ -177,6 +265,8 @@ const DISCOVERIES: Record<string, Discovery> = {
       },
     ],
     reactionCount: 3,
+    emergingTerms: [],
+    comments: [],
     derivedFrom: relatedItems("derived-from", 3, {
       subject: "川の上流",
       value: "上流にある発見",
