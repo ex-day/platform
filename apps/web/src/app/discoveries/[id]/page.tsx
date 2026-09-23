@@ -10,11 +10,22 @@
 // - reaction: リアクションボタン表現。"single"(単一) | "multiple"(複数)。既定値は"single"。
 // - place: 場所表示。"text" | "map"。既定値は"text"。
 // 各案の採用判断はIssue #8で人間が行う(docs/development/ai-collaboration.md §3)。
+//
+// DEC-0005・Issue #48/#50により、Hero直後にC25(わかってきたこと)を置き、
+// 従来のS06への「知識・疑問一覧を見る」導線をC26(コメント)の埋め込みに置き換えた。
 import Link from "next/link";
 import { DiscoveryDetailHero } from "@/components/C19-discovery-detail-hero/DiscoveryDetailHero";
 import { ReactionButton } from "@/components/C10-reaction-button/ReactionButton";
 import { DiscoveryValue } from "@/components/C12-discovery-value/DiscoveryValue";
+import { DiscoveryEmergingTerms } from "@/components/C25-discovery-emerging-terms/DiscoveryEmergingTerms";
+import { ContributionThread } from "@/components/C26-contribution-thread/ContributionThread";
 import { RelatedDiscoveryRail } from "@/components/layout/RelatedDiscoveryRail";
+import {
+  RAIL_CONTAINER_CLASS,
+  RAIL_ITEM_CLASS,
+  WRAP_CONTAINER_CLASS,
+  shouldUseRail,
+} from "@/components/layout/rail";
 import { getDiscoveryById } from "@/lib/mock-data/discovery";
 
 type Props = {
@@ -49,6 +60,7 @@ export default async function DiscoveryDetailPage({
   const place = pickParam(sp.place, PLACE_OPTIONS, "text");
 
   const discovery = getDiscoveryById(id);
+  const valuesUseRail = shouldUseRail(discovery.otherValues.length);
 
   const compareHref = (key: "hero" | "reaction" | "place", value: string) => {
     const next = new URLSearchParams();
@@ -118,6 +130,7 @@ export default async function DiscoveryDetailPage({
           recommendations={discovery.recommendations}
           switchStyle={hero}
         />
+        <DiscoveryEmergingTerms terms={discovery.emergingTerms} />
         <p className="whitespace-pre-line text-sm leading-relaxed">
           {discovery.body}
         </p>
@@ -127,20 +140,23 @@ export default async function DiscoveryDetailPage({
       {discovery.otherValues.length > 0 ? (
         <div className="flex flex-col gap-3">
           <h2 className="text-base font-semibold">その他の魅力</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={valuesUseRail ? RAIL_CONTAINER_CLASS : WRAP_CONTAINER_CLASS}>
             {discovery.otherValues.map((item) => (
-              <DiscoveryValue key={item.id} item={item} />
+              <div
+                key={item.id}
+                className={valuesUseRail ? `w-64 ${RAIL_ITEM_CLASS}` : "w-full sm:w-72"}
+              >
+                <DiscoveryValue item={item} />
+              </div>
             ))}
           </div>
         </div>
       ) : null}
 
-      <Link
-        href="/contributions"
-        className="text-sm font-medium text-primary underline underline-offset-2"
-      >
-        知識・疑問一覧を見る →
-      </Link>
+      <ContributionThread
+        key={discovery.id}
+        initialComments={discovery.comments}
+      />
 
       <RelatedDiscoveryRail
         heading="この発見のもとになったDiscovery"
