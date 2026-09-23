@@ -16,10 +16,11 @@
 | 共通ヘッダー         | → [C01](../components/C01-header.md)                   | component   | -        | -  | -        | -          | PC/モバイル |                                                               |
 | タイトル             | discovery_title                                        | text        | -        | -  | API      | title      | PC/モバイル |                                                               |
 | Hero                 | → [Discovery詳細 Hero](../components/C19-discovery-detail-hero.md) | component | - | - | - | - | PC/モバイル | C19。今伝えたい価値をメッセージと任意の画像・映像で提示 |
+| わかってきたこと     | → [C25](../components/C25-discovery-emerging-terms.md) | component | 0..n | - | - | - | PC/モバイル | C25。議論中に抽出された未確定の語句。0件の場合は非表示 |
 | 本文                 | discovery_body                                         | text        | -        | -  | API      | body       | PC/モバイル |                                                               |
 | リアクションボタン   | → [C10](../components/C10-reaction-button.md)          | component   | 3        | -  | -        | -          | PC/モバイル | 👍／😮／♥の複数リアクションを表示                             |
 | その他の魅力         | → [C12](../components/C12-discovery-value.md)          | component   | 0..n     | -  | -        | -          | PC/モバイル |                                                               |
-| 知識・疑問一覧を見る | show_contribution                                      | label/ link | -        | -  | 固定     | -          | PC/モバイル |                                                               |
+| コメント             | → [C26](../components/C26-contribution-thread.md)      | component   | 0..n     | -  | -        | -          | PC/モバイル | C26。DEC-0005によりContributionをコメントとしてS03上に埋め込む |
 | 派生元Discovery      | → [C03](../components/C03-discovery-card.md)           | component   | 0..n     | -  | -        | -          | PC/モバイル | 現在のDiscoveryの主たる起点。明示的な派生関係の派生元を表示   |
 | 派生したDiscovery    | → [C03](../components/C03-discovery-card.md)           | component   | 0..n     | -  | -        | -          | PC/モバイル | 現在のDiscoveryから派生したDiscoveryを表示                    |
 | 関連Discovery        | → [C03](../components/C03-discovery-card.md)           | component   | 0..n     | -  | -        | -          | PC/モバイル | 派生元・派生先以外の意味的関連を表示。Subject由来の関連を含む |
@@ -41,20 +42,26 @@
     - 派生元・派生先は、現在のDiscoveryを基準に明示的な派生関係の方向で判定する
     - 関連Discoveryには、派生と判定されない明示的な関連およびSubjectを介した意味的関連を表示する。共通Subjectだけから派生とみなさない
     - 各Discoveryの表示にはC03を再利用し、関係種別は枠の見出しで表す
-- 知識・疑問一覧を見るを押下
-    - S06: 知識・疑問一覧へ遷移
+- コメントを投稿
+    - C26の入力欄から投稿すると、Discoveryに紐づくコメントとして追加される。詳細な挙動はC26を参照する
+    - 投稿された本文はC25の語句抽出処理の入力となる
+- 「過去のやりとりをすべて見る」を押下
+    - C26のコメント一覧を展開する。詳細はC26を参照する
 - 関係Discoveryの「さらに見る」を押下
     - S02 Discovery探索一覧へ、該当する関係の条件を引き継いで遷移する
 - 遷移元のS01またはS02へ戻る
     - 遷移元のタブ選択状態およびスクロール位置を復元する。時間経過後の順位・鮮度、再取得の基準、非公開となったDiscoveryの扱いは実装時に決定する
 
 ## 構成方針
-- タイトルとHeroでDiscoveryの入口と現在の価値を示し、本文・リアクション・その他の魅力・知識／疑問への導線・関係するDiscoveryへつなぐ。詳細な配置はWireframeで検討する。
+- タイトルとHeroでDiscoveryの入口と現在の価値を示し、本文・リアクション・その他の魅力・コメント（C26）・関係するDiscoveryへつなぐ。詳細な配置はWireframeで検討する。
 - 場所は地図を埋め込まず、テキストで表示する。
 - リアクションは👍／😮／♥の3種類を併記し、ユーザーが複数の種類を付与できる構成とする。
 - 「今のおすすめ」の独立枠は設けず、C13の責務をHeroへ統合する。C13は廃止記録として残し、IDを再利用しない。
 - 「その他の魅力」は現在成立しないValueを対象とし、将来・別Contextで成立し得る条件を説明できるようにする。該当がなければ表示しない。
 - 公開・推薦上の制約があるValueや評価不能のValueを、一律に「その他の魅力」へ流さない。表示可否・表示先は後続設計で定める。
+- 付随的な情報（その他の魅力＝C12、派生元／派生した／関連Discovery＝C03の各枠）は、件数が可変であることを踏まえ横スクロールのカード列として表示する。本文とコメント（C26）のみ縦に積む構成とする（DEC-0005、Issue #48のWireframe検証結果）。
+- 議論中に抽出された未確定の語句（C25）は、Hero直後・本文の前に配置する。0件の場合は表示しない。
+- コメント（C26）は、従来「知識・疑問一覧を見る」によるS06への遷移で担っていた役割を置き換える。DEC-0005によりContributionはコメントとしての参加に一本化されるため、S06への導線は設けない。S05・S06自体の廃止判断はDEC-0005のConsequencesを参照し、本書では扱わない。
 
 ### 関係するDiscoveryのモバイル表示（ワイヤーフレームレビュー結果）
 
@@ -73,6 +80,7 @@
 - 関係の条件をS02へどう引き継ぎ、S02上でどう表示するか
 
 ## 検討事項
+- コメント（C26）の直近表示件数・ページング方式、および抽出語句（C25）の確定基準はDEC-0005のDeferred Questionsを参照する（Issue #48）。
 - HeroのRecommendation初期選択、表示順、画像・映像なしの場合と疑問状態の構成
 - 現在Contextの基準と再評価契機、Recommendation 0件・評価不能・取得失敗時の表示
 - 評価済みRecommendationからHeroの文言・Mediaを用意する担当と入力契約、公開・推薦上の制約と表示の優先関係
