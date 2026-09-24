@@ -1,6 +1,6 @@
 # C25 discovery-emerging-terms（仮称）
 ## 機能概要
-議論中にContributionから継続的に抽出された、まだConditionやValueとして確定していない語句を提示するコンポーネント。DEC-0005の「コメントからの継続的な価値抽出」に対応し、Discoveryが探索中〜蓄積中の段階で、価値が形成されていく過程を示す。
+議論中にContributionから継続的に抽出された、まだConditionやValueとして確定していない語句を提示するコンポーネント。DEC-0005の「コメントからの継続的な価値抽出」に対応し、Discoveryが探索中〜蓄積中の段階で、価値が形成されていく過程を示す。「探索中」「蓄積中」はView上の表現であり、Discoveryのドメイン状態と一対一に対応しない。抽出された語句はValue候補等の解析結果であり、Discoveryの成立状態には含めない（[DEC-0006](../../decisions/DEC-0006-discovery-state-responsibilities.md)）。
 
 正式なコンポーネントIDはC25として仮に採番する。既存コンポーネントとの採番調整は後続で確認する。
 
