@@ -2,7 +2,7 @@
 
 - 作成日：2026-09-15
 - 最終追補日：2026-09-24
-- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition、Contributionから複数DiscoveryへのValue提供関係、Contributionの独立性とDiscovery成立判断、DEC-0006によるDiscoveryの成立状態・公開状態と周辺状態の責務分離の追補反映）
+- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition、Contributionから複数DiscoveryへのValue提供関係、Contributionの独立性とDiscovery成立判断、DEC-0006によるDiscoveryの成立状態・公開状態と周辺状態の責務分離、DEC-0005によるContributionの発言としての位置付けと構造化情報・資料のDiscoveryへの帰属の追補反映）
 - 対象：論理属性、責務、関係、多重度、代表シナリオによる整合性確認
 - 対象外：物理DB、UUID、FK、index、PostGIS、pgvector、API、画面、具体的な推定アルゴリズム
 
@@ -17,14 +17,14 @@
 3. `ex-day_requirements.md` および参照資料 `sources/ex-day_requirements_v0.3(2).md`
 4. `ex-day_mvp_scope.md` および参照資料 `sources/ex-day_mvp_scope_v0.1(1).md`
 
-今回の追補は[DEC-0004](decisions/DEC-0004-contribution-as-first-class-content.md)と2026-09-22の改訂依頼に基づく。Contribution単独での成立・保持はDEC-0004、Discoveryの成立原則および自動判定を基本に必要時に人が判断する方針は今回の設計判断を根拠とする。後者により、従来のMVPで人間を必須判断者とする記述を更新する。Discoveryを成立前から会話の器とすること、成立状態（`UNESTABLISHED`／`ESTABLISHED`）と公開状態、確認・安全性・知識状態・推薦等の責務分担は[DEC-0006](decisions/DEC-0006-discovery-state-responsibilities.md)を根拠とする。
+今回の追補は[DEC-0004](decisions/DEC-0004-contribution-as-first-class-content.md)と2026-09-22の改訂依頼に基づく。Contribution単独での成立・保持はDEC-0004、Discoveryの成立原則および自動判定を基本に必要時に人が判断する方針は今回の設計判断を根拠とする。後者により、従来のMVPで人間を必須判断者とする記述を更新する。Discoveryを成立前から会話の器とすること、成立状態（`UNESTABLISHED`／`ESTABLISHED`）と公開状態、確認・安全性・知識状態・推薦等の責務分担は[DEC-0006](decisions/DEC-0006-discovery-state-responsibilities.md)を根拠とする。Contributionを発言として扱い固定的な型を定めないこと、場所・時期・分類・Valueといった構造化されうる情報と写真・資料の提供をDiscoveryに帰属させること、発言からの語句・手がかりの抽出を投稿後に複数の発言にまたがって行うことは[DEC-0005](decisions/DEC-0005-contribution-thread-and-comment.md)を根拠とする。
 
 「確定」は論理モデル上の採用を意味し、MVPでの実装確定を意味しない。「要検討」は、今回の設計で勝手に確定しない境界・属性・運用である。
 
 ## 2. 設計原則
 
 1. 中核は User / Discovery / Contribution / Reaction とする。
-2. Discoveryは発見・参加できる意味のある話題、Contributionは単独でも成立し価値を持つコンテンツでありDiscoveryを形成・成長させる材料にもなり得る。Reactionは簡潔な反応である。
+2. Discoveryは発見・参加できる意味のある話題、Contributionは会話の中の発言であり、単独でも成立し価値を持つコンテンツとして、Discoveryを形成・成長させる材料にもなり得る。Reactionは簡潔な反応である。
 3. Themeはユーザーが扱いやすい粗い興味の入口、Subjectは対象を横断して共通利用する統制された意味概念とする。
 4. Subjectは内部タグに閉じず、Discoveryの意味、関連する別Discovery、UserInterestとその推定理由をユーザーへ説明するためにも使う。
 5. UserInterestは自己申告とシステム推定を区別し、本人の明示意思を優先する。明示的な興味なしは再推定を抑止できる。
@@ -33,8 +33,8 @@
 8. 情報の出所、根拠、意味の確信度、事実の信頼度、人気を混同しない。
 9. Subjectが増えただけでDiscoveryを分割しない。Discoveryの成立は、場所とValue（必要に応じて時間・季節等の条件）を認識でき、独立した体験・発見価値として第三者へ提示できるかを判断する。自動判定を基本とし、必要時に運営による判断を組み合わせる。
 10. 不明、推定、異説、反証、保留を表現できる余地を残す。
-11. Contributionには、時間経過によって現在性（Freshness）が変化する情報を表現できる。現在性が低下してもContribution自体は削除せず、過去の記録として保持する。
-12. 開始または告知開始を伝えるContributionがDiscoveryに関連付けられている場合は、公開後速やかにそのDiscoveryの現在状態へ反映できるようにする。一方、終了期限・数量・残量等は投稿時点の情報であり、実際の状況と異なる可能性を明示する。
+11. 時間経過によって現在性（Freshness）が変化する情報は、Contributionの属性としてではなく、発言から抽出された手がかりとしてDiscovery側（現在状態の導出材料、ValueのCondition等）で扱う（DEC-0005 決定8）。Contributionは投稿・公開時点と原文を保持し、現在性が低下しても削除せず、過去の記録として保持する。
+12. 開始または告知開始を伝えるContributionがDiscoveryに属する場合は、公開後速やかにその発言から抽出した手がかりをDiscoveryの現在状態へ反映できるようにする。一方、終了期限・数量・残量等は投稿時点の申告であり、実際の状況と異なる可能性を明示する。
 13. Reactionは関心だけでなく、「今日行ってきた」「買えた」等、ContributionやDiscoveryの現在性を補強するシグナルとして利用できる。ただし、Reactionだけで事実や営業・在庫状況を保証しない。
 14. Seasonは例年の旬・反復時期等から該当Valueを通じてDiscoveryを「今見る価値がありそうな対象」として浮上させるトリガーであり、今年・今日の実状を示すリアルタイム情報そのものではない。
 15. Discoveryの現在状態は固定属性として断定的に保持するのではなく、該当ValueのSeason等の反復時間と、直近のContribution・Reactionから動的に形成する。
@@ -43,6 +43,7 @@
 17. Contributionの投稿成立はDiscoveryの成立・更新・既存Discoveryへの関連付けから独立する。ユーザーが関連先を指定しなくても正常に投稿・保持でき、その場合はシステムが成立前のDiscoveryを器として用意する。投稿後に既存Discoveryとの関係を追加できる。
 18. Contributionが単独で価値を持つことと、Discoveryに属するValueであることを区別する。
 19. Discoveryは成立前から会話の器として存在できる。Discovery自身が永続状態として持つのは成立状態（`UNESTABLISHED`／`ESTABLISHED`）と公開状態に限り、確認・安全性・知識状態・Value候補・推薦・活発度・新しさを単一のDiscovery Statusへ集約しない（DEC-0006）。
+20. Contributionは発言（コメント）としての参加であり、「疑問／知識」等の固定的な型や内容分類の属性を持たない。場所・時期・分類・Valueといった構造化されうる情報と、写真・資料（Media）の提供はDiscovery（成立前を含む）に帰属させる。資料の出典・提供者は資料自体に保持し、どのContributionとともに提供されたかを辿れるようにする（DEC-0005）。
 
 ## 3. 全体関係図
 
@@ -78,13 +79,11 @@ classDiagram
     Discovery "0..*" --> "0..*" Subject : 意味を持つ
     Contribution "0..*" --> "0..*" Subject : 意味を持つ
     Discovery "0..*" --> "0..*" Place : 関わる
-    Contribution "0..*" --> "0..*" Place : 関わる
     Discovery "1" --> "0..*" Value : 持つ（成立済みは1..*）
     Value "1" --> "0..*" Condition : 成立・推薦条件
     ContributionDiscovery "0..*" --> "0..1" Value : 対象Value
     Condition "0..*" --> "0..1" TimeExpression : 時間・季節等を表す
     Discovery "0..*" --> "0..*" TimeExpression : 話題の歴史的時間等
-    Contribution "0..*" --> "0..*" TimeExpression : 関わる
 
     User "1" --> "0..*" Contribution : 提供する
     User "1" --> "0..*" Reaction : 行う
@@ -98,7 +97,9 @@ classDiagram
     DiscoveryDecision "0..*" --> "0..*" Contribution : 判断材料
     DiscoveryDecision "0..*" --> "0..*" Discovery : 比較・結果
 
-    Contribution "1" --> "0..*" Media : 添付
+    Discovery "1" --> "0..*" Media : 提供された資料
+    Media "0..*" --> "0..1" Contribution : 提供時の発言
+    Media "0..*" --> "0..1" Source : 出典
     Contribution "0..*" --> "0..*" Source : 参照
     Evidence "0..*" --> "0..1" Media : 根拠になり得る
     Evidence "0..*" --> "0..1" Source : 根拠になり得る
@@ -108,9 +109,11 @@ classDiagram
     SearchContext ..> Discovery : 探索条件に利用
 ```
 
-図中で複数の `0..1` を持つ対象は「いずれか一種類を参照する」という論理制約を表す。汎用参照、継承、種別別関連のどれで実装するかは要検討である。
+図中で複数の `0..1` を持つ対象は「いずれか一種類を参照する」という論理制約を表す。ただし、Mediaの「提供時の発言」と「出典」は独立した関係であり、両方を持ち得る。汎用参照、継承、種別別関連のどれで実装するかは要検討である。
 
 DiscoveryとValueの`0..*`は成立前（`UNESTABLISHED`）のDiscoveryを含むためであり、成立済み（`ESTABLISHED`）のDiscoveryはValueを1件以上持つ（4.2節）。ContributionとContributionDiscoveryの`0..*`は、成立前Discovery（器）への所属の表現が要検討であるため従来の表記を維持している（6.2節）。
+
+DEC-0005により、Contributionから場所（Place）・時間（TimeExpression）・資料（Media）への直接の関係は持たない。場所・時期はDiscoveryのPlace・TimeExpression、ValueのConditionとして扱い、発言から抽出された語句・手がかりはその形成材料となる（4.2・4.3節）。資料はDiscoveryへ提供されるMediaとして扱い、提供時のContributionを任意で辿れるようにする（8.1節）。統合等により資料を別のDiscoveryから参照する方法は、Issue #37・#46と連携して定める。
 
 ## 4. 中核Entity
 
@@ -132,9 +135,11 @@ DiscoveryとValueの`0..*`は成立前（`UNESTABLISHED`）のDiscoveryを含む
 
 **責務**：ユーザーが発見・参加できる意味のある話題・事象を表す。成立前から、Contributionを蓄積する会話の器として存在できる（Thread等の別Entityは設けない）。会話やContributionから場所とValue（必要に応じて時間・季節等の条件）を認識でき、独立した体験・発見価値として第三者へ提示できると判断された時に成立状態が`ESTABLISHED`へ遷移する。成立は事実の確定を意味せず、答えが未確定で情報が不足していても疑問起点のValueにより成立できる。成立後もContributionにより成長し、別Discoveryへ派生・関連し得る。[DEC-0006]
 
+場所・時期・分類・Valueといった構造化されうる情報と、写真・資料（Media）の提供はDiscoveryに帰属する。発言から抽出された語句・手がかりは複数の発言にまたがって蓄積され、その組み合わせによってDiscoveryのPlace・TimeExpression・Subject・Value（Condition）を形成していく。矛盾する語句や複数の解釈は候補として共存してよく、単一の発言の解析結果をそのまま確定情報にしない。抽出された語句・候補の構造と、いつ・誰が（あるいはどの基準で）確定した情報として扱うかは要検討とする（11節）。[DEC-0005 決定8・9]
+
 **主要論理属性**：識別子、ユーザー向け表題、現在の要約、成立状態（`UNESTABLISHED`／`ESTABLISHED`）、公開状態（少なくとも`PUBLIC`／`HIDDEN`を区別）、成立時点、作成・更新時点。成立前のDiscoveryで表題・要約をどう扱うかは画面・要約設計で定める。知識の状況（答えが出ていない・調査が続いている・情報不足・複数説がある等）、推薦、活発度・新しさは属性として固定せず、Contribution・Value・Evidence・Reaction等から解析・要約・算出する情報とする。表示上の「開催予定／開催中らしい／今シーズンの情報あり」等の現在状態も導出情報であり、固定的な事実属性とは区別する。[DEC-0006]
 
-**主な関係**：Value 0..*（成立済みは1..*）、Contributionと多対多、Subject・Place・TimeExpressionと多対多、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。DiscoveryとTimeExpressionの直接の関係は、話題の歴史的時間等を説明するものであり、Valueの成立・推薦条件とは区別する。
+**主な関係**：Value 0..*（成立済みは1..*）、Contributionと多対多、Subject・Place・TimeExpressionと多対多、提供された資料Media 0..*、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。DiscoveryとTimeExpressionの直接の関係は、話題の歴史的時間等を説明するものであり、Valueの成立・推薦条件とは区別する。
 
 **論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、推薦を分ける。成立状態の遷移は`UNESTABLISHED`から`ESTABLISHED`への方向とし、新しい議論の発生を理由に`UNESTABLISHED`へ戻さない。成立の取消・統合・再審等で状態を変更する場合は判断記録を伴う操作とし、その表し方はIssue #37・#46で定める。成立済みDiscoveryはValueを1件以上持つ。公開状態は成立状態から独立し、両方の成立状態に適用する。成立前Discoveryの暫定公開（Issue #36の案D）は`UNESTABLISHED`かつ`PUBLIC`で表し、専用の状態を設けない。施設の閉園・閉店、季節外等は公開状態で表さない。Time／Seasonは原則としてDiscovery全体の一律の推薦条件ではなく、各Valueの成立・推薦条件である。Discoveryの現在状態は、直近のContributionとReaction、対象期間、該当ValueのSeason等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
 
@@ -195,21 +200,27 @@ DiscoveryとValueの`0..*`は成立前（`UNESTABLISHED`）のDiscoveryを含む
 
 **種別**：永続Entity（確定）
 
-**責務**：単独でも成立し価値を持つ、知識・疑問・資料・証言・体験・記憶・写真等のコンテンツを原文性と出所を保って表す。既存Discoveryの更新や新しいDiscoveryの成立、Valueの形成・成長に寄与し得る。Contributionの論理名は「知識・疑問」とする。
+**責務**：ユーザーが会話の中で行う発言（コメント）を、原文性と出所を保って表す。問い・情報・体験・記憶・証言等を持ち寄る単位であり、単独でも成立し価値を持つ。既存Discoveryの補完・更新や新しいDiscoveryの成立、Valueの形成・成長に寄与し得る。「疑問／知識」等の固定的・排他的な型を持たせず、同じ発言が問いと情報を含むことや、やり取りの中で役割や関連先が変わることを妨げない。従来の論理名「知識・疑問」は廃止する（DEC-0008）。[DEC-0005 決定1・8]
 
-**主要論理属性**：識別子、提供User、本文または説明、内容分類候補、公開状態、作成・更新時点、推定・不確実性に関する表示情報。時間に関わる情報として、投稿・公開時点とは別に、情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠を表現できる余地を持つ。
+**主要論理属性**：識別子、提供User、本文（原文）、公開状態、投稿・公開時点、更新時点、推定・不確実性に関する表示情報。
 
-**主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*および各DiscoveryのValue 0..*、Subject・Place・TimeExpression 0..*、Media 0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
+DEC-0005 決定8により、次の属性はContributionに持たせず、Discovery側で扱う。
+
+- **内容分類候補**：廃止する。発言を「疑問／知識」等の型に分類しない。発言が何について語っているかの推定はContribution Subject（5.3節）として解析結果の側で扱い、分類として構造化されうる情報はDiscoveryのSubject等として形成する。
+- **時間関連属性**（情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠）：発言から抽出された手がかりとして、Discoveryの話題の時間（TimeExpression）、ValueのCondition（4.2.2節）、およびDiscoveryの現在状態の導出材料（4.2節）で扱う。発言の投稿・公開時点はContributionの属性として保持し、手がかりの基準時点として参照できるようにする。
+- **場所・写真・資料**：場所はDiscoveryのPlace（7.1節）、写真・資料はDiscoveryへ提供されるMedia（8.1節）として扱う。
+
+**主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*および各DiscoveryのValue 0..*、Subject 0..*（Contribution Subject）、提供時の発言としてMediaから0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
 
 **投稿・保持の論理制約**：Discoveryの成立・更新・既存Discoveryへの関連付けを投稿成立条件にしない。ユーザーは関連先となる既存Discoveryを指定せずに投稿・保持でき、その場合はシステムが成立前（`UNESTABLISHED`）のDiscoveryを会話の器として用意する（DEC-0006）。類似候補は`0..n`件であり、0件でも、候補があっても関連付けない場合でも投稿できる。投稿後に既存Discoveryとの関係を追加し、還元を再検討できる。成立前Discoveryを器とすることは下書き・投稿不成立・承認待ちを意味しない。器との関係の表現と多重度は6.2節のとおり要検討とする。
 
-場所・時間等の不明な情報の入力や候補選択を、Discoveryを成立させるために強制しない。関連Discoveryの指定とContribution自身の属性入力は区別する。詳細な必須／任意条件は既存の画面・入力設計に従い、DEC-0004だけで新たに変更しない。AIが不足情報を推測・創作して成立へ寄せず、提供情報と推定候補を区別する。
+場所・時間・関連先等の不明な情報の入力や候補選択を投稿成立条件にせず、Discoveryを成立させるために強制しない。場所・時期等はContributionの属性ではないため、投稿画面でこれらをどう扱うか（入力欄を設けないか、Discoveryへの手がかりの提供として受け付けるか）は画面設計で定める。語句・手がかりの抽出は投稿後に行い、解析の未完了・失敗や候補がないことを理由に成立済みのContributionを失わせない（DEC-0005 決定7）。AIが不足情報を推測・創作して成立へ寄せず、提供情報と推定候補を区別する。
 
-ユーザーが関連先を指定しなかったContribution（成立前Discoveryを器とするもの）も原文・資料・疑問と現在状態を保持し、S05・S09等で確認できる対象とする。第三者への公開は器となるDiscoveryの公開状態に従い、成立前でも`HIDDEN`とされない限り閲覧・参加できる。露出方法・探索・検索範囲や状態の保存・導出方法を一律に確定するものではない。
+ユーザーが関連先を指定しなかったContribution（成立前Discoveryを器とするもの）も原文と現在状態を保持し（ともに提供された資料は器のDiscoveryに属するMediaとして保持する）、S05・S09等で確認できる対象とする。第三者への公開は器となるDiscoveryの公開状態に従い、成立前でも`HIDDEN`とされない限り閲覧・参加できる。露出方法・探索・検索範囲や状態の保存・導出方法を一律に確定するものではない。
 
-**その他の論理制約**：Contributionが単独で価値を持つことと、Discoveryに属するValueであることを区別する。ContributionをそのままValueへ置き換えず、登録時点でValueの成立を必須としない。投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わるContributionは、Freshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の情報は、関連Discoveryがある場合に公開後速やかにその現在状態へ反映できるようにする。関連先を指定しなかった場合も投稿を成立させ、後から既存Discoveryへ関連付けた際の反映方法は後続設計とする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
+**その他の論理制約**：Contributionが単独で価値を持つことと、Discoveryに属するValueであることを区別する。ContributionをそのままValueへ置き換えず、登録時点でValueの成立を必須としない。投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するContributionを一方の上書きで消さない。時間経過で現在性が変わる内容を伝えるContributionは、そこから抽出した手がかりのFreshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の手がかりは、Contributionが属するDiscoveryの現在状態へ公開後速やかに反映できるようにする。後から既存Discoveryへ関連付けた際の反映方法は後続設計とする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
 
-**要検討**：自然文ContributionからのValueの抽出・生成・更新方法、単独での成立・保持を前提としたDiscovery／Valueへの還元方法、成立前Discoveryを器とするContributionの露出方法・探索・検索範囲（公開の可否はDiscoveryの公開状態に従う）、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、一投稿の単位、返信・引用、編集・訂正履歴、外部情報のContribution化、自由文とReactionの境界、対象期間とFreshnessの具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
+**要検討**：自然文ContributionからのValueの抽出・生成・更新方法（複数の発言にまたがる語句・手がかりの抽出・蓄積・確定。DEC-0005 決定9・Deferred）、単独での成立・保持を前提としたDiscovery／Valueへの還元方法、成立前Discoveryを器とするContributionの露出方法・探索・検索範囲（公開の可否はDiscoveryの公開状態に従う）、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、一投稿の単位、返信・引用、編集・訂正履歴、外部情報のContribution化、自由文とReactionの境界、発言から抽出した対象期間・Freshness等の手がかりをDiscovery側で保持する具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
 
 ### 4.4 Reaction
 
@@ -353,21 +364,21 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 **種別**：永続参照Entityまたは値を持つEntity（基本概念は確定）
 
-**責務**：Discovery・Contribution・UserInterestが関わる場所を共通に参照できるようにする。
+**責務**：Discovery・UserInterestが関わる場所を共通に参照できるようにする。場所はContributionの属性として持たず、発言・資料から得られた手がかりの蓄積を通じてDiscoveryのPlaceとして形成する（DEC-0005）。
 
 **主要論理属性**：識別子、名称、説明、場所区分、確からしさ、適用期間または名称の時代性に関する情報。
 
 **基本区分**：Pointは特定地点、Areaは地域・範囲。PointがAreaに含まれ、Area同士が包含・重複し得る。
 
-**主な関係**：Discovery・Contribution・UserInterestと多対多相当。Place同士に包含等の関係を持ち得る。
+**主な関係**：Discovery・UserInterestと多対多相当。Place同士に包含等の関係を持ち得る。
 
-**要検討**：Point／Areaを継承で分けるか、複数地点、経路、曖昧範囲、旧地名、境界の時間変化、PlaceRelationの独立Entity化、対象との関係上の役割。
+**要検討**：Point／Areaを継承で分けるか、複数地点、経路、曖昧範囲、旧地名、境界の時間変化、PlaceRelationの独立Entity化、対象との関係上の役割、Mediaの撮影場所等の資料を説明する場所情報の持ち方。
 
 ### 7.2 TimeExpression
 
 **種別**：Value Objectを基本とする論理概念（区分は確定、永続形は要検討）
 
-**責務**：Discovery・Contribution・UserInterestが関わる時間を表す。
+**責務**：Discovery・ValueのCondition・UserInterestが関わる時間を表す。時間はContributionの属性として持たず、発言から抽出された手がかりの蓄積を通じてDiscovery側で形成する（DEC-0005）。
 
 **歴史的時間の主要属性候補**：時点／期間／年代／時代、開始・終了の表現、精度、推定・不明、表示文。
 
@@ -375,13 +386,13 @@ Discovery SubjectおよびContribution Subjectは、別種類のSubjectではな
 
 本書ではSeasonを独立した中核Entityとして確定せず、TimeExpressionが表す季節・旬・反復時間の役割名として扱う。ValueのConditionとしてのSeasonは、現在時刻との一致により該当Valueを通じてDiscoveryを再浮上させ、今年のContributionを集めたり確認したりする契機を作る。Season一致だけでは、今年の開始、当日の開催、営業、在庫等のリアルタイムな実状を意味しない。
 
-Contributionの時間情報では、投稿・公開時点と、そのContributionが表す事象の対象期間を分ける。事前告知は公開時点から参照可能で、対象開始前は「開催予定」等、開始後は期間と直近シグナルに基づく状態として扱える。終了日時や「なくなり次第終了」、数量・残量等は投稿時点情報として保持し、現実との一致を継続保証しない。
+発言の投稿・公開時点（Contributionの属性）と、発言が伝える事象の対象期間（Discovery側で扱う手がかり）を分ける。事前告知は公開時点から参照可能で、対象開始前は「開催予定」等、開始後は期間と直近シグナルに基づくDiscoveryの現在状態として扱える。終了日時や「なくなり次第終了」、数量・残量等は投稿時点の申告として扱い、現実との一致を継続保証しない。
 
-**主な関係**：Discovery・Contribution・UserInterestから0..*。ValueのConditionからもTime／Seasonの表現として参照し得る。一対象に歴史的時間と反復時間が併存できる。
+**主な関係**：Discovery・UserInterestから0..*。ValueのConditionからもTime／Seasonの表現として参照し得る。一対象に歴史的時間と反復時間が併存できる。
 
 **論理制約**：中世であることから現在訪問可能とは判断しない。反復時間は現在有効である根拠や適用期間を必要とし得る。Season一致と、今年・今日のContributionによる現在性を区別する。投稿・公開時点、対象開始、対象終了、Freshnessの失効を同一の日時にまとめない。
 
-**要検討**：時代マスタ、曖昧・複数説、暦、タイムゾーン、反復規則、現在性の確認、共通Entityとして識別する範囲、Seasonを独立Entity／関連Entity／TimeExpressionの区分のどれで実装するか、告知・対象期間・Freshnessの値表現、終了未定と例外日の扱い。
+**要検討**：時代マスタ、曖昧・複数説、暦、タイムゾーン、反復規則、現在性の確認、共通Entityとして識別する範囲、Seasonを独立Entity／関連Entity／TimeExpressionの区分のどれで実装するか、告知・対象期間・Freshnessの値表現とDiscovery側での保持方法、終了未定と例外日の扱い。
 
 ### 7.3 SearchContext
 
@@ -405,13 +416,15 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 **種別**：永続Entity（仮定義）
 
-**責務**：画像、文書、音声等のデジタル資産をContribution本文と分けて管理し、提供・権利・説明を辿れるようにする。
+**責務**：画像、文書、音声等のデジタル資産を、Discovery（成立前を含む）に対して直接提供される資料として管理し、提供・出典・権利・説明を辿れるようにする。Contributionの添付物としては扱わない（DEC-0005 決定8）。
 
-**主要論理属性候補**：識別子、媒体種別、説明、提供者、権利・利用条件、作成／撮影時点、取得時点、管理状態。
+**主要論理属性候補**：識別子、提供先Discovery、提供時の発言（任意）、媒体種別、説明、提供者、出典、権利・利用条件、作成／撮影時点、取得時点、管理状態。
 
-**主な関係**：Contribution 0..*、Evidence 0..*、必要に応じSource 0..1。
+**主な関係**：提供先Discovery 1、提供時のContribution 0..1、Evidence 0..*、必要に応じSource 0..1。
 
-**要検討**：外部URL、同一ファイル重複、派生物、代表画像、メタデータ、削除時の参照保持。
+**論理制約**：出典・提供者・権利情報は資料自体に紐づけて保持し、統合等で帰属先が変わっても失われないようにする。資料がどのContributionとともに提供されたかを辿れるようにするが、Contributionを伴わない資料の提供も妨げない。資料の撮影・作成時点を、話題の対象年代や体験時期と混同しない。
+
+**要検討**：外部URL、同一ファイル重複、派生物、代表画像、メタデータ、削除時の参照保持、統合時に資料を統合先Discoveryから参照する方法（Issue #37・#46）、撮影場所等の資料を説明する場所情報の持ち方。
 
 ### 8.2 Source
 
@@ -421,7 +434,7 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 **主要論理属性候補**：識別子、種別、名称・書誌、作成者・発行者、公開／作成時点、参照先、取得時点、説明、管理状態。
 
-**主な関係**：Contributionと多対多、Evidence 0..*、Media 0..*になり得る。
+**主な関係**：Contributionと多対多、Evidence 0..*、Media 0..*（資料の出典）になり得る。
 
 **要検討**：原資料と複製、版、Web更新、聞き取り対象者、外部情報のContribution化、権利・引用情報の責務分担。
 
@@ -458,10 +471,11 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - DiscoveryとContributionはContributionDiscoveryを介する多対多。ユーザーが関連先を指定しなかったContributionは、システムが用意した成立前Discoveryを器として持ち、投稿後に既存Discoveryとの関連を追加できる。器への所属の表現とContribution側の多重度は要検討（6.2節）。一つのContributionが複数Discoveryの材料になり、各Discoveryで異なるValueの形成・向上に利用され得る。対象Valueは任意であり、指定する場合はそのDiscoveryに属するValueでなければならない。
 - DiscoveryとSubject、ContributionとSubjectは多対多。関連固有の確信度・付与元を持ち得る。
 - 成立済みのDiscoveryはValueを1件以上持ち、成立前のDiscoveryはValueを持たなくてよい。各ValueはTime／Season等のConditionを0件以上持てる。Conditionがない軸には依存しない。
-- DiscoveryとPlace／TimeExpression、ContributionとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。ただし、Discoveryの話題を説明する歴史的時間と、Valueの成立・推薦条件としてのTime／Seasonを区別する。
+- DiscoveryとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。ContributionはPlace／TimeExpressionを直接持たず、発言から抽出された手がかりがDiscovery側の形成材料となる（DEC-0005）。ただし、Discoveryの話題を説明する歴史的時間と、Valueの成立・推薦条件としてのTime／Seasonを区別する。
 - Reactionは一つのDiscoveryまたは一つのContributionを対象とする。
 - Discoveryの現在状態は、該当ValueのSeason等の反復時間と、直近のContribution・Reactionから導出する。これはDiscoveryの恒常的な意味や存在期間とは別である。
-- Contributionの投稿・公開時点、対象期間、Freshnessは別概念である。現在性が失効してもContributionとの関連は保持する。
+- Contributionの投稿・公開時点と、発言から抽出された対象期間、Freshnessは別概念である。後二者はDiscovery側で扱う。現在性が失効してもContributionとの関連は保持する。
+- MediaはDiscoveryへ提供される資料であり、提供時のContributionを0..1で辿れる。出典・提供者は資料自体に保持する（DEC-0005）。
 - DiscoveryRelationは二つのDiscovery間の明示的関係を表す。Subject由来の関連候補とは別である。
 - DiscoveryDecisionは自動判定または人による判断の結果・根拠を保持する。比較対象Discoveryが0件でも正常であり、結果Discoveryも0件以上となる。現時点では成立させない・保留等では成立状態が遷移したDiscoveryがなく、対象の成立前Discoveryは`UNESTABLISHED`のまま保持される。
 - Discoveryの成立状態・公開状態はDiscoveryの論理属性であり、確認・安全性・知識の状況・推薦・活発度等は判断対象側の状態または導出・算出結果として扱う（4.2節）。判断記録自体をContribution投稿の必須条件にはしない。
@@ -472,21 +486,21 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 ### 10.1 小机城址：同一Discoveryの成長
 
 1. 小机城址の存在を伝えるContributionを器として受けた成立前Discoveryが、成立判断を経て`ESTABLISHED`となり、Discovery「小机城址」としてPlaceのPoint「小机城址」とArea「小机周辺」、Subject「城址」「城郭」「中世」等に関連する。「中世」は歴史的な話題を示すSubject側の属性であり、現在の訪問・推薦条件ではない。
-2. User Aの「現在は公園として歩ける」というContributionと、User Bの写真MediaがContributionDiscoveryを介して同じDiscoveryへ追加される。
-3. Contribution Subject「公園」「丘」「散歩」と歴史的Time／現在の観察が加わる。
+2. User Aの「現在は公園として歩ける」というContributionがContributionDiscoveryを介して同じDiscoveryへ加わり、User Bの写真Mediaが同じDiscoveryへ資料として提供される（提供時のContributionと提供者を辿れる）。
+3. 発言からContribution Subject「公園」「丘」「散歩」が推定され、歴史的な時間や現在の観察に関する語句・手がかりがDiscovery側に蓄積される。
 4. 既存の話題と意味的に両立し、独立Discoveryにする必要がないため、DiscoveryDecisionは既存への統合／成長と判断する。
 5. 城に関心のあるUserにも散歩に関心のあるUserにも異なる入口を提供するが、興味の違いだけではDiscoveryを分割しない。
 6. Valueとして「城址の歴史を知る」「公園を歩く」等を持てる。この例ではいずれにもTime／SeasonのConditionを付けないため、季節・時間帯の指定だけを理由に候補から除外しない。
 
-**検証結果**：一つのDiscoveryが複数Subject・Valueを持って成長でき、条件なしのValueも探索できる。Contribution原文・Media提供者・判断理由を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
+**検証結果**：一つのDiscoveryが複数Subject・Valueを持って成長でき、条件なしのValueも探索できる。Contribution原文、Mediaの提供者と提供時のContribution、判断理由を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
 
 ### 10.2 浜松町：疑問から成立し、根拠で成長
 
-1. User Aが「この建物の入口が道路より低いのはなぜ？」という疑問Contributionと写真Mediaを投稿する。
-2. ContributionにはPlaceの建物Pointと周辺Area、Subject「建物」「入口」「道路」「高低差」が関連する。投稿時点では「道路嵩上げ」を事実として付与しない。
-3. 投稿時点で、システムがこのContributionを器として受ける成立前Discovery（`UNESTABLISHED`、公開状態は`PUBLIC`であれば閲覧・参加可能）を用意する。候補があっても関連付けずに投稿でき、投稿後にも成立・関連付けを検討できる。
+1. User Aが「この建物の入口が道路より低いのはなぜ？」という疑問のContributionを投稿し、写真Mediaを提供する。
+2. 投稿時点で、システムがこのContributionを器として受ける成立前Discovery（`UNESTABLISHED`、公開状態は`PUBLIC`であれば閲覧・参加可能）を用意し、写真Mediaはこの器のDiscoveryへ提供された資料として保持される。候補があっても関連付けずに投稿でき、投稿後にも成立・関連付けを検討できる。
+3. 投稿後の解析で、発言と写真から建物Point・周辺Areaの手がかりが器のDiscoveryのPlace候補として、Subject「建物」「入口」「道路」「高低差」がContribution Subjectとして推定される。投稿時点では「道路嵩上げ」を事実として付与しない。
 4. 既存候補との類似性や情報充足度等を踏まえ、場所と、例えば「身近な高低差に気付き、その理由を一緒に考える」という疑問起点のValueを認識でき、独立した体験・発見価値として第三者へ提示できると判断した場合に、成立状態を`ESTABLISHED`へ遷移させ、判断主体・理由・根拠・結果をDiscoveryDecisionに記録する。既存候補が0件であることや投稿者の新規指定だけでは成立を保証しない。答えが出ておらず情報が不足していても成立でき、原因の確定を待たない。
-5. 後続のContributionが古地図Sourceや写真Mediaを示し、Evidenceとして道路面変化の説明を支持または反証する。
+5. 後続のContributionとともに古地図Sourceや写真Mediaが提供され、Evidenceとして道路面変化の説明を支持または反証する。
 6. Discovery Subjectと要約は根拠に応じて成長するが、Subject確信度と原因の事実信頼度を分ける。原因が未確定・複数説ありといった知識の状況は、Discoveryの属性ではなくContribution・Value・Evidence等から解析・要約される。
 
 **検証結果**：疑問だけでDiscoveryが成立でき、成立前から会話を受け付け、成立を状態の遷移として記録できる。Media・Source・Evidenceの責務を分離し、異説を上書きせず保持できる。場所の近接や語句一致だけによる重複成立をDiscoveryDecisionで抑制できる。
@@ -517,16 +531,16 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 
 1. Discovery「船橋の梨」は、Place「船橋」、Subject「梨」「直売」等に関連する。Value「旬の梨を楽しむ」にSeasonのCondition「例年8〜10月頃」を付ける。別のValueを追加する場合は、そのValueごとにConditionの有無を決める。
 2. 9月になると該当ValueのSeason一致をトリガーにDiscoveryが浮上する。この時点で示せるのは「例年なら今が関係する時期」であり、今年の販売開始や在庫を保証しない。
-3. 梨園等から「本日から直売開始」、または事前に「9月20日から直売開始予定」というContributionが公開された場合、告知・開始情報として速やかにDiscoveryの現在状態へ反映する。
-4. 「なくなり次第終了」「本日100箱」等は投稿時点情報として保持し、実際の終了・残量と異なる可能性を明示する。
+3. 梨園等から「本日から直売開始」、または事前に「9月20日から直売開始予定」というContributionが公開された場合、発言から抽出した告知・開始の手がかりを速やかにDiscoveryの現在状態へ反映する。
+4. 「なくなり次第終了」「本日100箱」等は、発言の原文と投稿時点を保持したうえで、Discovery側では投稿時点の申告として扱い、実際の終了・残量と異なる可能性を明示する。
 5. Userの「今日買えた」「行ってきた」等のReactionはFreshnessを補強できるが、販売・在庫の保証には使わない。新しいContribution、Reaction、明示的終了情報、時間経過により現在状態を更新する。
-6. Freshnessが低下・失効したContributionは現在状態の材料から外れ得るが、過去の記録としてDiscoveryとの関係を保持する。翌年は同じDiscoveryがValueのSeason条件により再浮上し、その年のContributionから新しい現在状態を形成する。
+6. Freshnessが低下・失効した手がかりとその出所のContributionは現在状態の材料から外れ得るが、過去の記録としてDiscoveryとの関係を保持する。翌年は同じDiscoveryがValueのSeason条件により再浮上し、その年のContributionから新しい現在状態を形成する。
 
 **検証結果**：ValueごとのSeasonによる反復的な浮上と、今年・今日の実状を示す直近シグナルを分離できる。Discoveryを作り直さず、時間経過で変わる現在状態、事前告知、開始の即時反映、終了・数量の非保証、履歴保持を同じモデルで説明できる。
 
 ### 10.6 関連先を指定しないContributionと投稿後の還元
 
-1. 場所・年代が分からない古写真と説明をContributionとして投稿・保持する。詳細な入力条件は既存の画面設計に従い、不明情報をDiscovery成立のために補わせない。
+1. 場所・年代が分からない古写真についての説明をContributionとして投稿し、古写真は器となるDiscoveryへ資料（Media）として提供する。不明な場所・年代をDiscovery成立のために補わせない。
 2. 類似Discovery候補が0件の場合も、候補が存在しても関連付けない場合も投稿が成立する。ユーザーが関連先を指定しないため、システムが成立前（`UNESTABLISHED`）のDiscoveryを器として用意する。Discoveryの成立、Value・DiscoveryDecisionの作成を投稿成立の条件にしない。
 3. S05・S09等で原文・資料・疑問と現在状態を確認できる。第三者への公開は器となるDiscoveryの公開状態に従い、`PUBLIC`であれば成立前でも会話として閲覧・参加できる。露出方法・探索範囲は表示・推薦設計の対象とする。
 4. 投稿後の情報追加・会話・調査により還元を再検討する。既存Discoveryへの寄与なら既存Discoveryとの関連を追加・統合でき（統合後の器の状態の表し方はIssue #37・#46）、場所とValueを認識でき独立した価値があると判断した場合は器のDiscoveryを`ESTABLISHED`へ遷移させ、形成材料の関係を保持する。既存Discoveryからの派生の場合はDiscoveryRelationで経緯を表す。
@@ -547,18 +561,20 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 7. Placeの複数地点・経路・曖昧範囲・旧地名・時間変化。
 8. Timeの歴史的時間と反復時間の具体構造、Seasonの実装形、曖昧さ、現在性、例外。
 9. Evidenceの対象となる主張の粒度、支持・反証・異説、事実信頼度の表現。
-10. Media／Sourceの版、権利、原資料・複製、外部URL、削除時の出所保持。
+10. Media／Sourceの版、権利、原資料・複製、外部URL、削除時の出所保持。Mediaと提供時のContributionの対応、統合時に資料を統合先Discoveryから参照する方法（8.1節）。
 11. ContentReportの対象、状態、モデレーション権限、異議申立て。
 12. Reaction種別、Contributionとの境界、UserInterest推定への利用規則、Freshness補強へ利用する反応・対象時点・減衰・不正対策。
 13. 個人以外の活動主体、未登録利用者、退会User、代理投稿。特にProvider（団体・事業者・施設等）をUserの一種、別Entity、役割のいずれで扱うか。
 14. Subject Clusterを保存する必要があるか、都度導出するか。
-15. Contributionの対象期間、Freshness、告知・開始・終了・終了未定・数量等の具体属性と更新規則。開始／告知開始を速やかに反映する処理と、終了・数量の非保証表示。
+15. 発言から抽出される対象期間、Freshness、告知・開始・終了・終了未定・数量等の手がかりを、Discovery側（現在状態の導出材料、ValueのCondition、TimeExpression）でどう保持・更新するか。開始／告知開始を速やかに反映する処理と、終了・数量の非保証表示（DEC-0005 決定8）。
 16. SourceとContributionの境界、外部情報をContribution化する主体・方法、Source自身の更新・取得時点を現在性へどう利用するか。
 17. Provider、Contribution提供者、Sourceの作成者・発行者・管理者の関係。公式情報またはofficial relationを独立関連として持つか、誰が何に対して公式であるか、認証・代理投稿・取消・履歴をどう表現するか。
 18. Value／Conditionの永続化、条件なしの物理表現（NULL、Conditionレコードなし、ANY／ALL等）、条件間の組み合わせ、明示条件による絞り込みの意味。
 19. 成立前Discoveryを器とするContributionの露出方法・探索・検索範囲、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、Discoveryへの還元方法（4.3節）。公開の可否は器となるDiscoveryの公開状態に従う（DEC-0006）。
 20. 器への所属をContributionDiscoveryの関係種別で表すか別の関連とするか、Contribution側の多重度（6.2節）。
 21. 公開状態の具体的な状態名・追加状態・遷移と運用フロー、成立の取消・統合・再審時の成立状態の表し方（Issue #37・#46）、Value候補・解析結果の構造（4.2節）。
+22. 発言から抽出された語句・手がかり・候補の構造、Contribution Subjectとの関係、それらをいつ・誰が（あるいはどの基準で）Discoveryの確定した場所・時期・分類・Valueとして扱うか、Discoveryの構造化情報を直接編集する手段を設けるか（DEC-0005 決定9・Deferred）。会話から読み取られた結果を独立したドメインとするか（DEC-0008 Deferred）はER図作成時に検討する。
+23. 並行する成立前Discoveryの統合を確定させる判断主体・権限・手順・記録（DEC-0005 決定4とDEC-0006 Decision 3。Issue #37・#46）。
 
 ## 12. 後続設計への引き継ぎ条件
 
@@ -572,6 +588,14 @@ Contributionの時間情報では、投稿・公開時点と、そのContributio
 - MVPスコープと同じ判断原則を適用する。具体的な判定条件・自動化の適用範囲はIssue #46で明文化する。成立・公開・確認・推薦の状態境界はIssue #36で検討し、DEC-0006として決定した内容を4.2・6.1・6.2節等へ反映した。本書だけでMVPの具体的な自動判定実装範囲を確定しない。
 
 ## 13. 今回の追補変更点
+
+### DEC-0005の反映：Contributionの発言としての位置付け（2026-09-24）
+
+- Contributionを発言（コメント）としての参加に位置づけ、「疑問／知識」等の固定的な型を持たせないこととした。論理名「知識・疑問」を廃止した（DEC-0008）。原則20を追加した（2・4.3節）。
+- Contributionの主要論理属性から「内容分類候補」と時間関連属性（対象時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等）を外し、それぞれDiscovery側（Subject、TimeExpression、ValueのCondition、現在状態の導出材料）で扱うことを明記した。投稿・公開時点はContributionの属性として残した（2・4.3・7.2・9節）。
+- 全体関係図から`Contribution --> Place`、`Contribution --> TimeExpression`、`Contribution --> Media`を削除し、`Discovery --> Media`（提供された資料）、`Media --> Contribution`（提供時の発言、0..1）、`Media --> Source`（出典）を追加した（3・7.1・8.1節）。
+- Discoveryの責務に、構造化されうる情報と資料の帰属、発言からの語句・手がかりの蓄積による形成を追記した（4.2節）。
+- 小机城址・浜松町・船橋の梨・関連先未指定のシナリオを整合し、要検討事項に語句・手がかりの構造と確定の扱い、統合の判断主体を追加した（10・11節）。
 
 ### DEC-0006の反映：Discoveryの成立状態と周辺状態の責務分離（2026-09-24）
 
