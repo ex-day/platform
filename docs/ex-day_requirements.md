@@ -304,9 +304,19 @@ ex-dayは単に、
 
 **資料からコンテンツを作るだけでなく、疑問から資料を集める。**
 
+### 投稿の蓄積から地域の知識を形成する
+
+地方の文化やローカルな食・生活の知識の多くは、外部の知識ベースにも一般的なAIの知識にも存在しない。ex-dayは、出所付きのユーザーの投稿・資料の蓄積から、こうした外部に存在しない地方文化・ローカルな知識をデータとして形成できることを、サービスの価値とする（[DEC-0007](decisions/DEC-0007-discovery-growth-and-derivation-by-context.md) Consequences「Requirements」）。
+
+- 知識の中身は、AIが推測・創作して補うのではなく、出所付きの投稿・資料から形成する（第24節）。
+- 会話から「何がわかってきたか」を、根拠となった会話（出所）とともに見せる。言及や反応の多さを事実の正しさとみなさない。
+- 会話が元の話題から離れることは逸脱ではなく、新しい発見の可能性として扱う。
+
+形成の単位や判断の原則は[ドメイン設計](ex-day_domain_model.md)（2.1・3.5・4.3〜4.6・5.3A節）で定める。形成した知識を外部の知識ベースへ還元する可能性がある場合の投稿のライセンスの扱いは、利用規約の検討事項とする（DEC-0007 Consequences「利用規約」）。
+
 ### Post単独での成立
 
-[DEC-0004](decisions/DEC-0004-contribution-as-first-class-content.md)・[DEC-0005](decisions/DEC-0005-contribution-thread-and-comment.md)に従い、Post（発言。[DEC-0008](decisions/DEC-0008-rename-contribution-to-post.md)により従来のContributionから改称）は、会話の中の発言として、問い・情報・体験・証言等を持ち寄る参加として扱い、単独でも成立し価値を持つコンテンツとする。疑問／知識等を固定的な型として定めない。写真・資料はPostの属性ではなく、Discoveryに対して提供するものとして扱い、出典・提供者を資料自体に保持する。既存Discoveryの更新や新しいDiscoveryの成立に寄与し得るが、Discoveryの成立・更新・関連付けをPostの投稿成立条件にはしない。
+[DEC-0004](decisions/DEC-0004-contribution-as-first-class-content.md)・[DEC-0005](decisions/DEC-0005-contribution-thread-and-comment.md)に従い、Post（発言。[DEC-0008](decisions/DEC-0008-rename-contribution-to-post.md)により従来のContributionから改称）は、会話の中の発言として、問い・情報・体験・証言等を持ち寄る参加として扱い、単独でも成立し価値を持つコンテンツとする。疑問／知識等を固定的な型として定めない。写真・資料はPostの属性ではなく、Discoveryに対して提供するものとして扱い、出典・提供者を資料自体に保持する。既存Discoveryの更新や新しいDiscoveryの成立の材料となり得るが、Discoveryの成立・更新・関連付けをPostの投稿成立条件にはしない。
 
 関連Discoveryが0件であることは正常な状態であり、関連先未指定のまま投稿・保持できる。類似Discovery候補は`0..n`件とし、0件の場合も、候補が存在しても関連付けない場合も投稿できる。関連付けやDiscoveryへの還元を促しつつ、投稿後の情報追加・調査等を経て関連を追加し、還元を再検討できるようにする。
 

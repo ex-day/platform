@@ -1,8 +1,8 @@
 # ex-day 論理エンティティ設計書 v0.1
 
 - 作成日：2026-09-15
-- 最終追補日：2026-09-24
-- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition、Postから複数DiscoveryへのValue提供関係、Postの独立性とDiscovery成立判断、DEC-0006によるDiscoveryの成立状態・公開状態と周辺状態の責務分離、DEC-0005による発言としての位置付けと構造化情報・資料のDiscoveryへの帰属、DEC-0008によるContributionからPostへの改称の追補反映）
+- 最終追補日：2026-09-25
+- 状態：現時点の論理ドメイン設計をEntity・関連・Value Objectへ写像した初版（現在性・Season・Freshness、Discovery Value・Condition、Postから複数DiscoveryへのValue提供関係、Postの独立性とDiscovery成立判断、DEC-0006によるDiscoveryの成立状態・公開状態と周辺状態の責務分離、DEC-0005による発言としての位置付けと構造化情報・資料のDiscoveryへの帰属、DEC-0008によるContributionからPostへの改称、DEC-0007・DEC-0009による会話の理解の3つの層・話題・発見の仮説・わかってきたこと・提案・タグ・Post間の参照の追補反映）
 - 対象：論理属性、責務、関係、多重度、代表シナリオによる整合性確認
 - 対象外：物理DB、UUID、FK、index、PostGIS、pgvector、API、画面、具体的な推定アルゴリズム
 
@@ -19,7 +19,9 @@
 
 今回の追補は[DEC-0004](decisions/DEC-0004-contribution-as-first-class-content.md)と2026-09-22の改訂依頼に基づく。Post単独での成立・保持はDEC-0004、Discoveryの成立原則および自動判定を基本に必要時に人が判断する方針は今回の設計判断を根拠とする。後者により、従来のMVPで人間を必須判断者とする記述を更新する。Discoveryを成立前から会話の器とすること、成立状態（`UNESTABLISHED`／`ESTABLISHED`）と公開状態、確認・安全性・知識状態・推薦等の責務分担は[DEC-0006](decisions/DEC-0006-discovery-state-responsibilities.md)を根拠とする。Postを発言として扱い固定的な型を定めないこと、場所・時期・分類・Valueといった構造化されうる情報と写真・資料の提供をDiscoveryに帰属させること、発言からの語句・手がかりの抽出を投稿後に複数の発言にまたがって行うことは[DEC-0005](decisions/DEC-0005-contribution-thread-and-comment.md)を根拠とする。
 
-[DEC-0008](decisions/DEC-0008-rename-contribution-to-post.md)により、ドメイン上のContributionをPost（日本語の説明では「発言」）へ改称した。DEC-0001〜DEC-0007の本文中の「Contribution」は書き換えず、Postと読み替える。ContributionDiscovery、Contribution Subject、ContributionOrigin等、Contributionを含むEntity・関連名は新しい名前が判断待ちのため現行名のままとする（名称は判断待ち（Issue #58））。
+[DEC-0008](decisions/DEC-0008-rename-contribution-to-post.md)により、ドメイン上のContributionをPost（日本語の説明では「発言」）へ改称した。DEC-0001〜DEC-0007の本文中の「Contribution」は書き換えず、Postと読み替える。Contributionを含んでいたEntity・関連名は、DEC-0009に基づき、旧Contribution Subject（PostとSubjectの直接の関係）を削除し、旧ContributionDiscoveryをPostの投稿先（器としての所属）と参照（話題への所属、わかってきたことの出所）に整理し直し、旧ContributionOriginをPost間の参照（PostReference）に統合した（4.3・6.2節）。
+
+[DEC-0007](decisions/DEC-0007-discovery-growth-and-derivation-by-context.md)により、補完・派生をPost単体ではなく会話の話題（DEC-0007の「文脈のまとまり」。DEC-0009で「話題」と呼び替えた）を単位として判断し、Post間の参照を話題の推定の優先的な入力とし、Subjectの対象と観点を区別し、PlaceのSpatial Type（`Point`／`Area`／`Route`）を扱う。[DEC-0009](decisions/DEC-0009-conversation-understanding-and-tags.md)により、会話に関わる概念を「人間が作ったもの」「ex-dayが会話から理解しているもの（見立て）」「ex-dayとして採用した構造」の3つの層に分け、話題（Topic）・発見の仮説（DiscoveryHypothesis）・わかってきたこと（Finding）・提案（Proposal）・表示するタグ（PostTag）・内部で持つタグ（TagMapping）を追加し、Reactionの対象を広げる。本書のEntity名はDEC-0009 Decision 11の仮称と、本書で提案した名前であり、最終的な名前は[Issue #65](https://github.com/ex-day/platform/issues/65)のPRで人間が確認する。ドメイン上の定義は[ドメイン設計](ex-day_domain_model.md)2.1・3.5節を正とする。
 
 「確定」は論理モデル上の採用を意味し、MVPでの実装確定を意味しない。「要検討」は、今回の設計で勝手に確定しない境界・属性・運用である。
 
@@ -46,6 +48,11 @@
 18. Postが単独で価値を持つことと、Discoveryに属するValueであることを区別する。
 19. Discoveryは成立前から会話の器として存在できる。Discovery自身が永続状態として持つのは成立状態（`UNESTABLISHED`／`ESTABLISHED`）と公開状態に限り、確認・安全性・知識状態・Value候補・推薦・活発度・新しさを単一のDiscovery Statusへ集約しない（DEC-0006）。
 20. Postは発言としての参加であり、「疑問／知識」等の固定的な型や内容分類の属性を持たない。場所・時期・分類・Valueといった構造化されうる情報と、写真・資料（Media）の提供はDiscovery（成立前を含む）に帰属させる。資料の出典・提供者は資料自体に保持し、どのPostとともに提供されたかを辿れるようにする（DEC-0005）。
+21. 各Entityを「人間が作ったもの」「ex-dayが会話から理解しているもの（見立て）」「ex-dayとして採用した構造」のいずれかの層に置く（3節の表）。見立ての層のEntityは更新・分割・統合・失効してよく、組み直しの記録は要らない。人間が作ったものをAIの解釈で書き換えない（DEC-0009）。
+22. 判断（提案の確定・却下、派生等）の時点で、根拠となったPostと、それを支えたわかってきたこと（その版の内容）を判断記録の側に写し取って固める。見立ての層のIDを参照するだけにはしない（DEC-0009）。
+23. Postが属する器（投稿先Discovery）は1つとする。他のDiscoveryとは参照（話題への所属、わかってきたことの出所、判断記録に固めた根拠）でつながり、Postを複製・移動しない（DEC-0009）。
+24. PostにSubjectを直接持たせない。Subjectの候補は発見の仮説が持ち、採用されたらDiscoveryのSubjectになる。Postとわかってきたことの関係は「寄与」ではなく「出所（根拠）」とする（DEC-0009）。
+25. Reactionの数、タグの数、言及の多さを事実の正しさに置き換えない。Reaction・タグ・Post間の参照は判断ではなく、重み付けされた入力とする（DEC-0007・DEC-0009）。
 
 ## 3. 全体関係図
 
@@ -59,11 +66,16 @@ classDiagram
     class Value
     class Condition
     class Post
+    class PostReference
+    class PostTag
     class Reaction
+    class Topic
+    class DiscoveryHypothesis
+    class Finding
+    class TagMapping
+    class Proposal
     class DiscoveryDecision
-    class ContributionDiscovery
     class DiscoveryRelation
-    class ContributionOrigin
     class Place
     class TimeExpression
     class Media
@@ -71,6 +83,22 @@ classDiagram
     class Evidence
     class ContentReport
     class SearchContext
+    <<HumanMade>> Post
+    <<HumanMade>> PostReference
+    <<HumanMade>> PostTag
+    <<HumanMade>> Reaction
+    <<HumanMade>> Media
+    <<Interpretation>> Topic
+    <<Interpretation>> DiscoveryHypothesis
+    <<Interpretation>> Finding
+    <<Interpretation>> TagMapping
+    <<Adopted>> Discovery
+    <<Adopted>> Subject
+    <<Adopted>> Place
+    <<Adopted>> Value
+    <<Adopted>> DiscoveryRelation
+    <<Adopted>> DiscoveryDecision
+    <<Adopted>> Proposal
 
     User "1" --> "0..*" UserInterest : 持つ
     UserInterest "0..*" --> "0..1" Theme : 興味対象
@@ -79,25 +107,42 @@ classDiagram
     UserInterest "0..*" --> "0..1" TimeExpression : 興味対象
 
     Discovery "0..*" --> "0..*" Subject : 意味を持つ
-    Post "0..*" --> "0..*" Subject : 意味を持つ
     Discovery "0..*" --> "0..*" Place : 関わる
     Discovery "1" --> "0..*" Value : 持つ（成立済みは1..*）
     Value "1" --> "0..*" Condition : 成立・推薦条件
-    ContributionDiscovery "0..*" --> "0..1" Value : 対象Value
     Condition "0..*" --> "0..1" TimeExpression : 時間・季節等を表す
     Discovery "0..*" --> "0..*" TimeExpression : 話題の歴史的時間等
 
     User "1" --> "0..*" Post : 提供する
+    Post "0..*" --> "1" Discovery : 投稿先（器）
+    Post "1" --> "0..*" PostReference : 参照元
+    PostReference "0..*" --> "1" Post : 参照先
+    Post "1" --> "0..*" PostTag : 付ける
+    PostTag "0..*" --> "0..1" TagMapping : 表記の揺れを吸収
+    TagMapping "0..*" --> "0..1" Subject : 対応付け
+
     User "1" --> "0..*" Reaction : 行う
     Reaction "0..*" --> "0..1" Discovery : 対象
     Reaction "0..*" --> "0..1" Post : 対象
-    Post "1" --> "0..*" ContributionDiscovery : 関係
-    Discovery "1" --> "0..*" ContributionDiscovery : 関係
+    Reaction "0..*" --> "0..1" Finding : 対象（版を持つ）
+    Reaction "0..*" --> "0..1" Value : 対象
+
+    Discovery "1" --> "0..*" Topic : 話題を持つ
+    Topic "0..*" --> "0..*" Post : 範囲とするPost（話題への所属）
+    Topic "1" --> "0..*" DiscoveryHypothesis : 持つ
+    DiscoveryHypothesis "0..*" --> "0..*" Finding : 中身として育つ
+    Finding "0..*" --> "1..*" Post : 出所（根拠）
+    DiscoveryHypothesis "0..*" ..> "0..*" Subject : 候補
+    DiscoveryHypothesis "0..*" ..> "0..*" Place : 候補
+
+    Proposal "0..*" --> "0..1" DiscoveryHypothesis : 起点
+    Proposal "0..*" --> "1..*" Discovery : 対象
+    DiscoveryDecision "0..*" --> "0..*" Proposal : 確定・却下
+    DiscoveryDecision "0..*" --> "0..*" Post : 固めた根拠
+    DiscoveryDecision "0..*" --> "0..*" Finding : 固めた根拠（版の写し）
+    DiscoveryDecision "0..*" --> "0..*" Discovery : 比較・結果
     Discovery "1" --> "0..*" DiscoveryRelation : 関係元
     DiscoveryRelation "0..*" --> "1" Discovery : 関係先
-    Post "1" --> "0..*" ContributionOrigin : 出所
-    DiscoveryDecision "0..*" --> "0..*" Post : 判断材料
-    DiscoveryDecision "0..*" --> "0..*" Discovery : 比較・結果
 
     Discovery "1" --> "0..*" Media : 提供された資料
     Media "0..*" --> "0..1" Post : 提供時の発言
@@ -111,11 +156,19 @@ classDiagram
     SearchContext ..> Discovery : 探索条件に利用
 ```
 
-ContributionDiscovery・ContributionOriginは、名称は判断待ち（Issue #58）のため現行名で記載している。
+注記は、DEC-0009 Decision 1の3つの層を表す。`<<HumanMade>>`は人間が作ったもの、`<<Interpretation>>`はex-dayが会話から理解しているもの（見立て）、`<<Adopted>>`はex-dayとして採用した構造である（Mermaidの注記に日本語を使えないため英語で表記する）。層の注記がないEntity（User、UserInterest、Theme、Condition、TimeExpression、Source、Evidence、ContentReport、SearchContext）の層の位置付けはDEC-0009の対象外であり、本書では定めない。
+
+| 層 | Entity | 性質 |
+|---|---|---|
+| 人間が作ったもの | Post、PostReference、PostTag、Reaction、Media | AIの解釈で書き換えない |
+| ex-dayが会話から理解しているもの（見立て） | Topic、DiscoveryHypothesis、Finding、TagMapping | 新しいPostや再解析で更新・分割・統合・失効してよい |
+| ex-dayとして採用した構造 | Discovery、Subject、Place、Value、DiscoveryRelation、DiscoveryDecision、Proposal | 「確定」は真実の保証ではなく、ドメインモデルとしての採用 |
+
+点線（`..>`）は、発見の仮説が候補として持つだけで、採用した構造としての関係ではないことを表す。
 
 図中で複数の `0..1` を持つ対象は「いずれか一種類を参照する」という論理制約を表す。ただし、Mediaの「提供時の発言」と「出典」は独立した関係であり、両方を持ち得る。汎用参照、継承、種別別関連のどれで実装するかは要検討である。
 
-DiscoveryとValueの`0..*`は成立前（`UNESTABLISHED`）のDiscoveryを含むためであり、成立済み（`ESTABLISHED`）のDiscoveryはValueを1件以上持つ（4.2節）。PostとContributionDiscoveryの`0..*`は、成立前Discovery（器）への所属の表現が要検討であるため従来の表記を維持している（6.2節）。
+DiscoveryとValueの`0..*`は成立前（`UNESTABLISHED`）のDiscoveryを含むためであり、成立済み（`ESTABLISHED`）のDiscoveryはValueを1件以上持つ（4.2節）。PostからDiscoveryへの投稿先は`1`であり、関連先を指定しない投稿ではシステムが用意した成立前Discoveryが投稿先となる（6.2節）。Post・Discovery・Valueの対応は、Findingの出所とDiscoveryDecisionに固めた根拠から辿る（6.2節）。
 
 DEC-0005により、Postから場所（Place）・時間（TimeExpression）・資料（Media）への直接の関係は持たない。場所・時期はDiscoveryのPlace・TimeExpression、ValueのConditionとして扱い、発言から抽出された語句・手がかりはその形成材料となる（4.2・4.3節）。資料はDiscoveryへ提供されるMediaとして扱い、提供時のPostを任意で辿れるようにする（8.1節）。統合等により資料を別のDiscoveryから参照する方法は、Issue #37・#46と連携して定める。
 
@@ -143,7 +196,7 @@ DEC-0005により、Postから場所（Place）・時間（TimeExpression）・�
 
 **主要論理属性**：識別子、ユーザー向け表題、現在の要約、成立状態（`UNESTABLISHED`／`ESTABLISHED`）、公開状態（少なくとも`PUBLIC`／`HIDDEN`を区別）、成立時点、作成・更新時点。成立前のDiscoveryで表題・要約をどう扱うかは画面・要約設計で定める。知識の状況（答えが出ていない・調査が続いている・情報不足・複数説がある等）、推薦、活発度・新しさは属性として固定せず、Post・Value・Evidence・Reaction等から解析・要約・算出する情報とする。表示上の「開催予定／開催中らしい／今シーズンの情報あり」等の現在状態も導出情報であり、固定的な事実属性とは区別する。[DEC-0006]
 
-**主な関係**：Value 0..*（成立済みは1..*）、Postと多対多、Subject・Place・TimeExpressionと多対多、提供された資料Media 0..*、DiscoveryRelationを介してDiscoveryと多対多、Reaction 0..*、DiscoveryDecision 0..*。DiscoveryとTimeExpressionの直接の関係は、話題の歴史的時間等を説明するものであり、Valueの成立・推薦条件とは区別する。
+**主な関係**：Value 0..*（成立済みは1..*）、投稿先とするPost 0..*（Postの器）、話題（Topic）0..*、Subject・Place・TimeExpressionと多対多、提供された資料Media 0..*、DiscoveryRelationを介してDiscoveryと多対多、Proposalの対象 0..*、Reaction 0..*、DiscoveryDecision 0..*。他のDiscoveryに投稿されたPostは、話題への所属やFindingの出所として参照する（6.2節）。運営が登録するDiscovery（Issue #57）には、運営が付けたタグを直接持たせてよい（6A.4節）。DiscoveryとTimeExpressionの直接の関係は、話題の歴史的時間等を説明するものであり、Valueの成立・推薦条件とは区別する。
 
 **論理制約**：Subjectの追加、見る人の興味の違い、複数地域でのSubject共有だけでは分割・派生させない。成立と事実確定、公開、推薦を分ける。成立状態の遷移は`UNESTABLISHED`から`ESTABLISHED`への方向とし、新しい議論の発生を理由に`UNESTABLISHED`へ戻さない。成立の取消・統合・再審等で状態を変更する場合は判断記録を伴う操作とし、その表し方はIssue #37・#46で定める。成立済みDiscoveryはValueを1件以上持つ。公開状態は成立状態から独立し、両方の成立状態に適用する。成立前Discoveryの暫定公開（Issue #36の案D）は`UNESTABLISHED`かつ`PUBLIC`で表し、専用の状態を設けない。施設の閉園・閉店、季節外等は公開状態で表さない。Time／Seasonは原則としてDiscovery全体の一律の推薦条件ではなく、各Valueの成立・推薦条件である。Discoveryの現在状態は、直近のPostとReaction、対象期間、該当ValueのSeason等から形成し、古い現在性情報が失効してもDiscovery自体は存続する。Season一致だけを「今年も開始した」「現在開催中」等の実状として表示しない。
 
@@ -168,9 +221,9 @@ DEC-0005により、Postから場所（Place）・時間（TimeExpression）・�
 
 **主要論理属性候補**：価値の説明、確認・根拠に関する判断の状態、作成・更新時点。Valueの確認・根拠はValue・Evidence等の責務としてValue側で管理する。推薦は状態として持たず、Condition・Context等から算出する（4.2.3節、DEC-0006）。確認の状態の具体的な種類は後続設計で定める。
 
-**主な関係**：一つのDiscoveryにValue 0..*（成立済みのDiscoveryは1..*）。会話の途中で検出されるValue候補はValueとして保持せず、Discoveryとは別の解析結果・候補として扱う（構造はDEC-0006の対象外）。各ValueはCondition 0..*を持つ。関連PostとはContributionDiscoveryを介して関係し、一つのValueに複数Post、一つのPostに複数DiscoveryのValueが関係し得る。
+**主な関係**：一つのDiscoveryにValue 0..*（成立済みのDiscoveryは1..*）。会話の途中で検出されるValue候補はValueとして保持せず、Discoveryとは別の解析結果・候補として扱う（構造はDEC-0006の対象外）。各ValueはCondition 0..*を持つ。Valueは、種類が価値のFindingがProposalとDiscoveryDecisionを経て採用されたものであり、採用時の根拠のPostはDiscoveryDecisionに固める。一つのValueに複数Postが根拠として関係し、一つのPostが複数DiscoveryのValueの根拠になり得る（6.2節）。Reaction 0..*の対象となる（「わかる」「行ってみたい」等。4.4節）。
 
-**論理制約**：ValueはPostそのものではなく、Post登録時に新しいValueが必ず成立するわけではない。異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
+**論理制約**：ValueはPostそのものではなく、Post登録時に新しいValueが必ず成立するわけではない。Value候補（採用前の価値のFinding）はValueとして保持しない。異なるValueがあるだけでDiscoveryを分割しない。ConditionなしのValueも検索・推薦候補となり得る。Valueに付くSeasonは例年の旬等を表し、今年・今日の実状を保証しない。
 
 **要検討**：ValueとSubjectの対応の保持方法およびDiscovery Subjectとの導出・更新関係、Valueの識別・編集単位、表示用要約との関係、永続化の形。Valueの信頼性の評価方法と具体的な属性・算出方式は確定しない。
 
@@ -204,19 +257,19 @@ DEC-0005により、Postから場所（Place）・時間（TimeExpression）・�
 
 **種別**：永続Entity（確定）
 
-**責務**：ユーザーが会話の中で行う発言（Post）を、原文性と出所を保って表す。新しい話題を始める発言も返信も、同じPostとして対等に扱う（DEC-0008）。問い・情報・体験・記憶・証言等を持ち寄る単位であり、単独でも成立し価値を持つ。既存Discoveryの補完・更新や新しいDiscoveryの成立、Valueの形成・成長に寄与し得る。「疑問／知識」等の固定的・排他的な型を持たせず、同じ発言が問いと情報を含むことや、やり取りの中で役割や関連先が変わることを妨げない。従来の論理名「知識・疑問」は廃止する（DEC-0008）。[DEC-0005 決定1・8]
+**責務**：ユーザーが会話の中で行う発言（Post）を、原文性と出所を保って表す。新しい話題を始める発言も返信も、同じPostとして対等に扱う（DEC-0008）。問い・情報・体験・記憶・証言等を持ち寄る単位であり、単独でも成立し価値を持つ。既存Discoveryの補完・更新や新しいDiscoveryの成立、Valueの形成・成長の材料・根拠となり得る。「疑問／知識」等の固定的・排他的な型を持たせず、同じ発言が問いと情報を含むことや、やり取りの中で役割や関連先が変わることを妨げない。従来の論理名「知識・疑問」は廃止する（DEC-0008）。[DEC-0005 決定1・8]
 
-**主要論理属性**：識別子、提供User、本文（原文）、公開状態、投稿・公開時点、更新時点、推定・不確実性に関する表示情報。
+**主要論理属性**：識別子、提供User、投稿先Discovery（器）、本文（原文）、公開状態、投稿・公開時点、更新時点、推定・不確実性に関する表示情報。
 
 DEC-0005 決定8により、次の属性はPostに持たせず、Discovery側で扱う。
 
-- **内容分類候補**：廃止する。発言を「疑問／知識」等の型に分類しない。発言が何について語っているかの推定はContribution Subject（5.3節）として解析結果の側で扱い、分類として構造化されうる情報はDiscoveryのSubject等として形成する。
+- **内容分類候補**：廃止する。発言を「疑問／知識」等の型に分類しない。PostにSubjectを直接持たせない（DEC-0009 決定5）。何について話しているかは話題（Topic）と発見の仮説（6A節）として見立ての層で扱い、分類として構造化されうる情報はDiscoveryのSubject等として採用する。Post単位の埋め込み・語の抽出は、解析の内部データ（キャッシュ）として扱ってよい。
 - **時間関連属性**（情報が対象とする時点／期間、告知開始、事象の開始・終了、反復時間、終了未定、数量・残量等の投稿時点値、現在性評価に必要な基準時点・根拠）：発言から抽出された手がかりとして、Discoveryの話題の時間（TimeExpression）、ValueのCondition（4.2.2節）、およびDiscoveryの現在状態の導出材料（4.2節）で扱う。発言の投稿・公開時点はPostの属性として保持し、手がかりの基準時点として参照できるようにする。
 - **場所・写真・資料**：場所はDiscoveryのPlace（7.1節）、写真・資料はDiscoveryへ提供されるMedia（8.1節）として扱う。
 
-**主な関係**：User 1、ContributionDiscoveryを介してDiscovery 0..*および各DiscoveryのValue 0..*、Subject 0..*（Contribution Subject）、提供時の発言としてMediaから0..*、Source 0..*、ContributionOrigin 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。
+**主な関係**：User 1、投稿先Discovery 1（器）、PostReference（参照元・参照先として0..*）、PostTag 0..*、話題（Topic）から0..*（話題への所属）、Findingの出所として0..*、DiscoveryDecisionの固めた根拠として0..*、提供時の発言としてMediaから0..*、Source 0..*、Reaction 0..*、Evidenceの対象または根拠になり得る。Subjectとの直接の関係は持たない。
 
-**投稿・保持の論理制約**：Discoveryの成立・更新・既存Discoveryへの関連付けを投稿成立条件にしない。ユーザーは関連先となる既存Discoveryを指定せずに投稿・保持でき、その場合はシステムが成立前（`UNESTABLISHED`）のDiscoveryを会話の器として用意する（DEC-0006）。類似候補は`0..n`件であり、0件でも、候補があっても関連付けない場合でも投稿できる。投稿後に既存Discoveryとの関係を追加し、還元を再検討できる。成立前Discoveryを器とすることは下書き・投稿不成立・承認待ちを意味しない。器との関係の表現と多重度は6.2節のとおり要検討とする。
+**投稿・保持の論理制約**：Discoveryの成立・更新・既存Discoveryへの関連付けを投稿成立条件にしない。ユーザーは関連先となる既存Discoveryを指定せずに投稿・保持でき、その場合はシステムが成立前（`UNESTABLISHED`）のDiscoveryを会話の器として用意する（DEC-0006）。類似候補は`0..n`件であり、0件でも、候補があっても関連付けない場合でも投稿できる。投稿後に既存Discoveryとの関係（話題への所属等の参照）を追加し、還元を再検討できる。成立前Discoveryを器とすることは下書き・投稿不成立・承認待ちを意味しない。投稿先Discoveryは1つであり、派生・統合等でも変更・複製しない（6.2節）。
 
 場所・時間・関連先等の不明な情報の入力や候補選択を投稿成立条件にせず、Discoveryを成立させるために強制しない。場所・時期等はPostの属性ではないため、投稿画面でこれらをどう扱うか（入力欄を設けないか、Discoveryへの手がかりの提供として受け付けるか）は画面設計で定める。語句・手がかりの抽出は投稿後に行い、解析の未完了・失敗や候補がないことを理由に成立済みのPostを失わせない（DEC-0005 決定7）。AIが不足情報を推測・創作して成立へ寄せず、提供情報と推定候補を区別する。
 
@@ -224,21 +277,49 @@ DEC-0005 決定8により、次の属性はPostに持たせず、Discovery側で
 
 **その他の論理制約**：Postが単独で価値を持つことと、Discoveryに属するValueであることを区別する。PostをそのままValueへ置き換えず、登録時点でValueの成立を必須としない。投稿原文とシステムによるSubject推定を分ける。品質評価やランキング目的のレビューにはしない。相反するPostを一方の上書きで消さない。時間経過で現在性が変わる内容を伝えるPostは、そこから抽出した手がかりのFreshnessが低下・失効しても削除せず、現在のDiscoveryを形成する材料から過去の記録へ位置づけを変える。開始または告知開始の手がかりは、Postが属するDiscoveryの現在状態へ公開後速やかに反映できるようにする。後から既存Discoveryへ関連付けた際の反映方法は後続設計とする。終了期限・数量・残量は投稿時点の申告・観測であり、実際の終了、営業、在庫等を保証せず、実状と異なる可能性をユーザーへ明示する。
 
-**要検討**：自然文PostからのValueの抽出・生成・更新方法（複数の発言にまたがる語句・手がかりの抽出・蓄積・確定。DEC-0005 決定9・Deferred）、単独での成立・保持を前提としたDiscovery／Valueへの還元方法、成立前Discoveryを器とするPostの露出方法・探索・検索範囲（公開の可否はDiscoveryの公開状態に従う）、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、一投稿の単位、返信・引用、編集・訂正履歴、外部情報のPost化、自由文とReactionの境界、発言から抽出した対象期間・Freshness等の手がかりをDiscovery側で保持する具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
+**要検討**：自然文PostからのValueの抽出・生成・更新方法（複数の発言にまたがる語句・手がかりの抽出・蓄積・確定。DEC-0005 決定9・Deferred）、単独での成立・保持を前提としたDiscovery／Valueへの還元方法、成立前Discoveryを器とするPostの露出方法・探索・検索範囲（公開の可否はDiscoveryの公開状態に従う）、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、一投稿の単位、PostReferenceの種類と物理モデル、編集・訂正履歴、外部情報のPost化、自由文とReactionの境界、発言から抽出した対象期間・Freshness等の手がかりをDiscovery側で保持する具体属性、現在性の減衰・失効規則、開始情報を速やかに反映する処理、終了・訂正情報、投稿者への再確認、数量表現の扱い。
+
+#### 4.3.1 PostReference（Post間の参照）
+
+**種別**：永続関連Entity（確定。人間が作ったもの）。旧ContributionOriginを統合した。
+
+**責務**：返信・メンション・引用等、Postが別のPostを受けて書かれたこと（Postが何を起点に生じたか）を表す。ユーザーが自然に与える強い文脈情報として、話題（Topic）の推定で優先して利用する（DEC-0007 決定8、DEC-0009 決定2）。
+
+**主要論理属性**：参照元Post、参照先Post、参照の種類（返信・メンション・引用等。起点の種類）、作成時点。
+
+**多重度**：Post 1 : PostReference 0..*（参照元・参照先の両側）。一つのPostが複数のPostを参照することも将来あり得る。
+
+**論理制約**：参照の存在を話題の推定・判断の前提にせず、参照機能を使わないPostも扱えるようにする。AIの解釈で参照を追加・変更しない（話題への所属は見立てとしてTopic側で扱う）。旧ContributionOriginが扱っていた起点のうち、外部Sourceの参照はPostとSourceの関係（8.2節）で、Discovery上の問いから生じたことは投稿先Discovery（器）で表す。「出所」は広義に使わず、情報源Source、Findingの出所（根拠）、投稿の起点（PostReference）を区別する。
+
+**要検討**：参照の種類の一覧、複数参照、参照先が非公開・削除された場合の扱い、Viewでの返信・メンション等の見せ方（画面設計）、物理モデル（DEC-0007 Deferred）。
+
+#### 4.3.2 PostTag（表示するタグ）
+
+**種別**：永続Entityまたは値（確定。人間が作ったもの）。
+
+**責務**：ユーザーがPostに付けたタグを、ユーザーが書いたまま表す（DEC-0009 決定10）。探すためのキーワード、価値がまだない段階のDiscoveryの露出、話題の解析の手がかり、Subjectの候補の入口として用いる。
+
+**主要論理属性**：Post、表記（ユーザーが書いたまま）、作成時点。
+
+**多重度**：Post 1 : PostTag 0..*。PostTag 0..* : TagMapping 0..1（6A.4節）。
+
+**論理制約**：必須にしない。判断ではなく、重み付けされた入力として扱う。入力はPostと同じ欄で行い、専用の入力欄を設けない。Discoveryのタグは属するPostのタグを集めて求める。タグで見せる単位はPostではなくDiscoveryとする（DEC-0008 決定4）。タグの数を事実の正しさや品質評価に置き換えない。
+
+**要検討**：本文中の表記から抽出する規則、編集・削除、スパム・不適切なタグへの対策（Issue #35）、MVPでの扱い（入力UIの範囲。DEC-0009 Deferred）。
 
 ### 4.4 Reaction
 
 **種別**：永続Entity（確定）
 
-**責務**：UserによるDiscoveryまたはPostへの簡潔な関心・共感・行動意欲等を表す。反応種別と対象時点によっては、対象が最近も現実と一致している可能性を示す現在性補強シグナルとして利用できる。
+**責務**：UserによるDiscovery・Post・Finding（価値・裏付けのない説）・Valueへの簡潔な関心・共感・行動意欲等を表す。対象ごとの意味はドメイン設計3.4節に従う（Postへの共感、価値への「わかる」「行ってみたい」、裏付けのない説への「そうかも」）。反応種別と対象時点によっては、対象が最近も現実と一致している可能性を示す現在性補強シグナルとして利用できる。
 
-**主要論理属性**：識別子、User、対象、反応種別、状態、作成・変更時点。
+**主要論理属性**：識別子、User、対象、対象の版（対象がFindingの場合）、反応種別、状態、作成・変更時点。
 
-**主な関係**：User 1、対象はDiscoveryまたはPostのいずれか1、各対象からReaction 0..*。
+**主な関係**：User 1、対象はDiscovery・Post・Finding・Valueのいずれか1、各対象からReaction 0..*。
 
-**論理制約**：一つのReactionが同時に両対象を持たない。Reaction数を事実の信頼度としない。品質ランキングや星評価を目的にしない。「行ってきた」「買えた」等をFreshness補強に利用する場合も、営業中・開催中・在庫あり等の保証へ置き換えず、反応の発生時点と意味を区別する。
+**論理制約**：一つのReactionが同時に複数の対象を持たない。Reaction数を事実の信頼度としない。裏付けのない説へのReactionを正しさの証拠にせず、票の多い説を正解のように扱わない。裏付けのある知識の説、Subject・Condition単独にはReactionを付けない。問いへの「自分も気になる」は問いを投げたPost（またはDiscovery）に付ける。FindingへのReactionは、Findingの同一性のルールに従って更新時に引き継ぎ、統合時は合算して同じUserの重複を1つにまとめ、分割時は元の方に残す（6A.3節）。品質ランキングや星評価を目的にしない。「行ってきた」「買えた」等をFreshness補強に利用する場合も、営業中・開催中・在庫あり等の保証へ置き換えず、反応の発生時点と意味を区別する。
 
-**要検討**：反応種別、取消・変更、同一Userの重複、保存・訪問を含めるか、ReactionからUserInterestを更新する規則、どの反応をFreshness補強に利用するか、対象時点、重み、減衰、不正・重複対策、Postとの境界。
+**要検討**：反応種別、取消・変更、同一Userの重複、保存・訪問を含めるか、Proposalへのユーザーのフィードバック（「関連ない」「一緒では？」。DEC-0007 決定10）をReactionの対象拡張で表すか別Entityとするか、ReactionからUserInterestを更新する規則、どの反応をFreshness補強に利用するか、対象時点、重み、減衰、不正・重複対策、Postとの境界。
 
 ## 5. 興味・意味概念
 
@@ -260,27 +341,27 @@ DEC-0005 決定8により、次の属性はPostに持たせず、Discovery側で
 
 **種別**：永続参照Entity（確定）
 
-**責務**：User、Discovery、Post、探索を横断し、同じ／近い意味を突合する統制された共通意味概念を表す。Discoveryの意味形成、関連Discovery探索、UserInterestの具体化と本人への可視化に使う。
+**責務**：User、Discovery、探索を横断し、同じ／近い意味を突合する統制された共通意味概念を表す。Discoveryの意味形成、関連Discovery探索、UserInterestの具体化と本人への可視化に使う。
 
-**主要論理属性**：識別子、代表表記、説明、同義表現、管理状態、作成・更新時点。
+**主要論理属性**：識別子、代表表記、説明、同義表現、区分（対象／観点）、管理状態（ex-day独自のSubject候補／採用済み等）、作成・更新時点。
 
-**主な関係**：Discovery・Post・UserInterestと多対多相当。Subject同士に同義・上位下位・近似等の関係を持ち得る。Themeとも多対多になり得る。
+**主な関係**：Discovery・UserInterestと多対多相当。発見の仮説（6A.2節）から候補として参照され、内部で持つタグ（TagMapping）から対応付けられる。Postとの直接の関係は持たない（DEC-0009 決定5）。Subject同士に同義・上位下位・近似等の関係を持ち得る。Themeとも多対多になり得る。
 
-**論理制約**：ユーザー自由入力をそのまま新Subjectにしない。入力は既存Subjectへ対応付け、または候補として扱う。UserInterestを否定してもSubject自体は削除しない。
+**論理制約**：ユーザー自由入力をそのまま新Subjectにしない。入力は既存Subjectへ対応付け、または候補として扱う。UserInterestを否定してもSubject自体は削除しない。Subject（対象：氷川丸、汽車道等の固有のもの）とSubject（観点：景観、鉄道史等の何についての話か）を区別する。場所・対象の種別（船、公園等）は独立したEntity（Category等）とせず、Subject（対象）の性質として扱う。既存Subjectに対応しないものはex-day独自のSubject候補として保持し、投稿の蓄積（言及の増加、言い換えの束ね、出所付きの情報の蓄積）を通じて育てる。対象の中身（地域・時期・内容等）をAIが推測・創作して確定させない（DEC-0007 決定9）。
 
-**要検討**：SubjectRelationの独立Entity化、同一性判定、表記揺れ、上位下位・近似の種別、候補の承認主体、版管理、多言語。
+**要検討**：SubjectRelationの独立Entity化、同一性判定、表記揺れ、上位下位・近似の種別、候補の承認主体、版管理、多言語、Subject（観点）の集合の規模・初期内容・管理方法。外部の知識ベース（Wikidata等）のID等への対応付けを持たせるかは、PoC（Issue #61）での採否の判断後に決める（DEC-0007 決定9）。
 
 ### 5.3 対象とSubjectの関連
 
-Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #58））は、別種類のSubjectではなく「対象と共通Subjectの関係」として扱う。
+Discovery Subjectは、別種類のSubjectではなく「対象と共通Subjectの関係」として扱う。PostとSubjectの直接の関係（旧Contribution Subject）は削除した（DEC-0009 決定5）。発見の仮説が持つSubject候補は見立ての層の候補であり、採用された時点でDiscovery Subjectとなる。
 
 **種別**：永続関連（確定）。独立関連Entityにするかは要検討。
 
 **主要論理属性候補**：対象、Subject、関連上の役割、Subjectである確信度、付与元（本人・運営・システム推定等）、確認状態、説明可能な根拠、作成・更新時点。
 
-**論理制約**：Subjectである確信度と内容が事実である信頼度を分ける。Contribution Subjectの単純集計をDiscovery Subjectとしない。
+**論理制約**：Subjectである確信度と内容が事実である信頼度を分ける。個々のPostの語やタグの単純集計をDiscovery Subjectとしない。
 
-**要検討**：役割分類、確信度尺度、推定履歴、ユーザー訂正、Subject Clusterの保存要否。Subject Clusterは現時点では意味形成を説明する一時的・導出モデルであり、永続Entityとは確定しない。
+**要検討**：役割分類、確信度尺度、推定履歴、ユーザー訂正。従来のSubject Clusterによる意味形成の説明は、話題（Topic）と発見の仮説（6A節）に置き換えた。
 
 ### 5.4 UserInterest
 
@@ -308,41 +389,55 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 
 **種別**：永続Entity（確定）
 
-**責務**：成立前Discovery（器）やPostについて、既存へ統合、成立（派生を含む）、関連付け、現時点では成立させない・保留等の判断結果と根拠を保持する。成立判断は、Discoveryの成立状態を`UNESTABLISHED`から`ESTABLISHED`へ遷移させる判断として記録し、判断主体・理由・根拠・結果を辿れるようにする。自動判定と人による判断の双方を追跡可能にする。AI・類似検索等の解析結果は提案であり、確定した判断結果と分けて記録する前提とする（DEC-0003・DEC-0006）。提案・候補を保持するEntityの構造は本書では定めない。
+**責務**：成立前Discovery（器）やPostについて、既存へ統合、成立（派生を含む）、関連付け、現時点では成立させない・保留等の判断結果と根拠を保持する。成立判断は、Discoveryの成立状態を`UNESTABLISHED`から`ESTABLISHED`へ遷移させる判断として記録し、判断主体・理由・根拠・結果を辿れるようにする。自動判定と人による判断の双方を追跡可能にする。AI・類似検索等の解析結果は提案であり、確定した判断結果と分けて記録する前提とする（DEC-0003・DEC-0006）。見立ての層から出された提案はProposal（6.4節）として保持し、その確定・却下を本Entityに記録する。
 
-**主要論理属性**：識別子、判断対象、判断結果、理由・根拠、判断方式（自動／人による判断）、判断主体、判断時点、状態、比較観点の説明。
+**主要論理属性**：識別子、判断対象、判断結果、理由・根拠、固めた根拠（判断時点の根拠のPostと、それを支えたFindingの版の内容の写し）、判断方式（自動／人による判断）、判断主体、判断時点、状態、比較観点の説明。
 
-**主な関係**：判断材料Post 0..*、比較対象Discovery 0..*、結果Discovery 0..*（成立判断では成立状態が遷移したDiscovery）。自動判定ではシステムを判断主体として識別し、人による判断ではUserまたは運営主体を追跡する。自動判定に架空のUserや運営承認者を必須としない。判断主体・方式の具体的なモデルと人の関与の多重度は後続設計とする。
+**主な関係**：確定・却下したProposal 0..*、固めた根拠のPost 0..*、固めた根拠のFinding（版の写し）0..*、比較対象Discovery 0..*、結果Discovery 0..*（成立判断では成立状態が遷移したDiscovery）。
+
+**根拠を固めるルール（DEC-0009 決定1）**：判断の時点で、根拠となったPostと、それを支えたFindingを判断記録の側に写し取って固める。Topic・DiscoveryHypothesis・Finding等の見立ての層のIDを参照するだけにはしない。見立てが後で組み直されても、判断の理由を失わない。Postは人間が作ったものであり参照で固めてよいが、Findingは版の内容を写す。自動判定ではシステムを判断主体として識別し、人による判断ではUserまたは運営主体を追跡する。自動判定に架空のUserや運営承認者を必須としない。判断主体・方式の具体的なモデルと人の関与の多重度は後続設計とする。
 
 **論理制約**：判断は事実認定ではなく話題の単位・関係の判断である。運用コストの過度な増大を避けるため、自動判定を基本とし、必要時に人による判断を組み合わせられる設計とする。運営による全件手動承認や投稿前のDiscoveryDecision作成をPostの成立条件にしない。類似候補が0件でも正常に判断でき、投稿者の新規指定のみで成立を保証しない。判定ルールに基づく自動成立と、登録や器の用意だけを契機とする無条件の成立を区別する。成立の判断主体はシステムまたは運営とし、ユーザーの投稿・コメント・Reactionは判断材料として扱い判断主体としない。
 
-**要検討**：結果種別・状態遷移、成立・統合・派生条件、類似判定基準、各種閾値、投稿者の権限・信頼性を利用する条件、自動判定方式、人の確認が必要な条件、判断主体モデル、適用したルールの識別・版の保持方法、再審・取消、候補Entityの要否、AI提案の記録方法（提案と確定情報を分けるDEC-0006を前提とする）。ドメイン設計9.1節の判断ルール設計と連携する。
+**要検討**：結果種別・状態遷移、成立・統合・派生条件、類似判定基準、各種閾値、投稿者の権限・信頼性を利用する条件、自動判定方式、人の確認が必要な条件、判断主体モデル、適用したルールの識別・版の保持方法、再審・取消、採用（確定）の判断と運用（運営による確定、自動の確定、その条件。DEC-0009 Deferred）。ドメイン設計9.1節の判断ルール設計と連携する。
 
-### 6.2 ContributionDiscovery
+### 6.2 PostとDiscoveryの関係（投稿先と参照。旧ContributionDiscovery）
 
-名称は判断待ち（Issue #58）。DEC-0008によりContributionをPostへ改称したが、本関連Entityの新しい名前は未決定のため現行名のままとする。
+従来のContributionDiscovery（PostとDiscoveryの多対多の関係に、形成材料・寄与・根拠等の関係種別と任意の対象Valueを持たせた関連Entity）は、DEC-0009により次のとおり整理し直した。「寄与」の意味では残さず、独立した関連Entityとしては置かない。
 
-**種別**：永続関連Entity（確定）
+| 旧ContributionDiscoveryの役割 | 整理後 | 層 |
+|---|---|---|
+| 成立前Discovery（器）への所属 | Postの投稿先Discovery（Postの論理属性。1つ） | 人間が作ったもの（Postの一部） |
+| 形成材料・成長への寄与・関連情報 | 話題への所属（TopicがPostを範囲とする参照。6A.1節） | 見立て |
+| 根拠・対象Value | Findingの出所（6A.3節）と、DiscoveryDecisionに固めた根拠（6.1節） | 見立て／採用した構造 |
 
-**責務**：PostとDiscoveryの関連が存在する場合に、どのように形成・成長・説明・反証等で寄与したかを表す。Valueが成立している場合は、どのDiscoveryのどのValueの形成・向上に利用されたかを対応付ける。
+**投稿先（器としての所属）**
 
-**主要論理属性**：Post、Discovery、対象Value（任意）、関係種別、関係の説明、付与主体、作成・更新時点。
+**種別**：Postの論理属性（確定）。
 
-**多重度**：Post 1 : ContributionDiscovery 0..*、Discovery 1 : ContributionDiscovery 0..*、Value 1 : ContributionDiscovery 0..*。一つのContributionDiscoveryが参照するValueは0..1。結果としてPostとDiscoveryは多対多であり、一つのPostは、複数Discoveryに属するそれぞれ異なるValueへ利用され得る。同じDiscovery内の複数Valueへ利用される場合も、ValueごとのContributionDiscoveryとして表現する。
+**責務**：Postが投稿された場所のDiscoveryを表す。Postが属する器は1つだけとする（DEC-0009 決定8）。
 
-**論理制約**：ユーザーが関連先となる既存Discoveryを指定しなかったことは正常な投稿状態であり、投稿後に既存Discoveryとの関連を追加できる。この場合もPostは、システムが用意した成立前（`UNESTABLISHED`）のDiscoveryを会話の器として持つ。成立前Discoveryは「仮のDiscovery」や承認待ちの暫定データではなく、成立状態が`UNESTABLISHED`である正規のDiscoveryである（DEC-0006）。Discovery参照がない空の関連レコードは作らない。器への所属を本関連の関係種別（例：会話の器としての所属）として表すか、形成材料・寄与とは別の関連として表すか、およびPost側の多重度（`0..*`を維持するか`1..*`とするか）は要検討とする。対象Valueを持つ場合、そのValueは同じContributionDiscoveryが参照するDiscoveryに属さなければならない。Valueが未成立の形成材料、Discovery全体への寄与、または対象Valueをまだ特定できない関係では、対象Valueを持たなくてよい。対象Valueなしを「そのDiscoveryの全Valueへの寄与」と解釈しない。同じPost・Discovery・Valueへの関係を重複登録しない。ただし関係種別を複数持たせる表現方法は後続設計で定める。
+**多重度**：Post 0..* : 投稿先Discovery 1。
 
-**成立時の論理制約**：Discoveryの成立（`ESTABLISHED`への遷移）には、器に蓄積された一つ以上の起点Postが必要であり、形成材料を辿れるようにする。Discovery側の図の0..*は関連の取消等を含む汎用の多重度であり、起点Postなしの成立を許可するものではない。派生Discoveryにも同じ起点Postの制約を適用する。成立後の削除・非公開・関連取消時の保持方法は未確定とする。
+**論理制約**：ユーザーが関連先となる既存Discoveryを指定しなかったことは正常な投稿状態であり、この場合はシステムが用意した成立前（`UNESTABLISHED`）のDiscoveryが投稿先となる。成立前Discoveryは「仮のDiscovery」や承認待ちの暫定データではなく、成立状態が`UNESTABLISHED`である正規のDiscoveryである（DEC-0006）。派生・統合等があっても、Postを複製・移動せず、投稿先を他のDiscoveryとつなぐには参照を用いる。これにより、DEC-0006の反映時に要検討としていた「器への所属の表し方とPost側の多重度」を解消した。
 
-**要検討**：器への所属の表現とPost側の多重度（上記）、関係種別の一覧と複数指定方法、同じPostの複数Discovery／複数Value利用時の表示、Value成立前の関係を成立後にどう対応付けるか、関係の取消・履歴、成立前Discoveryが既存Discoveryへ統合された場合の関連の扱い（Issue #37・#46）。
+**参照（話題への所属、Findingの出所）**
+
+**責務**：他のDiscoveryの話題やFindingが、そのPostを範囲・根拠として参照することを表す。一つのPostは複数の話題に属し、複数DiscoveryのFinding・Valueの根拠になり得る。
+
+**論理制約**：参照は見立ての層にあり、再解析で変わってよい。判断に用いた根拠はDiscoveryDecisionに固める。「どのPostが、どのDiscoveryの、どのValueの根拠になったか」は、Valueを採用したDiscoveryDecisionの固めた根拠と、Findingの出所から辿れるようにする。Valueとして採用される前の出所を、そのDiscoveryの全Valueの根拠とは解釈しない。個々のPostの「寄与」を割り振る属性は持たない（DEC-0009 決定6）。
+
+**成立時の論理制約**：Discoveryの成立（`ESTABLISHED`への遷移）には、一つ以上の根拠のPostが必要であり、成立を判断したDiscoveryDecisionに固める。派生Discoveryにも同じ制約を適用する。派生Discoveryの成立の経緯は、派生先の最初の話題（元の話題のコピー）が元のPostを参照することで辿れる（6A.1節）。成立後の削除・非公開時の保持方法は未確定とする。
+
+**要検討**：成立前Discoveryが既存Discoveryへ統合された場合の投稿先の扱い（投稿先を変更せず参照で表すことを基本とし、Issue #37・#46と連携する）、参照・根拠の表示方法（S05／C17等の画面設計）、削除・非公開時の保持。
 
 ### 6.3 DiscoveryRelation
 
 **種別**：永続関連Entity（確定）
 
-**責務**：派生元／派生先等、Discovery間で明示的に保持する意味のある関係と形成経緯を表す。
+**責務**：派生元／派生先等、Discovery間で明示的に保持する確定した関係と形成経緯を表す。関係の候補段階（提案中／確定／却下／失効。DEC-0007 決定10）はProposal（6.4節）で扱い、確定したものを本関連として保持する。関連は確定の影響が小さいため自動で確定してよく、同一は統合・補完に進むため判断を経て確定する。
 
-**主要論理属性**：関係元Discovery、関係先Discovery、関係種別、方向、説明、成立根拠となるDecision、付与主体、作成・更新時点。
+**主要論理属性**：関係元Discovery、関係先Discovery、関係種別、方向、説明、成立根拠となるDecision（関係形成のきっかけとなった話題の根拠のPostを固めたもの）、付与主体、作成・更新時点。
 
 **多重度**：Discovery 1 : DiscoveryRelation 0..*（関係元・関係先の両側）。Discovery同士は多対多。
 
@@ -352,19 +447,96 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 
 **要検討**：関係種別、対称性、循環、複数起点を設定する条件、強さ、削除・取消、Subject由来の関連候補をキャッシュするか。
 
-### 6.4 ContributionOrigin
+### 6.4 Proposal（提案）
 
-名称は判断待ち（Issue #58）。新しい名前は未決定のため現行名のままとする。
+**種別**：永続Entity（確定。採用した構造）。旧版の6.4節で扱っていたContributionOriginは、PostReference（4.3.1節）に統合した。
 
-**種別**：永続関連Entityの候補（仮定義）
+**責務**：発見の仮説（6A.2節）の判定（補完・類似・同一・派生）が基準を超えたときに、採用した構造の層に出される提案を表す（DEC-0009 決定7）。突き合わせの結果に応じて、元のDiscoveryへの補完、統合、新しいValueの追加、関連、派生等の提案になる。DiscoveryRelationの候補段階（DEC-0007 決定10）を含む。
 
-**責務**：Postが、Userの直接投稿、別Postへの応答、外部Sourceの参照、Discovery上の不足・疑問等、何を起点に生じたかを説明する。
+| 突き合わせの結果 | 提案 |
+|---|---|
+| 元のDiscoveryと類似 | 元のDiscoveryへの補完 |
+| 別の既存Discoveryと同一（価値の一致まで見る） | 統合、または新しいValueの追加 |
+| 別の既存Discoveryと類似 | 関連 |
+| どれとも一致しない | 派生 |
 
-**主要論理属性候補**：対象Post、起点種別、起点対象、説明、作成時点。
+**主要論理属性**：識別子、提案の種類、対象（Discovery、Discoveryの組等）、起点の発見の仮説、状態（提案中／確定／却下／失効）、提案時点、判断した記録（DiscoveryDecision）、失効時点。
 
-**多重度候補**：Post 1 : ContributionOrigin 0..*。起点はPost、Discovery、Source等のいずれか。
+**多重度**：Proposal 0..* : 対象Discovery 1..*（関係の提案では組）、起点DiscoveryHypothesis 0..1、DiscoveryDecision 0..*。
 
-**要検討**：独立Entityとする必要性、返信関係との境界、ContributionDiscovery・Source参照との重複、Post自身を起点にできる範囲。「出所」は広義に使わず、情報源Sourceと投稿発生の経緯Originを区別する。
+**論理制約**：提案は対象の側が状態を持つ（例：関係の提案はDiscovery AとBの組が持つ）。仮説が組み直されても、提案と却下の記録は採用した構造の層に残す。却下は組についての事実として残り、同じ提案を繰り返さない関門になる。失効した提案は、条件が再び満たされれば再提案できる（DEC-0007 決定10）。候補にする判断材料（2つの段階、中身の成熟・人の支え・時間の安定の3つの軸、候補にしない条件）に従い、1人の参加者の1つの発言だけからは確定候補・派生候補の提案にしない。現時点での例外は運営が登録するDiscovery（Issue #57）のみとし、例外は登録主体の種類と信頼性によって広げられる形にする（Issue #46）。派生の提案の前に既存Discoveryを探し、新しいValueの追加・関連を優先する（DEC-0007 決定4）。確定・却下はDiscoveryDecisionに記録し、そのとき根拠を固める。
+
+**派生が確定したとき**：新しいDiscoveryを`UNESTABLISHED`で生み（中身は発見の仮説から候補のまま引き継ぐ）、元のDiscoveryとの間にDiscoveryRelation（派生）を作り、DiscoveryDecisionに根拠のPostを固め、話題を派生先へコピーして派生先の最初の話題にする。Postはコピーしない（6A.1節、DEC-0009 決定8）。
+
+**要検討**：提案の種類の確定一覧、失効の条件、判断材料の数値の閾値（Issue #61）、採用（確定）の判断と運用（DEC-0009 Deferred）、ユーザーのフィードバックの表し方（4.4節）。
+
+## 6A. 会話の理解（見立ての層）
+
+本節のEntityは、DEC-0009の「ex-dayが会話から理解しているもの」の層に属する。新しいPostや再解析で更新・分割・統合・失効してよく、組み直しの記録は要らない。判断に用いる場合は、DiscoveryDecisionに根拠を固める（6.1節）。中核Entityや採用した構造とは区別する。ドメイン上の定義はドメイン設計3.5節を正とする。
+
+### 6A.1 Topic（話題）
+
+**種別**：永続Entity（確定。見立て）。DEC-0007の「文脈のまとまり」を、DEC-0009で「話題」と呼び替えた。
+
+**責務**：「どのPostの範囲で、何について話しているか」を表す。ex-dayが話題とその要約を保存し、新しいPostの解析は「既存の話題の要約＋新しいPost」を主な入力とする（DEC-0009 決定2）。
+
+**主要論理属性**：識別子、属するDiscovery（器）、要約、範囲とするPost、コピー元の話題（派生でコピーされた場合）、作成・更新時点。
+
+**多重度**：Discovery 1 : Topic 0..*。Topic 0..* : Post 0..*（1つのPostは複数の話題に属してよく、話題は複数のDiscoveryのPostを参照できる）。Topic 1 : DiscoveryHypothesis 0..*。
+
+**論理制約**：Postそのものではない。連続したPostの範囲である必要はなく、会話を排他的に区切らない。Post一件ごとに補完・派生を判定しない。PostReference・PostTagを話題の推定で優先して使うが、前提にはしない。派生が確定したら、話題を派生先へコピーし、派生先の最初の話題にする。コピー後、元の話題と派生先の話題は別々に育つ。元の場所で同じ話の続きが投稿された場合、Postは元のDiscoveryに属したまま、派生先の話題にも参照として加える（DEC-0009 決定8）。
+
+**要検討**：要約の形式、範囲とするPostの保持方法、解析のタイミング（全文再解析か差分解析か）、物理モデル（DEC-0007 Deferred・Issue #61）。
+
+### 6A.2 DiscoveryHypothesis（発見の仮説）
+
+**種別**：永続Entityまたは話題に属する値（確定。見立て）。単独の中核Entityとはしない（DEC-0009 決定3）。
+
+**責務**：話題が持つ、Discoveryと同じ形（場所・Subject・価値）を持つ擬似的なDiscoveryを表す。補完・派生等の突き合わせの単位とし、「仮説とDiscovery」「仮説どうし」を同じ物差しで比べる（DEC-0009 決定7）。
+
+**主要論理属性候補**：話題、Place候補とSpatial Type（`Point`／`Area`／`Route`）、Subject候補（対象・観点）、Time（話題が指す時期）、確からしさ、状態（有効／失効）、作成・更新時点。価値の候補は中身として育つFinding（価値）で表す。
+
+**多重度**：Topic 1 : DiscoveryHypothesis 0..*。DiscoveryHypothesis 0..* : Finding 0..*。DiscoveryHypothesisからSubject・Placeへの関係は候補であり、採用した構造としての関係ではない。
+
+**論理制約**：1つの話題に解釈の異なる複数の仮説があってよい（DEC-0005 決定9）。確からしさの高いものから数個までに絞り、支えを失った仮説は失効する。場所の種別は独立した属性とせずSubject（対象）の性質とする。単一の観点の変化だけで派生と判定しない（DEC-0007 決定3）。
+
+**要検討**：1つの話題に出る仮説の数、判定（補完・類似・同一・派生）の保持方法、突き合わせの頻度とコスト（Issue #61）。
+
+### 6A.3 Finding（わかってきたこと）
+
+**種別**：永続Entity（確定。見立て）。
+
+**責務**：会話から「何がわかってきたか」を表す。ユーザーに見せる（S03のC25「わかってきたこと」）。種類は説と価値の2つとし、1つのEntityの属性として持つ（DEC-0009 決定4）。
+
+**主要論理属性**：識別子、種類（説／価値）、内容（表現）、裏付けの有無（説の場合。資料・出典の裏付けがあるものを知識として扱う）、状態（有効／統合済み／分割済み／失効）、版の履歴、出所のPost、作成・更新時点。
+
+**多重度**：DiscoveryHypothesis 0..* : Finding 0..*（1つのFindingが複数の話題にまたがり得る）。Finding 0..* : 出所のPost 1..*。Finding 1 : Reaction 0..*（Reactionは対象の版を持つ）。DiscoveryDecisionから根拠として版の写しで参照される。
+
+**論理制約**：問いはFindingに含めない（問いはPostであり、問いを起点とした成立前Discoveryの話題になる）。種類どうしの関係（この説はこの問いに答える等）は、最初は持たない。Postとの関係は出所（根拠）であり、個人の寄与として割り振らない。Source・Evidenceと混同しない（Findingの出所は会話のどこから分かったかを表し、Evidenceは主張を資料等で支持・反証する関係である）。再解析で表現が変わったときは、「すでに反応した人が、変わった後の文を見ても同じ反応をするか」で同一性を判断する。
+
+| 変化 | 扱い |
+|---|---|
+| 言い換え、詳しくなる、条件が絞られる | 更新（新しい版。Reactionを引き継ぐ） |
+| 主張が変わる、対立する説が出る | 別の新しいFinding。元の説も残して並べる |
+| 同じものだと分かる | 統合（Reactionを合算し、同じUserの重複は1つにまとめる） |
+| 2つの主張が混ざっていた | 分割（元の方にReactionを残す） |
+| 支えがなくなった | 失効（消さずに残す） |
+
+**要検討**：版の保持方法、種類どうしの関係を持つか（Issue #61の結果による）、観察の扱い（説の一種とするか、Place・Subjectの候補に直接回すか）、説を採用した構造の側でどう表すか（DEC-0009 Deferred）。
+
+### 6A.4 TagMapping（内部で持つタグ）
+
+**種別**：永続Entity（確定。見立て）。
+
+**責務**：表示するタグ（PostTag）の表記の揺れを吸収し、Subjectに対応付けたものを表す（DEC-0009 決定10）。話題の解析とSubject候補の入口に用いる。
+
+**主要論理属性**：識別子、正規化した表記、対応するSubject（任意。対応しない場合はex-day独自のSubject候補の入口とし得る）、作成・更新時点。
+
+**多重度**：PostTag 0..* : TagMapping 0..1。TagMapping 0..* : Subject 0..1。
+
+**論理制約**：ユーザーが書いたままの表示するタグを書き換えない。対応付けは見立てであり、更新してよい。運営が登録するDiscovery（Issue #57）に運営が付けたタグを直接持たせる場合の保持方法は要検討とする。
+
+**要検討**：正規化の規則、Subjectへの対応付けの確からしさ、運営が付けるタグの保持方法、スパムや表記の揺れが露出・解析の品質を下げる場合の対策（DEC-0009 Revisit Conditions）。
 
 ## 7. Place・Time・探索
 
@@ -376,11 +548,11 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 
 **主要論理属性**：識別子、名称、説明、場所区分、確からしさ、適用期間または名称の時代性に関する情報。
 
-**基本区分**：Pointは特定地点、Areaは地域・範囲。PointがAreaに含まれ、Area同士が包含・重複し得る。
+**基本区分**：Spatial Typeとして、少なくともPointは特定地点、Areaは地域・範囲、Routeは経路を表す（DEC-0007 決定2）。PointがAreaに含まれ、Area同士が包含・重複し得る。Routeは構成要素（経路上のPoint等）を持ち得る。
 
 **主な関係**：Discovery・UserInterestと多対多相当。Place同士に包含等の関係を持ち得る。
 
-**要検討**：Point／Areaを継承で分けるか、複数地点、経路、曖昧範囲、旧地名、境界の時間変化、PlaceRelationの独立Entity化、対象との関係上の役割、Mediaの撮影場所等の資料を説明する場所情報の持ち方。
+**要検討**：Point／Area／Routeを継承で分けるか、複数地点、Routeの具体的な表現と構成要素の関係、曖昧範囲、旧地名、境界の時間変化、PlaceRelationの独立Entity化、対象との関係上の役割、Mediaの撮影場所等の資料を説明する場所情報の持ち方。
 
 ### 7.2 TimeExpression
 
@@ -476,16 +648,19 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 
 - Userは0件以上のUserInterestを持つ。興味未指定でも探索できる。
 - UserInterestは一つの興味対象を指す。対象はTheme・Subject・Place・TimeExpression等のいずれかであり、実装方式は要検討。
-- DiscoveryとPostはContributionDiscoveryを介する多対多。ユーザーが関連先を指定しなかったPostは、システムが用意した成立前Discoveryを器として持ち、投稿後に既存Discoveryとの関連を追加できる。器への所属の表現とPost側の多重度は要検討（6.2節）。一つのPostが複数Discoveryの材料になり、各Discoveryで異なるValueの形成・向上に利用され得る。対象Valueは任意であり、指定する場合はそのDiscoveryに属するValueでなければならない。
-- DiscoveryとSubject、PostとSubjectは多対多。関連固有の確信度・付与元を持ち得る。
+- Postは投稿先Discovery（器）を1つ持つ。ユーザーが関連先を指定しなかったPostは、システムが用意した成立前Discoveryを投稿先とし、投稿後に既存Discoveryとの関係を参照として追加できる（6.2節）。一つのPostは複数の話題（Topic）に属し、複数DiscoveryのFinding・Valueの根拠になり得る。Post・Discovery・Valueの対応は、Findingの出所とDiscoveryDecisionに固めた根拠から辿る。
+- DiscoveryとSubjectは多対多。関連固有の確信度・付与元を持ち得る。PostとSubjectの直接の関係は持たない。DiscoveryHypothesisはSubject候補を持ち、TagMappingはSubjectに対応付け得る。
+- Discoveryは話題（Topic）を0件以上持つ。Topicは複数のDiscoveryのPostを参照でき、DiscoveryHypothesisを0件以上持つ。DiscoveryHypothesisとFindingは多対多。Findingは出所のPostを1件以上持つ。
+- PostReferenceはPost間の参照（返信等）、PostTagはPostに付くタグを表す。PostTagはTagMappingを通じてSubjectに対応付け得る。
+- Proposalは対象Discovery（関係の提案では組）を持ち、確定・却下をDiscoveryDecisionに記録する。DiscoveryRelationは確定した関係のみを表す。
 - 成立済みのDiscoveryはValueを1件以上持ち、成立前のDiscoveryはValueを持たなくてよい。各ValueはTime／Season等のConditionを0件以上持てる。Conditionがない軸には依存しない。
 - DiscoveryとPlace／TimeExpressionは多対多相当。一件に複数の場所・時代・反復時間を持てる。PostはPlace／TimeExpressionを直接持たず、発言から抽出された手がかりがDiscovery側の形成材料となる（DEC-0005）。ただし、Discoveryの話題を説明する歴史的時間と、Valueの成立・推薦条件としてのTime／Seasonを区別する。
-- Reactionは一つのDiscoveryまたは一つのPostを対象とする。
+- Reactionは一つのDiscovery、Post、Finding（対象の版を持つ）、Valueのいずれかを対象とする。
 - Discoveryの現在状態は、該当ValueのSeason等の反復時間と、直近のPost・Reactionから導出する。これはDiscoveryの恒常的な意味や存在期間とは別である。
 - Postの投稿・公開時点と、発言から抽出された対象期間、Freshnessは別概念である。後二者はDiscovery側で扱う。現在性が失効してもPostとの関連は保持する。
 - MediaはDiscoveryへ提供される資料であり、提供時のPostを0..1で辿れる。出典・提供者は資料自体に保持する（DEC-0005）。
 - DiscoveryRelationは二つのDiscovery間の明示的関係を表す。Subject由来の関連候補とは別である。
-- DiscoveryDecisionは自動判定または人による判断の結果・根拠を保持する。比較対象Discoveryが0件でも正常であり、結果Discoveryも0件以上となる。現時点では成立させない・保留等では成立状態が遷移したDiscoveryがなく、対象の成立前Discoveryは`UNESTABLISHED`のまま保持される。
+- DiscoveryDecisionは自動判定または人による判断の結果・根拠を保持し、判断時点の根拠のPostとFindingの版を固める。比較対象Discoveryが0件でも正常であり、結果Discoveryも0件以上となる。現時点では成立させない・保留等では成立状態が遷移したDiscoveryがなく、対象の成立前Discoveryは`UNESTABLISHED`のまま保持される。
 - Discoveryの成立状態・公開状態はDiscoveryの論理属性であり、確認・安全性・知識の状況・推薦・活発度等は判断対象側の状態または導出・算出結果として扱う（4.2節）。判断記録自体をPostの投稿の必須条件にはしない。
 - Media／Source／PostはEvidenceの根拠になり得るが、Evidence対象となる「主張」の粒度は要検討。
 
@@ -494,36 +669,36 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 ### 10.1 小机城址：同一Discoveryの成長
 
 1. 小机城址の存在を伝えるPostを器として受けた成立前Discoveryが、成立判断を経て`ESTABLISHED`となり、Discovery「小机城址」としてPlaceのPoint「小机城址」とArea「小机周辺」、Subject「城址」「城郭」「中世」等に関連する。「中世」は歴史的な話題を示すSubject側の属性であり、現在の訪問・推薦条件ではない。
-2. User Aの「現在は公園として歩ける」というPostがContributionDiscoveryを介して同じDiscoveryへ加わり、User Bの写真Mediaが同じDiscoveryへ資料として提供される（提供時のPostと提供者を辿れる）。
-3. 発言からContribution Subject「公園」「丘」「散歩」が推定され、歴史的な時間や現在の観察に関する語句・手がかりがDiscovery側に蓄積される。
-4. 既存の話題と意味的に両立し、独立Discoveryにする必要がないため、DiscoveryDecisionは既存への統合／成長と判断する。
+2. User Aの「現在は公園として歩ける」というPostが同じDiscoveryを投稿先として加わり、User Bの写真Mediaが同じDiscoveryへ資料として提供される（提供時のPostと提供者を辿れる）。
+3. 話題（Topic）「城址の歴史と現在の姿」が更新され、その発見の仮説がSubject候補「公園」「丘」「散歩」を持つ。「公園として歩ける」は出所のPostを持つFinding（価値）として示される。歴史的な時間や現在の観察に関する手がかりも仮説側に蓄積される。
+4. 仮説は元のDiscoveryの話題の中心と一致し、単一の観点（Timeの過去と現在）の変化だけでは派生としないため、元のDiscoveryへの補完のProposalとなり、DiscoveryDecisionは既存への補完／成長と判断して根拠のPostを固める。
 5. 城に関心のあるUserにも散歩に関心のあるUserにも異なる入口を提供するが、興味の違いだけではDiscoveryを分割しない。
 6. Valueとして「城址の歴史を知る」「公園を歩く」等を持てる。この例ではいずれにもTime／SeasonのConditionを付けないため、季節・時間帯の指定だけを理由に候補から除外しない。
 
-**検証結果**：一つのDiscoveryが複数Subject・Valueを持って成長でき、条件なしのValueも探索できる。Post原文、Mediaの提供者と提供時のPost、判断理由を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
+**検証結果**：一つのDiscoveryが複数Subject・Valueを持って成長でき、条件なしのValueも探索できる。Post原文、Mediaの提供者と提供時のPost、判断理由と固めた根拠を保持できる。ThemeをDiscoveryへ必須付与しなくてもSubjectから探索できる。
 
 ### 10.2 浜松町：疑問から成立し、根拠で成長
 
 1. User Aが「この建物の入口が道路より低いのはなぜ？」という疑問のPostを投稿し、写真Mediaを提供する。
 2. 投稿時点で、システムがこのPostを器として受ける成立前Discovery（`UNESTABLISHED`、公開状態は`PUBLIC`であれば閲覧・参加可能）を用意し、写真Mediaはこの器のDiscoveryへ提供された資料として保持される。候補があっても関連付けずに投稿でき、投稿後にも成立・関連付けを検討できる。
-3. 投稿後の解析で、発言と写真から建物Point・周辺Areaの手がかりが器のDiscoveryのPlace候補として、Subject「建物」「入口」「道路」「高低差」がContribution Subjectとして推定される。投稿時点では「道路嵩上げ」を事実として付与しない。
+3. 投稿後の解析で、発言と写真から建物Point・周辺Areaの手がかりが器のDiscoveryのPlace候補として、この問いを起点とした話題の発見の仮説がSubject候補「建物」「入口」「道路」「高低差」を持つ。投稿時点では「道路嵩上げ」を事実として付与しない。
 4. 既存候補との類似性や情報充足度等を踏まえ、場所と、例えば「身近な高低差に気付き、その理由を一緒に考える」という疑問起点のValueを認識でき、独立した体験・発見価値として第三者へ提示できると判断した場合に、成立状態を`ESTABLISHED`へ遷移させ、判断主体・理由・根拠・結果をDiscoveryDecisionに記録する。既存候補が0件であることや投稿者の新規指定だけでは成立を保証しない。答えが出ておらず情報が不足していても成立でき、原因の確定を待たない。
-5. 後続のPostとともに古地図Sourceや写真Mediaが提供され、Evidenceとして道路面変化の説明を支持または反証する。
+5. 後続のPostで「水害に備えた街のつくりでは」「昔あった〇〇の名残では」という説が出ると、1つの話題に解釈の異なる複数のDiscoveryHypothesisが並び、それぞれの説は出所のPostを持つFinding（説）となる。説への「そうかも」というReactionは対象の版とともに保持するが、正しさの証拠にはしない。後続のPostとともに古地図Sourceや写真Mediaが提供され、Evidenceとして道路面変化の説明を支持または反証する。
 6. Discovery Subjectと要約は根拠に応じて成長するが、Subject確信度と原因の事実信頼度を分ける。原因が未確定・複数説ありといった知識の状況は、Discoveryの属性ではなくPost・Value・Evidence等から解析・要約される。
 
-**検証結果**：疑問だけでDiscoveryが成立でき、成立前から会話を受け付け、成立を状態の遷移として記録できる。Media・Source・Evidenceの責務を分離し、異説を上書きせず保持できる。場所の近接や語句一致だけによる重複成立をDiscoveryDecisionで抑制できる。
+**検証結果**：疑問だけでDiscoveryが成立でき、成立前から会話を受け付け、成立を状態の遷移として記録できる。Media・Source・Evidenceの責務と、Findingの出所を分離し、異説を複数の仮説・Findingとして上書きせず保持できる。場所の近接や語句一致だけによる重複成立をDiscoveryDecisionで抑制できる。
 
 ### 10.3 生麦・青柳：Post群から別Discoveryが派生
 
 1. Discovery A「生麦周辺はかつて漁師町だった」に、漁・市場・昔の暮らしに関するPostが集まる。
-2. 「青柳を干して食べた」「子供のおやつだった」「料理屋で扱った」等のContribution Subjectが食文化のSubject Clusterを形成する。Clusterは導出・判断用で、永続Entityとは確定しない。
-3. 自動判定を基本に必要時に人が判断する方針で既存Discoveryを比較し、「生麦の食文化」が独立した体験・発見価値を持つ話題だと判断した結果・根拠をDiscoveryDecisionに記録する。
-4. Discovery B「生麦の食文化」は、Aと関連付けた別のDiscoveryとして成立前の段階から扱われ、成立判断により`ESTABLISHED`となる。Aは`ESTABLISHED`のまま変わらない。ContributionDiscoveryにより形成材料をAとBの双方から辿れる。DiscoveryRelationによりAからBへの明示的な派生を表す。Bを成立前Discoveryとして扱い始める時点・条件はIssue #46で定める。
-   同じPostがAでは「地域の暮らしを知る」Valueの向上に、Bでは「青柳の食文化を知る」Valueの形成に利用された場合、それぞれのDiscovery・Valueを指す別のContributionDiscoveryとして保持する。
+2. 「青柳を干して食べた」「子供のおやつだった」「料理屋で扱った」等の発言から、Aの中に話題（Topic）「食文化」が形成され、その発見の仮説がSubject候補「青柳」「干物」「郷土食」を持つ。「子供のおやつとして青柳を干して食べていた」は出所のPostを持つFinding（説）として示される。
+3. 仮説をAの話題の中心と既存Discoveryに突き合わせ、どれとも一致しない場合に派生のProposalを出す。複数の参加者の発言に支えられている等、候補にする判断材料を満たしたうえで、自動判定を基本に必要時に人が判断し、確定した結果と根拠のPostをDiscoveryDecisionに固める。
+4. Discovery B「生麦の食文化」が`UNESTABLISHED`で生まれ（中身は仮説から候補のまま引き継ぐ）、AとBのDiscoveryRelation（派生）が作られ、話題「食文化」がBの最初の話題としてコピーされる。PostはAを投稿先としたまま、Bの話題から参照される。Bは別の成立判断により`ESTABLISHED`となる。Aは`ESTABLISHED`のまま変わらない。Bを成立前Discoveryとして扱い始める時点・条件はIssue #46で定める。
+   同じPostがAでは「地域の暮らしを知る」Valueの、Bでは「青柳の食文化を知る」Valueの根拠になった場合、それぞれのValueを採用したDiscoveryDecisionに固めた根拠として辿れる。Postを複製しない。
 5. BはSubject「青柳」「干して食べる」「郷土食」「子供のおやつ」等を持つが、各Subjectを別Discoveryに分割しない。
 6. Subject「青柳を干して食べる」を介して別地域の近似Discoveryを探索できる。これは派生関係でなければDiscoveryRelationとして保存する必要はない。
 
-**検証結果**：成長と派生、形成材料と発生経緯、明示的派生とSubject由来の意味的関連を分けて表現できる。一つのPostを複数Discoveryへ関連付けられる。
+**検証結果**：成長と派生、形成の根拠と発生経緯、明示的派生とSubject由来の意味的関連を分けて表現できる。一つのPostを複製せずに複数Discoveryの話題・根拠から参照できる。見立て（話題・仮説）が後で組み直されても、DiscoveryDecisionに固めた根拠で派生の理由を辿れる。
 
 ### 10.4 知らなかった興味の発見
 
@@ -551,51 +726,66 @@ Discovery SubjectおよびContribution Subject（名称は判断待ち（Issue #
 1. 場所・年代が分からない古写真についての説明をPostとして投稿し、古写真は器となるDiscoveryへ資料（Media）として提供する。不明な場所・年代をDiscovery成立のために補わせない。
 2. 類似Discovery候補が0件の場合も、候補が存在しても関連付けない場合も投稿が成立する。ユーザーが関連先を指定しないため、システムが成立前（`UNESTABLISHED`）のDiscoveryを器として用意する。Discoveryの成立、Value・DiscoveryDecisionの作成を投稿成立の条件にしない。
 3. S05・S09等で原文・資料・疑問と現在状態を確認できる。第三者への公開は器となるDiscoveryの公開状態に従い、`PUBLIC`であれば成立前でも会話として閲覧・参加できる。露出方法・探索範囲は表示・推薦設計の対象とする。
-4. 投稿後の情報追加・会話・調査により還元を再検討する。既存Discoveryへの寄与なら既存Discoveryとの関連を追加・統合でき（統合後の器の状態の表し方はIssue #37・#46）、場所とValueを認識でき独立した価値があると判断した場合は器のDiscoveryを`ESTABLISHED`へ遷移させ、形成材料の関係を保持する。既存Discoveryからの派生の場合はDiscoveryRelationで経緯を表す。
+4. 投稿後の情報追加・会話・調査により還元を再検討する。話題の発見の仮説が既存Discoveryと同一・類似なら、新しいValueの追加・統合・関連のProposalとなり（統合後の器の状態の表し方はIssue #37・#46）、場所とValueを認識でき独立した価値があると判断した場合は器のDiscoveryを`ESTABLISHED`へ遷移させ、根拠のPostをDiscoveryDecisionに固める。既存Discoveryからの派生の場合はDiscoveryRelationで経緯を表す。
 5. 現時点ではDiscoveryとして成立させない判断では、器のDiscoveryは`UNESTABLISHED`のまま会話を受け付け、Postの原文・出所・単独での価値も保持する。自動判定と必要時の人の判断は結果・根拠をDiscoveryDecisionで追跡する。
 
-**検証結果**：単独での投稿成立、候補検索、Discovery成立判断、投稿後の関連追加を分離できる。関連先未指定のPostを表すための新規Entity（Thread等）は不要であり、器は成立状態が`UNESTABLISHED`の正規のDiscoveryとして表現できる。器への所属の表現とPost側の多重度は6.2節で要検討とする。
+**検証結果**：単独での投稿成立、候補検索、Discovery成立判断、投稿後の関連追加を分離できる。関連先未指定のPostを表すための新規Entity（Thread等）は不要であり、器は成立状態が`UNESTABLISHED`の正規のDiscoveryとして表現できる。器への所属はPostの投稿先Discovery（1つ）として表す（6.2節）。
 
 ## 11. 現時点の要検討事項
 
 優先度が高い論点は次のとおりである。
 
 1. Discovery成立・統合・派生判断ルール（具体条件、類似判定、各種閾値、自動成立／保留／人の確認、投稿者の権限・信頼性、運用コスト、投稿ガイドライン・利用規約との関係）。[Issue #46](https://github.com/ex-day/platform/issues/46)・ドメイン設計9.1節の後続課題と連携する。DiscoveryDecisionの候補・結果モデル、判断種別・主体、再審・取消も具体化する。
-2. ContributionOriginを独立Entityとする範囲と、返信・Source・ContributionDiscoveryとの重複。
+2. PostReferenceの参照の種類の一覧・複数参照・物理モデル（旧ContributionOriginの統合後の詳細。4.3.1節）。
 3. ThemeをDiscoveryへ直接関連付けるか、ThemeとSubjectの対応から探索時に導出するか。
 4. Subject候補の確定運用、SubjectRelation、同義・上位下位・近似、訂正履歴。
 5. UserInterestの尺度・履歴・減衰・明示的興味なしの期限と近似概念への波及。
 6. 興味推定に使う一時行動の種類、保持期間、ユーザーへの説明、同意・削除・監査。
-7. Placeの複数地点・経路・曖昧範囲・旧地名・時間変化。
+7. Placeの複数地点・Routeの表現と構成要素・曖昧範囲・旧地名・時間変化。
 8. Timeの歴史的時間と反復時間の具体構造、Seasonの実装形、曖昧さ、現在性、例外。
 9. Evidenceの対象となる主張の粒度、支持・反証・異説、事実信頼度の表現。
 10. Media／Sourceの版、権利、原資料・複製、外部URL、削除時の出所保持。Mediaと提供時のPostの対応、統合時に資料を統合先Discoveryから参照する方法（8.1節）。
 11. ContentReportの対象、状態、モデレーション権限、異議申立て。
-12. Reaction種別、Postとの境界、UserInterest推定への利用規則、Freshness補強へ利用する反応・対象時点・減衰・不正対策。
+12. Reaction種別、Postとの境界、UserInterest推定への利用規則、Freshness補強へ利用する反応・対象時点・減衰・不正対策。Proposalへのユーザーのフィードバックの表し方（4.4節）。
 13. 個人以外の活動主体、未登録利用者、退会User、代理投稿。特にProvider（団体・事業者・施設等）をUserの一種、別Entity、役割のいずれで扱うか。
-14. Subject Clusterを保存する必要があるか、都度導出するか。
+14. Topic・DiscoveryHypothesis・Findingの具体的な保持方法、1つの話題に出る仮説の数、候補にする判断材料の数値の閾値、突き合わせの頻度とコスト、解析方式（毎回全文／要約＋新しいPost／参照と既存分類を使いLLMは難しい場合のみ）（Issue #61。DEC-0007・DEC-0009）。
 15. 発言から抽出される対象期間、Freshness、告知・開始・終了・終了未定・数量等の手がかりを、Discovery側（現在状態の導出材料、ValueのCondition、TimeExpression）でどう保持・更新するか。開始／告知開始を速やかに反映する処理と、終了・数量の非保証表示（DEC-0005 決定8）。
 16. SourceとPostの境界、外部情報をPost化する主体・方法、Source自身の更新・取得時点を現在性へどう利用するか。
 17. Provider、Post提供者、Sourceの作成者・発行者・管理者の関係。公式情報またはofficial relationを独立関連として持つか、誰が何に対して公式であるか、認証・代理投稿・取消・履歴をどう表現するか。
 18. Value／Conditionの永続化、条件なしの物理表現（NULL、Conditionレコードなし、ANY／ALL等）、条件間の組み合わせ、明示条件による絞り込みの意味。
 19. 成立前Discoveryを器とするPostの露出方法・探索・検索範囲、投稿後に既存Discoveryへ関連付ける主体・権限・手順・通知方法、Discoveryへの還元方法（4.3節）。公開の可否は器となるDiscoveryの公開状態に従う（DEC-0006）。
-20. 器への所属をContributionDiscoveryの関係種別で表すか別の関連とするか、Post側の多重度（6.2節）。
+20. 採用（確定）の判断と運用（運営による確定、自動の確定、その条件）、Proposalの種類の確定一覧と失効の条件、例外とする登録主体の種類と信頼性のルール（Issue #46。DEC-0009 Deferred）。
 21. 公開状態の具体的な状態名・追加状態・遷移と運用フロー、成立の取消・統合・再審時の成立状態の表し方（Issue #37・#46）、Value候補・解析結果の構造（4.2節）。
-22. 発言から抽出された語句・手がかり・候補の構造、Contribution Subjectとの関係、それらをいつ・誰が（あるいはどの基準で）Discoveryの確定した場所・時期・分類・Valueとして扱うか、Discoveryの構造化情報を直接編集する手段を設けるか（DEC-0005 決定9・Deferred）。会話から読み取られた結果を独立したドメインとするか（DEC-0008 Deferred）はER図作成時に検討する。
+22. 発言から抽出された語句・手がかり（解析の内部データ）と、発見の仮説・Findingとの関係、それらをいつ・誰が（あるいはどの基準で）Discoveryの確定した場所・時期・分類・Valueとして扱うか、Discoveryの構造化情報を直接編集する手段を設けるか（DEC-0005 決定9・Deferred）。会話から読み取られた結果を独立したドメインとするか（DEC-0008 Deferred）は、DEC-0009によりFinding等を見立ての層として置くことで回答した。
 23. 並行する成立前Discoveryの統合を確定させる判断主体・権限・手順・記録（DEC-0005 決定4とDEC-0006 Decision 3。Issue #37・#46）。
+24. Findingの種類どうしの関係（説と問い、観察と説等）を持つか、観察の扱い、説を採用した構造の側でどう表すか（DEC-0009 Deferred）。
+25. タグのMVPでの扱い（入力UIの範囲）、運営が登録するDiscoveryにタグを直接持たせる保持方法、タグのスパム・表記の揺れ対策（DEC-0009）。
 
 ## 12. 後続設計への引き継ぎ条件
 
 - 物理設計では、論理上の多態的対象を安易な汎用IDへ確定せず、整合性・参照制約を比較する。
 - ベクトル類似度や地理空間検索は実現手段であり、Subject、Place、DiscoveryDecisionを置き換えない。
-- Subjectの推定理由、UserInterestの由来、Discovery形成材料、Postが利用されたDiscoveryとValueの対応、出所、判断理由をユーザーまたは運営が辿れる状態を維持する。
-- S05・S09等では、ユーザーが関連先を指定しなかったPost（成立前Discoveryを器とするもの）も内容と現在状態を確認できる。S05／C17では、関連先がある場合に、一つのPostに関係するDiscoveryを列挙するだけでなく、各DiscoveryでどのValueの形成・向上に利用されたかを対応付けて確認できるようにする。対象Valueが未成立・未特定の場合を、Valueなしまたは全Valueへの寄与と誤認させない。具体的なカード等のUI形式は本書では定めない。
+- Subjectの推定理由、UserInterestの由来、Discoveryの形成の根拠、Postが根拠になったDiscoveryとValueの対応、Findingの出所、判断理由と固めた根拠をユーザーまたは運営が辿れる状態を維持する。
+- 物理設計では、見立ての層（Topic・DiscoveryHypothesis・Finding・TagMapping）の組み直しが、人間が作ったもの（Post等）と採用した構造（DiscoveryDecision等）を書き換えないようにする。
+- S05・S09等では、ユーザーが関連先を指定しなかったPost（成立前Discoveryを器とするもの）も内容と現在状態を確認できる。S05／C17では、関連先がある場合に、一つのPostが属する話題と、各DiscoveryでどのFinding・Valueの根拠になったかを対応付けて確認できるようにする。Valueとして採用される前の出所を、Valueなしまたは全Valueの根拠と誤認させない。S09は「自分が参加した会話から、わかってきたこと」として再構成する（DEC-0009）。具体的なカード等のUI形式は本書では定めない。
 - 自動判定を基本とし必要時に人が判断する原則を維持し、DiscoveryDecisionで判断結果・根拠・方式・主体を追跡できるようにする。具体的な判定条件・実装範囲は後続設計で明示し、投稿時の候補選択を無条件のDiscovery成立としない。
 - 要検討事項を物理都合だけで確定した場合は、論理設計へのフィードバックと決定記録を残す。
 - ValueのConditionなしを検索候補から落とさず、Context一致による推薦順位の向上と明示条件による絞り込みを区別する。具体SQL、インデックス、候補抽出、スコアリング、性能担保は詳細設計で定める。
 - MVPスコープと同じ判断原則を適用する。具体的な判定条件・自動化の適用範囲はIssue #46で明文化する。成立・公開・確認・推薦の状態境界はIssue #36で検討し、DEC-0006として決定した内容を4.2・6.1・6.2節等へ反映した。本書だけでMVPの具体的な自動判定実装範囲を確定しない。
 
 ## 13. 今回の追補変更点
+
+### DEC-0007・DEC-0009の反映：会話の理解の層、話題による補完・派生、タグ（2026-09-25）
+
+- 各Entityを3つの層（人間が作ったもの／見立て／採用した構造）に置き、判断時点で根拠を固める原則、Postの器を1つとする原則、PostにSubjectを持たせない原則等を追加した（1・2節の原則21〜25）。Entity名はDEC-0009 Decision 11の仮称と本書で提案した名前であり、Issue #65のPRで人間が確認する。
+- 全体関係図から`Post --> Subject`、ContributionDiscovery、ContributionOriginを削除し、Postの投稿先、PostReference、PostTag、Topic、DiscoveryHypothesis、Finding、TagMapping、Proposalと、Reactionの対象（Finding・Value）、DiscoveryDecisionの固めた根拠を追加した。層を注記と表で区別した（3節）。
+- ContributionDiscoveryを、Postの投稿先（器としての所属。1つ）と参照（話題への所属、Findingの出所）に整理し直した。これにより器への所属の表し方とPost側の多重度の要検討を解消した（4.3・6.2・9・10.6・11節）。「名称は判断待ち（Issue #58）」の注記を外した。
+- ContributionOriginをPost間の参照（PostReference）に統合し、PostTagとともに4.3.1・4.3.2節に置いた。
+- Reactionの対象をFinding（版を持つ）・Valueへ広げ、対象ごとの意味と事実の正しさに置き換えない制約を追加した（4.4節）。
+- Subjectに区分（対象／観点）と管理状態（ex-day独自のSubject候補等）を追加し、Postとの直接の関係（旧Contribution Subject）を削除した。外部の知識ベースへの対応付けはPoC後に決める（5.2・5.3節）。
+- DiscoveryDecisionに固めた根拠（PostとFindingの版の写し）とProposalとの関係を追加し、Proposal（6.4節）と会話の理解の見立ての層（Topic・DiscoveryHypothesis・Finding・TagMapping。6A節）を追加した。DiscoveryRelationの候補段階をProposalに含めた（6.1・6.3節）。
+- PlaceのSpatial TypeにRouteを加えた（7.1節）。
+- 多重度の補足、代表シナリオ、要検討事項、引き継ぎ条件を整合した（9〜12節）。
 
 ### DEC-0008の反映：ContributionからPostへの改称（2026-09-24）
 
