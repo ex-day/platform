@@ -9,6 +9,8 @@
 // - 資料の添付時にC23を開かず、出典状態="unset"のまま添付する。出典表示自体を
 //   ボタンとし、送る前・送った後のいつでもC23を任意に呼び出せる。
 // - 未ログインで「送る」を押すとC08でログインを求め、ログイン後に入力内容のまま送る(DEC-0010 決定2)。
+// - 表示名は表示のたびに投稿者の今のニックネームを引く(Issue #74)。モックではログインユーザーの声を
+//   S08(ユーザー情報更新)で変えたニックネームで表示する(Issue #79)。
 "use client";
 
 import Link from "next/link";
@@ -28,6 +30,7 @@ import { MediaSourceDialog } from "@/components/C23-media-source-dialog/MediaSou
 import { ReactionButton } from "@/components/C10-reaction-button/ReactionButton";
 import { BodyWithTags, TagAwareTextarea } from "@/components/layout/TagAwareTextarea";
 import { useMockAuth } from "@/lib/mock-auth";
+import { MOCK_SELF_USER_ID, resolveAuthorName } from "@/lib/mock-data/user";
 import { cn } from "@/lib/utils";
 import {
   describeSourceStatus,
@@ -147,8 +150,9 @@ export function PostThread({
   derivationMarkers?: DerivationMarker[];
   derivedOriginNotice?: DiscoveryRef;
 }) {
-  const { user, requireLogin } = useMockAuth();
-  const [posts, setPosts] = useState(initialPosts);
+  const { user, profile, requireLogin } = useMockAuth();
+  const [storedPosts, setPosts] = useState(initialPosts);
+  const posts = storedPosts.map((p) => ({ ...p, author: resolveAuthorName(p, profile) }));
   const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -183,12 +187,13 @@ export function PostThread({
     setPendingMedia((prev) => [...prev, ...added]);
   };
 
-  const send = (author: string) => {
+  const send = (author: { id: string; name: string }) => {
     setPosts((prev) => [
       ...prev,
       {
         id: `post-${Date.now()}`,
-        author,
+        author: author.name,
+        authorId: author.id === MOCK_SELF_USER_ID ? author.id : undefined,
         postedAtLabel: "たった今",
         body: body.trim(),
         media: pendingMedia,
@@ -204,7 +209,7 @@ export function PostThread({
   // 未ログインで送ろうとした場合は、C08でログインを求め、ログイン後に入力内容のまま送る(DEC-0010 決定2)
   const handleSend = () => {
     if (!canSend) return;
-    requireLogin((loggedIn) => send(loggedIn.name));
+    requireLogin((loggedIn) => send(loggedIn));
   };
 
   const jumpTo = (id: string) => {

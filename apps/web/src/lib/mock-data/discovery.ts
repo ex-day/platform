@@ -6,6 +6,7 @@
 
 import type { DraftMedia } from "@/lib/mock-data/media";
 import { extractTags } from "@/lib/mock-data/tags";
+import { MOCK_SELF_USER_ID } from "@/lib/mock-data/user";
 
 export type DiscoveryCondition = {
   label: string;
@@ -54,7 +55,14 @@ export type DiscoveryRef = { id: string; title: string };
  */
 export type DiscoveryPost = {
   id: string;
+  /**
+   * 表示名の仮置き(モックデータ用)。本来は声に名前を保存せず、表示のたびに投稿者の今の
+   * ニックネームを引いて表示する(Issue #74)。authorIdがモックのログインユーザーの声は、
+   * S08(ユーザー情報更新)で変えたニックネームで表示する(C26)。
+   */
   author: string;
+  /** 投稿者(User)のID。モックではログインユーザー(MOCK_SELF_USER_ID)の声だけに付ける */
+  authorId?: string;
   /** 相対表現の表示用文字列(モックのため日時計算はしない) */
   postedAtLabel: string;
   body: string;
@@ -198,7 +206,9 @@ const DISCOVERIES: Record<string, DiscoveryData> = {
       },
       {
         id: "post-3",
-        author: "はるか",
+        author: "夕景さんぽ",
+        // モックのログインユーザーの声(S08でニックネームを変えると表示名が変わる。Issue #79)
+        authorId: MOCK_SELF_USER_ID,
         postedAtLabel: "6日前",
         body: "市の資料館に古い縄張り図がありました。石垣の積み方も時代で違うみたいです。",
         media: [
