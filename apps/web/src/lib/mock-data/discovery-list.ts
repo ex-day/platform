@@ -10,8 +10,6 @@ export type Entry = (typeof ENTRIES)[number];
 export const LAYOUTS = ["a", "b", "c"] as const;
 export type ListLayout = (typeof LAYOUTS)[number];
 
-// 「少数件」と判定する件数の上限(仮置き)。判定条件(件数・PC/Mobile・レイアウト・検索範囲による違い)は実装時に確定する。
-export const FEW_COUNT_MAX = 3;
 export const DEFAULT_RADIUS_KM = 5; // 仮置き
 export const EXPANDED_RADIUS_KM = 20; // 仮置き
 export const DEFAULT_AREA = "東京都千代田区"; // 現在地を取得できない場合の既定エリア(仮置き)

@@ -13,7 +13,10 @@
 // S03構成方針、Issue #50のレビューで既決と確認)。他の案は比較用に残している。
 //
 // DEC-0005・Issue #48/#50により、Hero直後にC25(わかってきたこと)を置き、
-// 従来のS06への「知識・疑問一覧を見る」導線をC26(コメント)の埋め込みに置き換えた。
+// 従来のS06への導線をC26(みんなの声)の埋め込みに置き換えた。
+// Issue #67により、C25を説・価値と種類ごとのリアクション、C26を「みんなの声」(返信先の引用・タグ・
+// 派生の誘導)に改め、Discoveryのタグを表示する。派生の誘導はsample-1(目印・注記・返信時の提案)と
+// sample-3(派生先の冒頭の経緯)で確認できる。
 //
 // Issue #50: 探索段階ごとの見え方を確認するため、[Mock比較用]バーの「状態」で
 // 探索開始直後(exploring-start)／探索中(exploring)／推薦可能(sample-1)を切り替える。
@@ -27,7 +30,8 @@ import { DiscoveryDetailHero } from "@/components/C19-discovery-detail-hero/Disc
 import { ReactionButton } from "@/components/C10-reaction-button/ReactionButton";
 import { DiscoveryValue } from "@/components/C12-discovery-value/DiscoveryValue";
 import { DiscoveryEmergingTerms } from "@/components/C25-discovery-emerging-terms/DiscoveryEmergingTerms";
-import { ContributionThread } from "@/components/C26-contribution-thread/ContributionThread";
+import { PostThread } from "@/components/C26-post-thread/PostThread";
+import { tagSearchHref } from "@/lib/mock-data/tags";
 import { RelatedDiscoveryRail } from "@/components/layout/RelatedDiscoveryRail";
 import { RAIL_CONTAINER_CLASS, RAIL_ITEM_CLASS } from "@/components/layout/rail";
 import { getDiscoveryById } from "@/lib/mock-data/discovery";
@@ -47,6 +51,8 @@ const STAGES = [
   { id: "exploring-start", label: "探索開始直後" },
   { id: "exploring", label: "探索中" },
   { id: "sample-1", label: "推薦可能" },
+  { id: "sample-2", label: "疑問（説が並ぶ）" },
+  { id: "sample-3", label: "派生先" },
 ] as const;
 
 const OPTION_LABELS: Record<string, string> = {
@@ -142,13 +148,25 @@ export default async function DiscoveryDetailPage({
           recommendations={discovery.recommendations}
           switchStyle={hero}
         />
-        <DiscoveryEmergingTerms terms={discovery.emergingTerms} />
+        <DiscoveryEmergingTerms findings={discovery.findings} />
         {discovery.body ? (
           <p className="whitespace-pre-line text-sm leading-relaxed">
             {discovery.body}
           </p>
         ) : null}
         <ReactionButton variant={reaction} initialCount={discovery.reactionCount} />
+        {discovery.tags.length > 0 ? (
+          // Discoveryのタグ(属する声のタグと運営が付けたタグを集めたもの。DEC-0009 決定10)
+          <ul aria-label="タグ" className="flex flex-wrap gap-2 text-xs">
+            {discovery.tags.map((tag) => (
+              <li key={tag}>
+                <Link href={tagSearchHref(tag)} className="rounded-full border px-2.5 py-1 text-muted-foreground hover:text-foreground">
+                  #{tag}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </div>
 
       {discovery.otherValues.length > 0 ? (
@@ -165,10 +183,12 @@ export default async function DiscoveryDetailPage({
         </div>
       ) : null}
 
-      <ContributionThread
-        // 比較用クエリの切替でコメントの初期データが変わるため、状態をリセットする
+      <PostThread
+        // 比較用クエリの切替で声の初期データが変わるため、状態をリセットする
         key={`${discovery.id}-${current.origin}`}
-        initialComments={discovery.comments}
+        initialPosts={discovery.posts}
+        derivationMarkers={discovery.derivationMarkers}
+        derivedOriginNotice={discovery.derivedOriginNotice}
       />
 
       <RelatedDiscoveryRail

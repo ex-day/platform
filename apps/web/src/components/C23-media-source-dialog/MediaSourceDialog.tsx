@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Button } from "@/components/primitives/button";
 import { Dialog } from "@/components/primitives/dialog";
-import type { DraftMedia, MediaSourceStatus, MediaSourceType } from "@/lib/mock-data/contribution-draft";
+import type { DraftMedia, MediaSourceStatus, MediaSourceType } from "@/lib/mock-data/media";
 
 const SOURCE_TYPE_OPTIONS: { value: MediaSourceType; label: string }[] = [
   { value: "website", label: "Webサイト" },
