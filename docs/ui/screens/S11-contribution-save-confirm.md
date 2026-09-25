@@ -1,14 +1,26 @@
-# S11 contribution save confirm
-## 画面概要
+# S11 知識・疑問登録確認画面（廃止）
+
+> **廃止（2026-09-25）**。IDは欠番とし、再利用しない。本ファイルは過去の参照のために残す。以下の「廃止前の定義」は当時の記録であり、現在の仕様ではない。
+
+## 廃止の理由と代わり
+- 投稿してから解析する流れになり、投稿前に解析結果を確認する段階がなくなったため廃止する（[DEC-0005](../../decisions/DEC-0005-contribution-thread-and-comment.md) 決定7、[DEC-0010](../../decisions/DEC-0010-duplicate-conversations-and-posting-auth.md) 決定1）。
+- 代わり：解析は投稿後に裏で動く[F02（投稿後の会話の解析）](../functions/F02-conversation-analysis.md)が行い、結果はS03（Discovery詳細）のC25（わかってきたこと）等に示す。投稿直後の似たDiscoveryの案内は[F03（似たDiscoveryの案内）](../functions/F03-similar-discovery-guide.md)と[C27（新しい話を始める）](../components/C27-post-new.md)が担う。
+- 関係するDEC／Issue：DEC-0003、DEC-0005、[DEC-0009](../../decisions/DEC-0009-conversation-understanding-and-tags.md)、DEC-0010、[DEC-0011](../../decisions/DEC-0011-id-numbering-rules.md)、[Issue #67](https://github.com/ex-day/platform/issues/67)
+
+## 廃止前の定義
+
+（元の見出し：S11 contribution save confirm）
+
+### 画面概要
 S04で入力した知識・疑問の本文と添付資料、場所・時間・季節を確認し、解析された内容分類や関連Discoveryの候補を必要に応じて選択・修正して投稿する。候補を確定できない項目は未確定のまま投稿できる。
 
 [S04](./S04-contribution-save.md)の時間入力2グループと[C24](../components/C24-time-period-input.md)の詳細情報は、[DEC-0002](../../decisions/DEC-0002-contribution-temporal-information.md)に従い、選択内容・入力原文を欠落なく引き継ぐ。以下の確認項目の詳細整合は[Issue #40](https://github.com/ex-day/platform/issues/40)で扱い、S11のMockおよびDiscovery／Valueへの具体的な変換規則は本変更では確定しない。
 
-## 対象端末
+### 対象端末
 - PC
 - モバイル
 
-## 表示項目
+### 表示項目
 | 論理名                   | 物理名                                       | 種別      | 繰り返し | 親               | データ元 | データ項目         | 対象端末    | 備考                                                         |
 |--------------------------|----------------------------------------------|-----------|----------|------------------|----------|--------------------|-------------|--------------------------------------------------------------|
 | 共通ヘッダー             | → [C01](../components/C01-header.md)         | component | -        | -                | -        | -                  | PC/モバイル |                                                              |
@@ -39,7 +51,7 @@ S04で入力した知識・疑問の本文と添付資料、場所・時間・�
 | 投稿する                 | -                                            | button    | -        | -                | -        | -                  | PC/モバイル | 確認した内容で投稿                                           |
 | 共通フッター             | → [C02](../components/C02-footer.md)         | component | -        | -                | -        | -                  | PC/モバイル |                                                              |
 
-## アクション
+### アクション
 - 初期表示時
   - [S04 知識・疑問登録／編集](./S04-contribution-save.md)から入力内容と新規作成／編集の状態を引き継ぎ、本文・添付資料・入力済みの場所や時間を表示する
   - 本文、添付資料の手掛かり、利用できる端末位置などから、対象となる場所・時間／時期・季節・内容分類と関連Discoveryの候補を表示する
@@ -58,7 +70,7 @@ S04で入力した知識・疑問の本文と添付資料、場所・時間・�
   - 未認証の場合の投稿確定処理は、S04／認証フローの検討結果に従う
   - 保存成功後は[S05 知識・疑問詳細](./S05-contribution-detail.md)へ遷移する
 
-## 検討事項
+### 検討事項
 - 投稿確定時に認証を必須とするか、および認証が必要な場合に入力内容を認証後へ引き継ぐ方法は、S04／認証フローと合わせて検討する（Non-blocking）
 - 資料の確認・表示方法、候補の表示件数、場所の入力方法は画面設計時に検討する。S11のMockはドメイン／EntityやIssue #1等の前提が確定するまで保留する方針を維持し、本変更では未確定事項を解決しない
 - MVPで許可するMedia Type、ファイルサイズ、動画時間、Live Photos等の扱い、不適切資料の検出・モデレーション方式は[Issue #35](https://github.com/ex-day/platform/issues/35)で確定する

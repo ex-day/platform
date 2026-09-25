@@ -1,4 +1,6 @@
 // see docs/ui/components/C07-dropdown-menu.md
+//
+// 新規投稿の導線はC01(共通ヘッダー)の「話す」へ移したため、本メニューには置かない(Issue #67)。
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -61,13 +63,6 @@ export function UserMenu() {
               >
                 ユーザー情報更新
               </Link>
-              <Link
-                href="/contributions/new"
-                role="menuitem"
-                className="block rounded px-3 py-2 hover:bg-accent"
-              >
-                新規知識登録
-              </Link>
               <button
                 type="button"
                 role="menuitem"
@@ -99,14 +94,6 @@ export function UserMenu() {
                 className="block rounded px-3 py-2 hover:bg-accent"
               >
                 新規ユーザー登録
-              </Link>
-              <div className="my-1 h-px bg-border" />
-              <Link
-                href="/contributions/new"
-                role="menuitem"
-                className="block rounded px-3 py-2 hover:bg-accent"
-              >
-                新規知識登録
               </Link>
             </>
           )}

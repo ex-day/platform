@@ -4,7 +4,8 @@
 // 実際のAPI契約を先取りするものではない(docs/ui/components/C19-discovery-detail-hero.md
 // 「表示に必要な文言・Mediaを用意する担当と具体的なデータ契約は未確定」を参照)。
 
-import type { DraftMedia } from "@/lib/mock-data/contribution-draft";
+import type { DraftMedia } from "@/lib/mock-data/media";
+import { extractTags } from "@/lib/mock-data/tags";
 
 export type DiscoveryCondition = {
   label: string;
@@ -43,20 +44,42 @@ export type RelatedDiscoverySummary = {
   place: DiscoveryPlace;
 };
 
+/** 派生先Discoveryへの参照(派生の誘導の表示用) */
+export type DiscoveryRef = { id: string; title: string };
+
 /**
- * S03に埋め込むコメント(C26)。DEC-0005によりContributionを発言(コメント)として扱う。
- * 添付資料はS04と同じDraftMedia型で持ち、出典状態は"unset"を許容する(C23)。
+ * S03の「みんなの声」(C26)に並ぶPost(画面では「声」)。DEC-0008によりContributionから改称。
+ * 資料はDiscoveryへ提供されたものとして扱い、どの声とともに提供されたかを示すため声に持たせる。
+ * 出典状態は"unset"を許容する(C23)。タグは本文中の「#」で表す(DEC-0009 決定10)。
  */
-export type DiscoveryComment = {
+export type DiscoveryPost = {
   id: string;
   author: string;
   /** 相対表現の表示用文字列(モックのため日時計算はしない) */
   postedAtLabel: string;
   body: string;
   media: DraftMedia[];
-  /** 探索の起点となったContribution(モック確認用の目印。表示方法は未確定) */
+  /** 新しい話を始めた最初の声(モック確認用の目印。表示方法は未確定。Issue #53) */
   isOrigin?: boolean;
+  /** 返信先の声のID(Post間の参照。PostReference) */
+  replyTo?: string;
+  /** 派生した話の続きと見立てられた場合の派生先(F02の解析結果。見立てのため再解析で変わり得る) */
+  continuedIn?: DiscoveryRef;
 };
+
+/** C25。わかってきたこと(Finding)。種類は説と価値(DEC-0009 決定4) */
+export type DiscoveryFinding = {
+  id: string;
+  kind: "value" | "theory";
+  text: string;
+  /** 資料(出典)の裏付けがある説の出典名。ある場合はリアクションを付けない(DEC-0009 決定9) */
+  backedBy?: string;
+  /** 種類ごとのリアクション数(価値: understand/wantToGo、裏付けのない説: maybe) */
+  reactions: Partial<Record<"understand" | "wantToGo" | "maybe", number>>;
+};
+
+/** C26の「派生の目印」。派生が確定した時点の位置(afterPostIdの声の直後)に挟む */
+export type DerivationMarker = { afterPostId: string; discovery: DiscoveryRef };
 
 export type Discovery = {
   id: string;
@@ -66,10 +89,18 @@ export type Discovery = {
   recommendations: DiscoveryRecommendation[];
   otherValues: DiscoveryValueItem[];
   reactionCount: number;
-  /** C25。複数のコメントから抽出された未確定の語句 */
-  emergingTerms: string[];
+  /** C25。会話から読み取られたわかってきたこと(F02の解析結果のモック) */
+  findings: DiscoveryFinding[];
   /** C26。時系列(古い→新しい)順 */
-  comments: DiscoveryComment[];
+  posts: DiscoveryPost[];
+  /** 運営が付けたタグ(#57)。Discoveryのタグは、これと属する声のタグを集めて求める */
+  operatorTags?: string[];
+  /** Discoveryのタグ(getDiscoveryByIdで求める) */
+  tags: string[];
+  /** C26の派生の目印 */
+  derivationMarkers: DerivationMarker[];
+  /** 派生して生まれたDiscoveryの場合の元の会話(C26の冒頭に経緯として示す) */
+  derivedOriginNotice?: DiscoveryRef;
   derivedFrom: RelatedDiscoverySummary[];
   derivedTo: RelatedDiscoverySummary[];
   related: RelatedDiscoverySummary[];
@@ -95,7 +126,10 @@ function relatedItems(
   }));
 }
 
-const DISCOVERIES: Record<string, Discovery> = {
+/** モックの元データ。tagsはgetDiscoveryByIdで求める */
+type DiscoveryData = Omit<Discovery, "tags">;
+
+const DISCOVERIES: Record<string, DiscoveryData> = {
   "sample-1": {
     id: "sample-1",
     title: "○○城跡でみつけた、静かな夕景",
@@ -134,29 +168,41 @@ const DISCOVERIES: Record<string, Discovery> = {
       },
     ],
     reactionCount: 128,
-    emergingTerms: ["後北条氏の支城", "戦国期", "夕景", "桜の名所", "石垣の積み方"],
-    comments: [
+    findings: [
+      { id: "finding-1", kind: "value", text: "夕方、石垣の上から見る夕景が綺麗", reactions: { understand: 18, wantToGo: 25 } },
+      { id: "finding-2", kind: "value", text: "春は石垣と桜を一緒に楽しめる", reactions: { understand: 9, wantToGo: 14 } },
+      { id: "finding-3", kind: "theory", text: "戦国期には後北条氏の支城だったのでは", reactions: { maybe: 7 } },
       {
-        id: "comment-1",
+        id: "finding-4",
+        kind: "theory",
+        text: "石垣の積み方は、築かれた時代によって違う",
+        backedBy: "○○市郷土資料館 所蔵資料",
+        reactions: {},
+      },
+    ],
+    operatorTags: ["城跡"],
+    posts: [
+      {
+        id: "post-1",
         author: "くみ子",
         postedAtLabel: "12日前",
         body: "子どもの頃、祖父とよくここから夕日を見ていました。当時の写真が出てきたので載せます。",
-        media: [mockMedia("comment-1-media-1", "昭和50年代の城跡.jpg")],
+        media: [mockMedia("post-1-media-1", "昭和50年代の城跡.jpg")],
       },
       {
-        id: "comment-2",
+        id: "post-2",
         author: "みつる",
         postedAtLabel: "10日前",
         body: "戦国期には後北条氏の支城だったと聞いたことがあります。",
         media: [],
       },
       {
-        id: "comment-3",
+        id: "post-3",
         author: "はるか",
         postedAtLabel: "6日前",
         body: "市の資料館に古い縄張り図がありました。石垣の積み方も時代で違うみたいです。",
         media: [
-          mockMedia("comment-3-media-1", "縄張り図.jpg", {
+          mockMedia("post-3-media-1", "縄張り図.jpg", {
             sourceStatus: "registered",
             sourceType: "document",
             sourceName: "○○市郷土資料館 所蔵資料",
@@ -164,20 +210,32 @@ const DISCOVERIES: Record<string, Discovery> = {
         ],
       },
       {
-        id: "comment-4",
+        id: "post-4",
         author: "けんじ",
         postedAtLabel: "2日前",
-        body: "今週末あたり桜が見頃になりそうです。夕方の石垣と一緒に撮ってきました。",
-        media: [mockMedia("comment-4-media-1", "夕景と桜.jpg", { sourceStatus: "self" })],
+        body: "今週末あたり桜が見頃になりそうです。夕方の石垣と一緒に撮ってきました。 #桜 #夕景",
+        media: [mockMedia("post-4-media-1", "夕景と桜.jpg", { sourceStatus: "self" })],
       },
       {
-        id: "comment-5",
+        id: "post-5",
         author: "ゆかり",
         postedAtLabel: "3時間前",
         body: "くみ子さんの写真、今と見比べると石垣の上の木がずいぶん育っていますね。",
         media: [],
+        replyTo: "post-1",
+      },
+      {
+        id: "post-6",
+        author: "けんじ",
+        postedAtLabel: "1時間前",
+        body: "夜のライトアップで見る桜もよかったです。堀に映っていました。",
+        media: [],
+        replyTo: "post-4",
+        continuedIn: { id: "derived-to-1", title: "夜桜にまつわる発見 1" },
       },
     ],
+    // 桜の話から「夜桜」の話が派生したと確定した時点の位置(モック)
+    derivationMarkers: [{ afterPostId: "post-4", discovery: { id: "derived-to-1", title: "夜桜にまつわる発見 1" } }],
     derivedFrom: relatedItems("derived-from", 1, {
       subject: "城下町の街並み",
       value: "城跡の麓に広がる古い街並み",
@@ -208,23 +266,31 @@ const DISCOVERIES: Record<string, Discovery> = {
     ],
     otherValues: [],
     reactionCount: 12,
-    emergingTerms: ["道標？", "供養塔？", "江戸時代"],
-    comments: [
+    // 対立する説は無理に一つにまとめず並べる(DEC-0005 決定9)
+    findings: [
+      { id: "finding-1", kind: "theory", text: "登山道の分岐を示す道標だったのでは", reactions: { maybe: 4 } },
+      { id: "finding-2", kind: "theory", text: "供養塔だったのでは", reactions: { maybe: 3 } },
+      { id: "finding-3", kind: "value", text: "石碑の由来を一緒に考える", reactions: { understand: 5, wantToGo: 2 } },
+    ],
+    operatorTags: ["石碑", "登山道"],
+    posts: [
       {
-        id: "comment-1",
+        id: "post-1",
         author: "たけし",
         postedAtLabel: "4日前",
         body: "形からすると道標か供養塔かもしれません。裏側の文字を撮ってきました。",
-        media: [mockMedia("comment-1-media-1", "石碑の裏側.jpg")],
+        media: [mockMedia("post-1-media-1", "石碑の裏側.jpg")],
       },
       {
-        id: "comment-2",
+        id: "post-2",
         author: "はるか",
         postedAtLabel: "1日前",
         body: "年号が読めれば江戸時代のものか分かりそうですね。",
         media: [],
+        replyTo: "post-1",
       },
     ],
+    derivationMarkers: [],
     derivedFrom: [],
     derivedTo: relatedItems("derived-to", 1, {
       subject: "登山道の分岐点",
@@ -267,8 +333,11 @@ const DISCOVERIES: Record<string, Discovery> = {
       },
     ],
     reactionCount: 3,
-    emergingTerms: [],
-    comments: [],
+    findings: [],
+    posts: [],
+    derivationMarkers: [],
+    // 派生して生まれたDiscoveryの冒頭の経緯(モック)
+    derivedOriginNotice: { id: "derived-from-1", title: "川の上流にまつわる発見 1" },
     derivedFrom: relatedItems("derived-from", 3, {
       subject: "川の上流",
       value: "上流にある発見",
@@ -293,7 +362,7 @@ const DISCOVERIES: Record<string, Discovery> = {
 // ---------------------------------------------------------------------------
 
 export type DiscoveryMockOptions = {
-  /** 探索開始直後: 起点Contributionに写真があるか */
+  /** 探索開始直後: 新しい話を始めた最初の声に写真があるか */
   originPhoto?: boolean;
   /** 探索中: 関連Discoveryがあるか */
   withRelated?: boolean;
@@ -302,18 +371,18 @@ export type DiscoveryMockOptions = {
 const EXPLORING_TITLE = "鶴見の浜で干していた貝は何？";
 const EXPLORING_PLACE: DiscoveryPlace = { text: "神奈川県横浜市鶴見区", lat: 35.5, lng: 139.68 };
 
-function originComment(withPhoto: boolean): DiscoveryComment {
+function originPost(withPhoto: boolean): DiscoveryPost {
   return {
-    id: "comment-origin",
+    id: "post-origin",
     author: "ゆかり",
     postedAtLabel: withPhoto ? "2時間前" : "5日前",
-    body: "祖母から、昔は鶴見の浜で貝を干していたと聞きました。何の貝で、どうやって食べていたのか知っている人いますか？",
-    media: withPhoto ? [mockMedia("comment-origin-media-1", "祖母のアルバム_浜の写真.jpg")] : [],
+    body: "祖母から、昔は鶴見の浜で貝を干していたと聞きました。何の貝で、どうやって食べていたのか知っている人いますか？ #鶴見 #古写真",
+    media: withPhoto ? [mockMedia("post-origin-media-1", "祖母のアルバム_浜の写真.jpg")] : [],
     isOrigin: true,
   };
 }
 
-function buildExploringStart(options: DiscoveryMockOptions): Discovery {
+function buildExploringStart(options: DiscoveryMockOptions): DiscoveryData {
   const withPhoto = options.originPhoto ?? false;
   return {
     id: "exploring-start",
@@ -334,24 +403,26 @@ function buildExploringStart(options: DiscoveryMockOptions): Discovery {
       : [],
     otherValues: [],
     reactionCount: 1,
-    emergingTerms: [],
-    comments: [
-      originComment(withPhoto),
+    findings: [],
+    posts: [
+      originPost(withPhoto),
       {
-        id: "comment-2",
+        id: "post-2",
         author: "みつる",
         postedAtLabel: "1時間前",
         body: "うちの祖父も浜で何か干していたと言っていました。気になります。",
         media: [],
+        replyTo: "post-origin",
       },
     ],
+    derivationMarkers: [],
     derivedFrom: [],
     derivedTo: [],
     related: [],
   };
 }
 
-function buildExploring(options: DiscoveryMockOptions): Discovery {
+function buildExploring(options: DiscoveryMockOptions): DiscoveryData {
   return {
     id: "exploring",
     title: EXPLORING_TITLE,
@@ -374,37 +445,48 @@ function buildExploring(options: DiscoveryMockOptions): Discovery {
     // 「その他の魅力」まで成立していない状態を確認するため0件とする
     otherValues: [],
     reactionCount: 24,
-    emergingTerms: ["鶴見の浜", "昭和30年代", "青柳（バカガイ）", "アサリ？", "青柳干し", "干し場"],
-    comments: [
-      { ...originComment(true), postedAtLabel: "9日前" },
+    findings: [
       {
-        id: "comment-2",
+        id: "finding-1",
+        kind: "theory",
+        text: "昭和30年代、鶴見の浜では青柳（バカガイ）を干していた",
+        backedBy: "鶴見区史",
+        reactions: {},
+      },
+      { id: "finding-2", kind: "theory", text: "時期によってはアサリも干していたのでは", reactions: { maybe: 3 } },
+      { id: "finding-3", kind: "value", text: "昭和の浜の暮らしを、古写真でたどれる", reactions: { understand: 11, wantToGo: 4 } },
+    ],
+    posts: [
+      { ...originPost(true), postedAtLabel: "9日前" },
+      {
+        id: "post-2",
         author: "みつる",
         postedAtLabel: "9日前",
         body: "うちの祖父も浜で何か干していたと言っていました。気になります。",
         media: [],
       },
       {
-        id: "comment-3",
+        id: "post-3",
         author: "くみ子",
         postedAtLabel: "7日前",
         body: "実家に干し場の写真がありました。青柳（バカガイ）を干していたと聞いています。",
-        media: [mockMedia("comment-3-media-1", "浜の干し場_昭和35年頃.jpg")],
+        media: [mockMedia("post-3-media-1", "浜の干し場_昭和35年頃.jpg")],
       },
       {
-        id: "comment-4",
+        id: "post-4",
         author: "たけし",
         postedAtLabel: "6日前",
         body: "アサリだったという話も聞いたことがあります。時期によって違ったのかも？",
         media: [],
+        replyTo: "post-3",
       },
       {
-        id: "comment-5",
+        id: "post-5",
         author: "はるか",
         postedAtLabel: "4日前",
         body: "区史に「青柳干し」の記述がありました。該当ページを添付します。",
         media: [
-          mockMedia("comment-5-media-1", "区史_抜粋.pdf", {
+          mockMedia("post-5-media-1", "区史_抜粋.pdf", {
             sourceStatus: "registered",
             sourceType: "book",
             sourceName: "鶴見区史",
@@ -412,20 +494,22 @@ function buildExploring(options: DiscoveryMockOptions): Discovery {
         ],
       },
       {
-        id: "comment-6",
+        id: "post-6",
         author: "けんじ",
         postedAtLabel: "2日前",
         body: "今の様子を撮ってきました。干し場の跡はもう残っていないみたいです。",
-        media: [mockMedia("comment-6-media-1", "現在の護岸.jpg", { sourceStatus: "self" })],
+        media: [mockMedia("post-6-media-1", "現在の護岸.jpg", { sourceStatus: "self" })],
       },
       {
-        id: "comment-7",
+        id: "post-7",
         author: "ゆかり",
         postedAtLabel: "5時間前",
-        body: "皆さんありがとうございます。青柳干しの可能性が高そうですね。",
+        body: "皆さんありがとうございます。青柳干しの可能性が高そうですね。 #青柳干し",
         media: [],
+        replyTo: "post-5",
       },
     ],
+    derivationMarkers: [],
     derivedFrom: [],
     derivedTo: [],
     related: options.withRelated
@@ -442,8 +526,19 @@ function buildExploring(options: DiscoveryMockOptions): Discovery {
   };
 }
 
-export function getDiscoveryById(id: string, options: DiscoveryMockOptions = {}): Discovery {
+/** Discoveryのタグは、運営が付けたタグと、属する声のタグを集めて求める(DEC-0009 決定10) */
+function withTags(discovery: DiscoveryData): Discovery {
+  const tags = new Set(discovery.operatorTags ?? []);
+  discovery.posts.forEach((post) => extractTags(post.body).forEach((t) => tags.add(t)));
+  return { ...discovery, tags: Array.from(tags) };
+}
+
+function resolveDiscovery(id: string, options: DiscoveryMockOptions): DiscoveryData {
   if (id === "exploring-start") return buildExploringStart(options);
   if (id === "exploring") return buildExploring(options);
   return DISCOVERIES[id] ?? { ...DISCOVERIES["sample-1"], id };
+}
+
+export function getDiscoveryById(id: string, options: DiscoveryMockOptions = {}): Discovery {
+  return withTags(resolveDiscovery(id, options));
 }

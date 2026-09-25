@@ -6,6 +6,7 @@ import {
   createContext,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -19,6 +20,11 @@ type MockAuthContextValue = {
   logout: () => void;
   openLogin: () => void;
   closeLogin: () => void;
+  /**
+   * ログインが必要な操作(投稿の確定等)を、ログイン後に続けて行う。未ログインならC08を開き、
+   * ログインしたらonLoggedInを呼ぶ。ログインせずに閉じた場合は呼ばない(DEC-0010 決定2)。
+   */
+  requireLogin: (onLoggedIn: (user: MockUser) => void) => void;
 };
 
 const MockAuthContext = createContext<MockAuthContextValue | null>(null);
@@ -26,18 +32,34 @@ const MockAuthContext = createContext<MockAuthContextValue | null>(null);
 export function MockAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MockUser | null>(null);
   const [isLoginDialogOpen, setLoginDialogOpen] = useState(false);
+  const pendingRef = useRef<((user: MockUser) => void) | null>(null);
 
   const value = useMemo<MockAuthContextValue>(
     () => ({
       user,
       isLoginDialogOpen,
       login: (providerName: string) => {
-        setUser({ name: `モックユーザー(${providerName})` });
+        const next = { name: `モックユーザー(${providerName})` };
+        setUser(next);
         setLoginDialogOpen(false);
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        pending?.(next);
       },
       logout: () => setUser(null),
       openLogin: () => setLoginDialogOpen(true),
-      closeLogin: () => setLoginDialogOpen(false),
+      closeLogin: () => {
+        pendingRef.current = null;
+        setLoginDialogOpen(false);
+      },
+      requireLogin: (onLoggedIn) => {
+        if (user) {
+          onLoggedIn(user);
+          return;
+        }
+        pendingRef.current = onLoggedIn;
+        setLoginDialogOpen(true);
+      },
     }),
     [user, isLoginDialogOpen],
   );
