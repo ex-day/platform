@@ -12,7 +12,7 @@ IDの採番・廃止・参照のルールは[各種設計資料の作成方針](
 |S05|[知識・疑問詳細](ui/screens/S05-contribution-detail.md)|`/contributions/[id]`|Discoveryの元となった知識|
 |S06|[知識・疑問一覧](ui/screens/S06-contribution-list.md)|`/contributions`|Discoveryの元となった知識の一覧|
 |S07|[新規ユーザー登録](ui/screens/S07-signup.md)|`/signup`|アカウントの作成は認証サービス側で行い、ex-dayの画面は初回ログイン時のニックネーム設定（本名と関係のない候補が入った状態で確認して決める）とする（[Issue #74](https://github.com/ex-day/platform/issues/74)）。認証の画面の方式と本定義の書き直しは[Issue #75](https://github.com/ex-day/platform/issues/75)の決定後|
-|S08|[ユーザー情報更新](ui/screens/S08-user-edit.md)|`/account`|ニックネームを後から変える画面（初回登録はS07（新規ユーザー登録））。地域・興味の登録、ログイン方法の管理、退会（[Issue #76](https://github.com/ex-day/platform/issues/76)）|
+|S08|[ユーザー情報更新](ui/screens/S08-user-edit.md)|`/account`|ニックネームを後から変える画面（初回登録はS07（新規ユーザー登録））。「プロフィール」（ニックネーム、興味のある地域、興味）と「アカウント」（ログイン方法、退会）の2つのセクションに分ける（[Issue #76](https://github.com/ex-day/platform/issues/76)）|
 |S09|[自分の投稿一覧](ui/screens/S09-user-contribution-list.md)|`/account/contributions`|Discovery未紐付けを含む、自分が登録した知識・疑問の一覧|
 |S10|ex-dayについて|`/about`||
 
