@@ -54,6 +54,8 @@ ex-dayは現在、個人で立ち上げている実験的なプロジェクト�
 
 「実装はしないけれどアイデアには興味がある」「地域情報について協力できる」といった関わり方も歓迎します。
 
+声をかけてもらうときは、[Discussions の案内の投稿](https://github.com/orgs/ex-day/discussions/1)へのコメントや、新しい Discussion で気軽にどうぞ。
+
 参加方法やContributionのルールについては、プロジェクトの進行に合わせて整備していく予定です。ライセンスと将来の方針は、下の [License / Use of Ideas](#license--use-of-ideas) を見てください。
 
 ## Project Philosophy
