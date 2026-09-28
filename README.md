@@ -104,6 +104,10 @@ ex-dayのAPIを配置します。
 
 現時点では **Spring Boot** を第一候補としていますが、MVPの構成に応じて変更する可能性があります。
 
+### 技術検証（PoC）
+
+技術検証のコードと結果は、別のリポジトリ [ex-day/poc](https://github.com/ex-day/poc) にまとめています（例：pgvector を使った関連 Discovery の検索、#1）。検証を受けた判断は、このリポジトリの issue に記録します。
+
 ## Architecture Direction
 
 現時点では以下の方向で検討しています。
