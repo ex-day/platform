@@ -1,0 +1,525 @@
+openapi: 3.1.0
+info:
+  title: ex-day 閲覧用 API
+  version: 0.1.0
+  summary: S01（Discovery提案（サービスTOP））と S03（Discovery詳細）が使う取得用の API
+  description: |
+    Issue #89（Docker で閲覧用に動かせるローカル環境を用意する）の、画面が必要とする取得用の API の約束事。
+    API 本体の前に、この定義からモックサーバーを立てて画面をつなげられるようにする。
+
+    - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
+    - 用語は論理 Entity の設計（docs/ex-day_logical_entity_design.md）に合わせる。
+    - 「今」と「いる場所」は、開発用の設定ファイル（YAML）で固定できる。固定しない場合は実際の日時と既定エリアを使う。
+      どちらを使ったかはレスポンスの `context` で返し、画面と API で食い違わないようにする。
+    - JSON の項目名は camelCase。エラーは RFC 9457（application/problem+json）。
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: http://localhost:8080/api/v1
+    description: ローカル（docker compose）。画面のコンテナからは http://api:8080/api/v1
+security: []  # 閲覧用のため認証なし（認証は #75 で決める）
+tags:
+  - name: S01
+    description: Discovery提案（サービスTOP）
+  - name: S03
+    description: Discovery詳細
+paths:
+  /discovery-sections:
+    get:
+      tags: [S01]
+      operationId: getDiscoverySections
+      summary: S01 の提案のまとまり（C11（discovery sections）の各セクション）を取得する
+      description: |
+        提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
+        未ログインのため、興味（Subject）を使う軸は扱わない。
+
+        - nearby：いる場所から近い順。
+        - season：「今」の季節に合う Value を持つ Discovery。季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。
+        - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
+        - 各カードの価値（subject・value）は、その軸で推薦の対象になった Value を表す。
+      parameters:
+        - name: lat
+          in: query
+          required: false
+          description: いる場所の緯度（ブラウザで取れた場合）。lng と組で指定する。開発用の設定ファイルで場所を固定している場合は、そちらを優先する
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: lng
+          in: query
+          required: false
+          description: いる場所の経度。lat と組で指定する
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: limit
+          in: query
+          required: false
+          description: セクションごとの最大件数
+          schema: { type: integer, minimum: 1, maximum: 20, default: 8 }
+      responses:
+        '200':
+          description: セクションの一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoverySectionsResponse' }
+              examples:
+                sakuragicho-april:
+                  $ref: '#/components/examples/SectionsSakuragichoApril'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /discoveries/{discoveryId}:
+    get:
+      tags: [S03]
+      operationId: getDiscovery
+      summary: S03 の Discovery の内容を取得する（みんなの声を除く）
+      description: |
+        タイトル、Hero（C19）、わかってきたこと（C25）、本文、タグ、その他の魅力（C12）、関係する Discovery（C03 の3つの枠）を返す。
+        みんなの声（C26）は件数が増えるため、別の API（/discoveries/{discoveryId}/posts）で取る。
+
+        Value の振り分けは API が行い、画面では評価しない（S03「評価ロジックはC19に持たせず」）。
+        - 「今」成立する Value → `recommendations`（Hero）
+        - 「今」成立しない Value → `otherValues`（その他の魅力）
+        - 季節の条件を持たない Value と「通年」の Value は、季節の軸では常に成立するとみなす。
+      parameters:
+        - $ref: '#/components/parameters/DiscoveryId'
+      responses:
+        '200':
+          description: Discovery の内容
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryDetail' }
+              examples:
+                ookagawa-april:
+                  $ref: '#/components/examples/DiscoveryOokagawaApril'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /discoveries/{discoveryId}/posts:
+    get:
+      tags: [S03]
+      operationId: getDiscoveryPosts
+      summary: S03 のみんなの声（C26）を取得する
+      description: |
+        この Discovery を投稿先（器）とする声（Post）を、時系列（古い→新しい）で返す。ツリーにはしない。
+        あわせて、派生の目印と、派生して生まれた Discovery の場合の元の会話を返す。
+
+        直近の表示件数・展開・ページ送りは未定（Issue #53）。今回はすべて返し、件数が増えたらページ送りの項目を足す。
+      parameters:
+        - $ref: '#/components/parameters/DiscoveryId'
+      responses:
+        '200':
+          description: みんなの声
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryPosts' }
+              examples:
+                ookagawa:
+                  $ref: '#/components/examples/PostsOokagawa'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  parameters:
+    DiscoveryId:
+      name: discoveryId
+      in: path
+      required: true
+      description: Discovery の識別子。形式は約束しない（中身を解釈しない文字列として扱う）
+      schema: { type: string, minLength: 1, maxLength: 64 }
+  responses:
+    BadRequest:
+      description: 指定が正しくない（例：lat だけ指定した）
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Discovery がない、または公開状態が HIDDEN
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    EvaluationContext:
+      type: object
+      description: 提案や Value の振り分けに使った「今」と「いる場所」。開発用の設定で固定したかどうかも返す
+      required: [now, season, location, clockSource, locationSource]
+      properties:
+        now:
+          type: string
+          format: date-time
+          description: 「今」
+        season:
+          $ref: '#/components/schemas/CurrentSeason'
+        location:
+          $ref: '#/components/schemas/Location'
+        clockSource:
+          type: string
+          enum: [fixed, system]
+          description: fixed は開発用の設定ファイルで固定した日時、system は実際の日時
+        locationSource:
+          type: string
+          enum: [fixed, request, default]
+          description: fixed は開発用の設定ファイル、request は lat・lng の指定、default は既定エリア
+    Location:
+      type: object
+      required: [lat, lng]
+      properties:
+        name:
+          type: string
+          description: 表示用の名前（例：桜木町駅）。指定された座標だけの場合はない
+        lat: { type: number, format: double }
+        lng: { type: number, format: double }
+    CurrentSeason:
+      type: string
+      enum: [spring, summer, autumn, winter]
+      description: 「今」の季節
+    Season:
+      type: string
+      enum: [spring, summer, autumn, winter, all_year]
+      description: Value の条件としての季節（DEC-0002。春・夏・秋・冬・通年）
+    DiscoverySectionsResponse:
+      type: object
+      required: [context, sections]
+      properties:
+        context: { $ref: '#/components/schemas/EvaluationContext' }
+        sections:
+          type: array
+          description: 表示する順。該当が0件のセクションも返す（見せ方は画面で決める）
+          items: { $ref: '#/components/schemas/DiscoverySection' }
+    DiscoverySection:
+      type: object
+      required: [key, title, items]
+      properties:
+        key:
+          type: string
+          enum: [nearby, season]
+          description: 提案の軸。nearby は「この近く」、season は「今の時期」
+        title:
+          type: string
+          description: セクションの表示名（PC の見出し、モバイルのタブ）
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/DiscoveryCard' }
+    DiscoveryCard:
+      type: object
+      description: C03（discovery-card）。Discovery と、推薦の対象になった Value の要約
+      required: [id, title, subject, value, place]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        subject:
+          type: string
+          description: 何についての価値か（例：桜並木、散策）
+        value:
+          type: string
+          description: 推薦の対象になった Value の短い説明
+        picture: { $ref: '#/components/schemas/Image' }
+        place: { $ref: '#/components/schemas/PlaceSummary' }
+    PlaceSummary:
+      type: object
+      description: 場所。地図は埋め込まず、テキストで表示する
+      required: [name]
+      properties:
+        name: { type: string, description: 例：大岡川（桜木町駅〜蒔田） }
+    Image:
+      type: object
+      description: 画像。今回のサンプルは権利の問題を避けるため仮の画像
+      required: [url, alt]
+      properties:
+        url: { type: string, format: uri-reference }
+        alt: { type: string }
+    DiscoveryRef:
+      type: object
+      description: 別の Discovery への参照（派生の誘導の表示用）
+      required: [id, title]
+      properties:
+        id: { type: string }
+        title: { type: string }
+    DiscoveryDetail:
+      type: object
+      required: [id, title, body, place, context, recommendations, otherValues, findings, tags, reactions, relations]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body:
+          type: string
+          description: 本文（現在の要約）
+        place: { $ref: '#/components/schemas/PlaceSummary' }
+        context: { $ref: '#/components/schemas/EvaluationContext' }
+        recommendations:
+          type: array
+          description: Hero（C19）に渡す、「今」成立する Value の推薦。表示する順。0件でも Hero は標準 Hero で表示する（Issue #50）
+          items: { $ref: '#/components/schemas/Recommendation' }
+        otherValues:
+          type: array
+          description: その他の魅力（C12）。「今」成立しない Value
+          items: { $ref: '#/components/schemas/ValueItem' }
+        findings:
+          type: array
+          description: わかってきたこと（C25）。説と価値
+          items: { $ref: '#/components/schemas/Finding' }
+        tags:
+          type: array
+          description: Discovery のタグ。属する声のタグと、運営が付けたタグを集めたもの
+          items: { type: string }
+        reactions: { $ref: '#/components/schemas/DiscoveryReactions' }
+        relations: { $ref: '#/components/schemas/DiscoveryRelations' }
+    Recommendation:
+      type: object
+      description: C19（Discovery詳細 Hero）の1件分
+      required: [valueId, message]
+      properties:
+        valueId: { type: string }
+        message:
+          type: string
+          description: 今伝えたい価値のメッセージ（例：今、桜が見頃です）
+        participationMessage:
+          type: string
+          description: 参加を促すメッセージ（例：一緒に考えませんか？）
+        media: { $ref: '#/components/schemas/Image' }
+    ValueItem:
+      type: object
+      description: C12（discovery-value）の1件分
+      required: [id, subject, value, body, conditions]
+      properties:
+        id: { type: string }
+        subject:
+          type: string
+          description: 何についての価値か
+        value: { type: string }
+        body: { type: string }
+        picture: { $ref: '#/components/schemas/Image' }
+        conditions:
+          type: array
+          description: 楽しめる条件の説明。内部の Condition の構造をそのまま出さず、表示用の説明にする
+          items: { $ref: '#/components/schemas/ConditionDescription' }
+    ConditionDescription:
+      type: object
+      required: [label, text]
+      properties:
+        label:
+          type: string
+          description: 例：季節
+        text:
+          type: string
+          description: 例：春（3〜5月）
+        seasons:
+          type: array
+          description: 季節の条件の場合の値（画面で表示を変えたいとき用）
+          items: { $ref: '#/components/schemas/Season' }
+    Finding:
+      type: object
+      description: C25（わかってきたこと）の1件分。まだ見立てであり、断定の書き方にしない
+      required: [id, kind, text, reactions]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [value, theory]
+          description: value は価値、theory は説
+        text: { type: string }
+        backedBy:
+          type: string
+          description: 資料（出典）の裏付けがある説の出典名。ある説にはリアクションを付けない（DEC-0009 決定9）
+        reactions:
+          type: object
+          description: 種類ごとのリアクション数。価値は understand（わかる）・wantToGo（行ってみたい）、裏付けのない説は maybe（そうかも）
+          properties:
+            understand: { type: integer, minimum: 0 }
+            wantToGo: { type: integer, minimum: 0 }
+            maybe: { type: integer, minimum: 0 }
+    DiscoveryReactions:
+      type: object
+      description: Discovery へのリアクション数（C10。👍／😮／♥）
+      required: [like, surprised, love]
+      properties:
+        like: { type: integer, minimum: 0 }
+        surprised: { type: integer, minimum: 0 }
+        love: { type: integer, minimum: 0 }
+    DiscoveryRelations:
+      type: object
+      description: 関係する Discovery の3つの枠。該当がない枠は空の配列
+      required: [derivedFrom, derivedTo, related]
+      properties:
+        derivedFrom:
+          type: array
+          description: 派生元（この発見のもとになった Discovery）
+          items: { $ref: '#/components/schemas/DiscoveryCard' }
+        derivedTo:
+          type: array
+          description: 派生した Discovery（この発見から広がった Discovery）
+          items: { $ref: '#/components/schemas/DiscoveryCard' }
+        related:
+          type: array
+          description: 関連する Discovery。今回はベクトル検索を使わず、サンプルデータに書いた関係をそのまま返す
+          items: { $ref: '#/components/schemas/DiscoveryCard' }
+    DiscoveryPosts:
+      type: object
+      required: [posts, derivationMarkers]
+      properties:
+        posts:
+          type: array
+          description: 時系列（古い→新しい）
+          items: { $ref: '#/components/schemas/Post' }
+        derivationMarkers:
+          type: array
+          description: 派生の目印。afterPostId の声の直後に挟む
+          items: { $ref: '#/components/schemas/DerivationMarker' }
+        derivedOrigin:
+          $ref: '#/components/schemas/DiscoveryRef'
+          description: 派生して生まれた Discovery の場合の元の会話（一覧の冒頭に示す）
+    Post:
+      type: object
+      description: 声（Post）。C26（みんなの声）の1件分
+      required: [id, authorName, postedAt, body, media, reactionCount]
+      properties:
+        id: { type: string }
+        authorName:
+          type: string
+          description: 投稿者の今のニックネーム（声に名前は保存せず、表示のたびに引く。Issue #74）
+        postedAt:
+          type: string
+          format: date-time
+          description: 投稿日時。相対表現（n日前 等）は画面で作る
+        body:
+          type: string
+          description: 本文。#タグを含め、ユーザーが書いたまま
+        replyTo: { $ref: '#/components/schemas/ReplyQuote' }
+        media:
+          type: array
+          description: この声とともに Discovery へ提供された資料
+          items: { $ref: '#/components/schemas/MediaItem' }
+        reactionCount:
+          type: integer
+          minimum: 0
+          description: 声への共感の数
+        continuedIn:
+          $ref: '#/components/schemas/DiscoveryRef'
+          description: 派生した話の続きと見立てられた場合の派生先（「『〇〇』で続いています」）
+    ReplyQuote:
+      type: object
+      description: 返信先の引用（Post 間の参照。PostReference）
+      required: [postId, authorName, excerpt]
+      properties:
+        postId: { type: string }
+        authorName: { type: string }
+        excerpt:
+          type: string
+          description: 返信先の本文の冒頭
+    MediaItem:
+      type: object
+      required: [id, kind, name, source]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [image, video, pdf, other]
+        name: { type: string }
+        image:
+          $ref: '#/components/schemas/Image'
+          description: kind が image の場合の画像
+        source: { $ref: '#/components/schemas/MediaSource' }
+    MediaSource:
+      type: object
+      description: 資料の出典（C23（資料出典登録ダイアログ）で登録するもの）
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [unset, self, registered, unknown]
+          description: unset は未設定、self は自分で撮影・作成、registered は出典を登録済み、unknown は不明
+        type:
+          type: string
+          enum: [website, book, document, provided, other]
+        name: { type: string }
+    DerivationMarker:
+      type: object
+      required: [afterPostId, discovery]
+      properties:
+        afterPostId: { type: string }
+        discovery: { $ref: '#/components/schemas/DiscoveryRef' }
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details
+      required: [title, status]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+  examples:
+    SectionsSakuragichoApril:
+      summary: 「4月2日の15時、桜木町駅の前にいる」ことにした場合
+      value:
+        context:
+          now: '2026-04-02T15:00:00+09:00'
+          season: spring
+          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          clockSource: fixed
+          locationSource: fixed
+        sections:
+          - key: nearby
+            title: この近く
+            items:
+              - id: ookagawa-sakura
+                title: 大岡川の桜と風景の変化
+                subject: 桜並木
+                value: 川沿いに続く桜並木を、水面越しに眺められる
+                picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+                place: { name: 大岡川（桜木町駅〜蒔田） }
+          - key: season
+            title: 今の時期
+            items:
+              - id: ookagawa-sakura
+                title: 大岡川の桜と風景の変化
+                subject: 桜並木
+                value: 川沿いに続く桜並木を、水面越しに眺められる
+                picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+                place: { name: 大岡川（桜木町駅〜蒔田） }
+    DiscoveryOokagawaApril:
+      summary: 大岡川の桜（4月に見た場合）
+      value:
+        id: ookagawa-sakura
+        title: 大岡川の桜と風景の変化
+        body: 桜木町駅の近くから南へ続く大岡川の桜並木。いつから桜の名所になったのか、昔を知る人の記憶や写真が集まっている。（利用イメージのサンプルで、史実と異なる場合がある）
+        place: { name: 大岡川（桜木町駅〜蒔田） }
+        context:
+          now: '2026-04-02T15:00:00+09:00'
+          season: spring
+          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          clockSource: fixed
+          locationSource: fixed
+        recommendations:
+          - valueId: v-ookagawa-cherry
+            message: 今、川沿いの桜が見頃です
+            media: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+        otherValues: []
+        findings:
+          - id: f-1
+            kind: value
+            text: 夜は川面に映る桜も楽しめるらしい
+            reactions: { understand: 3, wantToGo: 5 }
+          - id: f-2
+            kind: theory
+            text: 昔は今より桜の本数が少なかったのでは
+            reactions: { maybe: 2 }
+        tags: [大岡川, 桜]
+        reactions: { like: 4, surprised: 1, love: 6 }
+        relations:
+          derivedFrom: []
+          derivedTo: []
+          related: []
+    PostsOokagawa:
+      summary: 大岡川の桜のみんなの声（抜粋）
+      value:
+        posts:
+          - id: p-1
+            authorName: ななしさん
+            postedAt: '2026-03-30T10:12:00+09:00'
+            body: 大岡川って昔から桜の名所だったのかな？ #大岡川
+            media: []
+            reactionCount: 3
+          - id: p-2
+            authorName: みなとの散歩人
+            postedAt: '2026-03-30T18:40:00+09:00'
+            body: 子どものころは、今ほど桜は多くなかった気がします。
+            replyTo: { postId: p-1, authorName: ななしさん, excerpt: 大岡川って昔から桜の名所だったのかな？ }
+            media: []
+            reactionCount: 1
+        derivationMarkers: []
