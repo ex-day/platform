@@ -39,34 +39,62 @@ paths:
     get:
       tags: [S01]
       operationId: getDiscoverySections
-      summary: S01 の提案のまとまり（C11（discovery sections）の各セクション）を取得する
+      summary: S01 に出すセクションの一覧を取得する（F01（discovery-sections））
       description: |
-        提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
-        未ログインのため、興味（Subject）を使う軸は扱わない。
+        どのセクションをどの順で出すかは API が決める。中身（カード）は含めず、セクションごとに
+        /discovery-sections/{sectionKey}/discoveries で取る。
 
+        - 今の提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
+          未ログインのため、興味（Subject）を使う軸は扱わない。
+        - 一覧と中身を分けるのは、セクションごとに別々に読み込めるようにするため（モバイルは開いたタブの分だけ取る、
+          PC は各セクションを並行して取る）。画面はセクションごとに読み込み中（C09（loading））を出す。
+          あわせて、続きの読み込み（無限スクロール）や S02 への「もっと見る」、ログイン後の興味のセクションを足しやすくする。
+      responses:
+        '200':
+          description: セクションの一覧（表示する順）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoverySectionList' }
+              examples:
+                sakuragicho-april:
+                  $ref: '#/components/examples/SectionListSakuragichoApril'
+  /discovery-sections/{sectionKey}/discoveries:
+    get:
+      tags: [S01]
+      operationId: getDiscoverySectionItems
+      summary: S01 の1つのセクションのカード（C05（discovery-section）の中身）を取得する
+      description: |
         - nearby：推薦する Value（季節が一致、または通年・条件なし）を1つ以上持つ Discovery を、いる場所から近い順に並べる。
           季節違いの Value しかない Discovery は出さない。
         - season：「今」の季節と一致する Value を持つ Discovery。今は通年・条件なしの Value だけの Discovery は出さない。
           季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。並びはいる場所から近い順。
         - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
         - 各カードの価値（subject・value）は、推薦する Value のうち、おすすめ度がいちばん高いもの（季節の一致を優先）。
+
+        続きの読み込みの単位（cursor 方式にするか等）は、S01 の無限スクロールを試すときに決める。今は limit までを返す。
       parameters:
+        - $ref: '#/components/parameters/SectionKey'
         - name: limit
           in: query
           required: false
-          description: セクションごとの最大件数
+          description: 最大件数
           schema: { type: integer, minimum: 1, maximum: 20, default: 8 }
       responses:
         '200':
-          description: セクションの一覧
+          description: セクションのカード
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/DiscoverySectionsResponse' }
+              schema: { $ref: '#/components/schemas/DiscoverySectionItems' }
               examples:
-                sakuragicho-april:
-                  $ref: '#/components/examples/SectionsSakuragichoApril'
+                nearby-sakuragicho-april:
+                  $ref: '#/components/examples/SectionItemsNearbySakuragichoApril'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          description: セクションがない（一覧にない key を指定した）
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
   /discoveries/{discoveryId}:
     get:
       tags: [S03]
@@ -117,6 +145,12 @@ paths:
           $ref: '#/components/responses/NotFound'
 components:
   parameters:
+    SectionKey:
+      name: sectionKey
+      in: path
+      required: true
+      description: セクションの key（/discovery-sections で返したもの）
+      schema: { $ref: '#/components/schemas/SectionKey' }
     DiscoveryId:
       name: discoveryId
       in: path
@@ -173,28 +207,36 @@ components:
       type: string
       enum: [spring, summer, autumn, winter, all_year]
       description: Value の条件としての季節（DEC-0002。春・夏・秋・冬・通年）
-    DiscoverySectionsResponse:
+    SectionKey:
+      type: string
+      enum: [nearby, season]
+      description: 提案の軸。nearby は「この近く」、season は「今の時期」。軸が増えたら値を足す
+    DiscoverySectionList:
       type: object
       required: [context, sections]
       properties:
         context: { $ref: '#/components/schemas/EvaluationContext' }
         sections:
           type: array
-          description: 表示する順。該当が0件のセクションも返す（見せ方は画面で決める）
+          description: 表示する順
           items: { $ref: '#/components/schemas/DiscoverySection' }
     DiscoverySection:
       type: object
-      required: [key, title, items]
+      required: [key, title]
       properties:
-        key:
-          type: string
-          enum: [nearby, season]
-          description: 提案の軸。nearby は「この近く」、season は「今の時期」
+        key: { $ref: '#/components/schemas/SectionKey' }
         title:
           type: string
           description: セクションの表示名（PC の見出し、モバイルのタブ）
+    DiscoverySectionItems:
+      type: object
+      required: [context, key, items]
+      properties:
+        context: { $ref: '#/components/schemas/EvaluationContext' }
+        key: { $ref: '#/components/schemas/SectionKey' }
         items:
           type: array
+          description: 0件のこともある（見せ方は画面で決める）
           items: { $ref: '#/components/schemas/DiscoveryCard' }
     DiscoveryCard:
       type: object
@@ -448,7 +490,7 @@ components:
         detail: { type: string }
         instance: { type: string, format: uri-reference }
   examples:
-    SectionsSakuragichoApril:
+    SectionListSakuragichoApril:
       summary: 「4月2日の15時、桜木町駅の前にいる」ことにした場合
       value:
         context:
@@ -458,24 +500,25 @@ components:
           clockSource: fixed
           locationSource: fixed
         sections:
-          - key: nearby
-            title: この近く
-            items:
-              - id: ookagawa-sakura
-                title: 大岡川の桜と風景の変化
-                subject: 桜並木
-                value: 川沿いに続く桜並木を、水面越しに眺められる
-                picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
-                place: { name: 大岡川（桜木町駅〜蒔田） }
-          - key: season
-            title: 今の時期
-            items:
-              - id: ookagawa-sakura
-                title: 大岡川の桜と風景の変化
-                subject: 桜並木
-                value: 川沿いに続く桜並木を、水面越しに眺められる
-                picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
-                place: { name: 大岡川（桜木町駅〜蒔田） }
+          - { key: nearby, title: この近く }
+          - { key: season, title: 今の時期 }
+    SectionItemsNearbySakuragichoApril:
+      summary: 「この近く」（4月2日の15時、桜木町駅の前）
+      value:
+        context:
+          now: '2026-04-02T15:00:00+09:00'
+          season: spring
+          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          clockSource: fixed
+          locationSource: fixed
+        key: nearby
+        items:
+          - id: ookagawa-sakura
+            title: 大岡川の桜と風景の変化
+            subject: 桜並木
+            value: 川沿いに続く桜並木を、水面越しに眺められる
+            picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+            place: { name: 大岡川（桜木町駅〜蒔田） }
     DiscoveryOokagawaApril:
       summary: 大岡川の桜（4月に見た場合）
       value:
