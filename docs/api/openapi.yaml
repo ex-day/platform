@@ -9,8 +9,18 @@ info:
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
     - 用語は論理 Entity の設計（docs/ex-day_logical_entity_design.md）に合わせる。
-    - 「今」と「いる場所」は、開発用の設定ファイル（YAML）で固定できる。固定しない場合は実際の日時と既定エリアを使う。
+    - 「今」と「いる場所」は、開発用の設定ファイル（YAML）で固定できる。固定しない場合は実際の日時と既定エリア（桜木町駅の付近）を使う。
       どちらを使ったかはレスポンスの `context` で返し、画面と API で食い違わないようにする。
+    - 使ってみる人の現在地は、今は受け取らない（試す人の情報を取らない。場所を変えたいときは設定ファイルで変える）。
+
+    ## 季節と推薦の考え方
+    「本当に今の季節のおすすめ」であることを大事にする。Value の季節の条件（DEC-0002）と「今」の季節を比べて、次のように扱う。
+
+    | Value の季節 | 推薦 | おすすめ度 |
+    |---|---|---|
+    | 「今」の季節と一致 | する | 高い |
+    | 通年、または季節の条件がない | する | 一致より低い |
+    | 「今」の季節と違う | しない（S03 では「その他の魅力」に出す） | ― |
     - JSON の項目名は camelCase。エラーは RFC 9457（application/problem+json）。
   license:
     name: MIT
@@ -34,21 +44,13 @@ paths:
         提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
         未ログインのため、興味（Subject）を使う軸は扱わない。
 
-        - nearby：いる場所から近い順。
-        - season：「今」の季節に合う Value を持つ Discovery。季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。
+        - nearby：推薦する Value（季節が一致、または通年・条件なし）を1つ以上持つ Discovery を、いる場所から近い順に並べる。
+          季節違いの Value しかない Discovery は出さない。
+        - season：「今」の季節と一致する Value を持つ Discovery。今は通年・条件なしの Value だけの Discovery は出さない。
+          季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。並びはいる場所から近い順。
         - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
-        - 各カードの価値（subject・value）は、その軸で推薦の対象になった Value を表す。
+        - 各カードの価値（subject・value）は、推薦する Value のうち、おすすめ度がいちばん高いもの（季節の一致を優先）。
       parameters:
-        - name: lat
-          in: query
-          required: false
-          description: いる場所の緯度（ブラウザで取れた場合）。lng と組で指定する。開発用の設定ファイルで場所を固定している場合は、そちらを優先する
-          schema: { type: number, format: double, minimum: -90, maximum: 90 }
-        - name: lng
-          in: query
-          required: false
-          description: いる場所の経度。lat と組で指定する
-          schema: { type: number, format: double, minimum: -180, maximum: 180 }
         - name: limit
           in: query
           required: false
@@ -75,9 +77,8 @@ paths:
         みんなの声（C26）は件数が増えるため、別の API（/discoveries/{discoveryId}/posts）で取る。
 
         Value の振り分けは API が行い、画面では評価しない（S03「評価ロジックはC19に持たせず」）。
-        - 「今」成立する Value → `recommendations`（Hero）
-        - 「今」成立しない Value → `otherValues`（その他の魅力）
-        - 季節の条件を持たない Value と「通年」の Value は、季節の軸では常に成立するとみなす。
+        - 推薦する Value（季節が一致、または通年・条件なし）→ `recommendations`（Hero）。おすすめ度の高い順（季節の一致が先）
+        - 推薦しない Value（季節違い）→ `otherValues`（その他の魅力）
       parameters:
         - $ref: '#/components/parameters/DiscoveryId'
       responses:
@@ -124,7 +125,7 @@ components:
       schema: { type: string, minLength: 1, maxLength: 64 }
   responses:
     BadRequest:
-      description: 指定が正しくない（例：lat だけ指定した）
+      description: 指定が正しくない（例：limit が範囲外）
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -153,15 +154,15 @@ components:
           description: fixed は開発用の設定ファイルで固定した日時、system は実際の日時
         locationSource:
           type: string
-          enum: [fixed, request, default]
-          description: fixed は開発用の設定ファイル、request は lat・lng の指定、default は既定エリア
+          enum: [fixed, default]
+          description: fixed は開発用の設定ファイルで指定した場所、default は既定エリア（桜木町駅の付近）
     Location:
       type: object
-      required: [lat, lng]
+      required: [name, lat, lng]
       properties:
         name:
           type: string
-          description: 表示用の名前（例：桜木町駅）。指定された座標だけの場合はない
+          description: 表示用の名前（例：桜木町駅）
         lat: { type: number, format: double }
         lng: { type: number, format: double }
     CurrentSeason:
@@ -243,11 +244,11 @@ components:
         context: { $ref: '#/components/schemas/EvaluationContext' }
         recommendations:
           type: array
-          description: Hero（C19）に渡す、「今」成立する Value の推薦。表示する順。0件でも Hero は標準 Hero で表示する（Issue #50）
+          description: Hero（C19）に渡す、推薦する Value。おすすめ度の高い順。0件でも Hero は標準 Hero で表示する（Issue #50）
           items: { $ref: '#/components/schemas/Recommendation' }
         otherValues:
           type: array
-          description: その他の魅力（C12）。「今」成立しない Value
+          description: その他の魅力（C12）。季節違いで、今は推薦しない Value
           items: { $ref: '#/components/schemas/ValueItem' }
         findings:
           type: array
@@ -267,7 +268,10 @@ components:
         valueId: { type: string }
         message:
           type: string
-          description: 今伝えたい価値のメッセージ（例：今、桜が見頃です）
+          description: |
+            今伝えたい価値のメッセージ（例：今、桜が見頃です）。
+            価値の組み合わせと会話の文脈を AI で解析した結果として作る文言を想定する。
+            今回のサンプルでは、解析の結果の代わりに、用意した文言をデータとして持つ
         participationMessage:
           type: string
           description: 参加を促すメッセージ（例：一緒に考えませんか？）
