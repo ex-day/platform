@@ -370,7 +370,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description 指定が正しくない（例：limit が範囲外） */
+        /** @description 指定が正しくない（例：limit が範囲外、discoveryId が長すぎる） */
         BadRequest: {
             headers: {
                 [name: string]: unknown;
@@ -478,6 +478,7 @@ export interface operations {
                     "application/json": components["schemas"]["DiscoveryDetail"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -502,6 +503,7 @@ export interface operations {
                     "application/json": components["schemas"]["DiscoveryPosts"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
         };
     };
