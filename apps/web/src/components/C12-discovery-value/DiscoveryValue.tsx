@@ -9,7 +9,11 @@ export function DiscoveryValue({ item }: { item: DiscoveryValueItem }) {
         {item.subject}
       </span>
       <h3 className="text-base font-semibold">{item.value}</h3>
-      {item.picture ? (
+      {item.pictureUrl ? (
+        // 画像の配信元・最適化は未定のため、next/imageを使わずそのまま表示する
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={item.pictureUrl} alt={item.picture ?? ""} className="h-28 w-full rounded-md bg-muted object-cover" />
+      ) : item.picture ? (
         <div className="flex h-28 items-center justify-center gap-2 rounded-md bg-muted text-xs text-muted-foreground">
           <ImageIcon className="h-4 w-4" aria-hidden />
           {item.picture}

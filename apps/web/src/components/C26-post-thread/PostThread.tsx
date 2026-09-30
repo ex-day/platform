@@ -32,6 +32,7 @@ import { BodyWithTags, TagAwareTextarea } from "@/components/layout/TagAwareText
 import { useMockAuth } from "@/lib/mock-auth";
 import { MOCK_SELF_USER_ID, resolveAuthorName } from "@/lib/mock-data/user";
 import { cn } from "@/lib/utils";
+import { useWriteActions } from "@/lib/write-actions";
 import {
   describeSourceStatus,
   filesToDraftMedia,
@@ -122,11 +123,11 @@ function ReplyQuote({ target, onJump }: { target: DiscoveryPost; onJump?: () => 
 }
 
 /** 会話の中の目印。派生が確定した時点の位置に挟み、位置は動かさない */
-function DerivationMarkerCard({ discovery }: { discovery: DiscoveryRef }) {
+function DerivationMarkerCard({ discovery, hrefBase }: { discovery: DiscoveryRef; hrefBase: string }) {
   return (
     <li className="py-3">
       <Link
-        href={`/discoveries/${discovery.id}`}
+        href={`${hrefBase}/${discovery.id}`}
         className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm hover:bg-primary/10"
       >
         <span className="flex items-center gap-2">
@@ -145,12 +146,16 @@ export function PostThread({
   initialPosts,
   derivationMarkers = [],
   derivedOriginNotice,
+  hrefBase,
 }: {
   initialPosts: DiscoveryPost[];
   derivationMarkers?: DerivationMarker[];
   derivedOriginNotice?: DiscoveryRef;
+  /** 派生先などへのリンクの基点(@/lib/discovery-href) */
+  hrefBase: string;
 }) {
   const { user, profile, requireLogin } = useMockAuth();
+  const { notReady, run } = useWriteActions();
   const [storedPosts, setPosts] = useState(initialPosts);
   const posts = storedPosts.map((p) => ({ ...p, author: resolveAuthorName(p, profile) }));
   const [expanded, setExpanded] = useState(false);
@@ -209,7 +214,7 @@ export function PostThread({
   // 未ログインで送ろうとした場合は、C08でログインを求め、ログイン後に入力内容のまま送る(DEC-0010 決定2)
   const handleSend = () => {
     if (!canSend) return;
-    requireLogin((loggedIn) => send(loggedIn));
+    run(() => requireLogin((loggedIn) => send(loggedIn)));
   };
 
   const jumpTo = (id: string) => {
@@ -261,7 +266,7 @@ export function PostThread({
               <MediaItem
                 key={media.id}
                 media={media}
-                onEditSource={() => setActiveMedia({ postId: post.id, mediaId: media.id })}
+                onEditSource={() => run(() => setActiveMedia({ postId: post.id, mediaId: media.id }))}
               />
             ))}
           </div>
@@ -269,27 +274,31 @@ export function PostThread({
         {post.continuedIn ? (
           // 続きの投稿への注記。投稿後の解析による見立てのため、控えめに表示する
           <Link
-            href={`/discoveries/${post.continuedIn.id}`}
+            href={`${hrefBase}/${post.continuedIn.id}`}
             className="w-fit text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             『{post.continuedIn.title}』で続いています →
           </Link>
         ) : null}
         <div className="flex items-center gap-3">
-          <ReactionButton variant="single" initialCount={0} />
+          <ReactionButton variant="single" initialCount={post.reactionCount ?? 0} />
           <button
             type="button"
-            onClick={() => {
-              setReplyTo(post.id);
-              setDismissedSuggestion(false);
-            }}
+            onClick={() =>
+              run(() => {
+                setReplyTo(post.id);
+                setDismissedSuggestion(false);
+              })
+            }
             className="text-xs text-muted-foreground hover:text-foreground"
           >
             返信する
           </button>
         </div>
       </li>,
-      ...markers.map((m) => <DerivationMarkerCard key={`marker-${m.discovery.id}`} discovery={m.discovery} />),
+      ...markers.map((m) => (
+        <DerivationMarkerCard key={`marker-${m.discovery.id}`} discovery={m.discovery} hrefBase={hrefBase} />
+      )),
     ];
   };
 
@@ -303,7 +312,7 @@ export function PostThread({
 
       {derivedOriginNotice ? (
         <Link
-          href={`/discoveries/${derivedOriginNotice.id}`}
+          href={`${hrefBase}/${derivedOriginNotice.id}`}
           className="w-fit rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
         >
           『{derivedOriginNotice.title}』の会話から生まれた話です →
@@ -350,7 +359,7 @@ export function PostThread({
           <div role="note" className="flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
             <span>続きは『{suggestion.title}』で話しませんか？</span>
             <span className="flex shrink-0 gap-2">
-              <Link href={`/discoveries/${suggestion.id}`} className={buttonVariants({ size: "sm" })}>
+              <Link href={`${hrefBase}/${suggestion.id}`} className={buttonVariants({ size: "sm" })}>
                 『{excerpt(suggestion.title, 12)}』で話す
               </Link>
               <Button type="button" size="sm" variant="outline" onClick={() => setDismissedSuggestion(true)}>
@@ -381,6 +390,13 @@ export function PostThread({
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor={fileInputId}
+            onClick={(event) => {
+              // 準備中はファイルの選択を開かず、「準備中」と知らせる
+              if (notReady) {
+                event.preventDefault();
+                run(() => {});
+              }
+            }}
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer")}
           >
             <PaperclipIcon className="h-4 w-4" aria-hidden />

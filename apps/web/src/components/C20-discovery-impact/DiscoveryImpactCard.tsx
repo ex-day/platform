@@ -7,6 +7,7 @@
 // 固定見出し(「Impact」等)は置かず、対象Discoveryを識別情報として先頭に表示する。
 import Link from "next/link";
 import type { DiscoveryImpact } from "@/lib/mock-data/contribution";
+import { MOCK_DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
 
 export function DiscoveryImpactCard({
   impact,
@@ -21,7 +22,7 @@ export function DiscoveryImpactCard({
     <article className="flex flex-col gap-2 border-t py-3 first:border-t-0 first:pt-0">
       <div>
         <Link
-          href={`/discoveries/${impact.discoveryId}`}
+          href={`${MOCK_DISCOVERY_HREF_BASE}/${impact.discoveryId}`}
           className="text-sm font-bold text-primary underline underline-offset-2"
         >
           {impact.discoveryTitle}

@@ -11,8 +11,11 @@ import { useState } from "react";
 import { HeartIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMockAuth } from "@/lib/mock-auth";
+import { useWriteActions } from "@/lib/write-actions";
 
 type ReactionVariant = "single" | "multiple";
+
+type ReactionKey = "like" | "surprised" | "love";
 
 const REACTION_TYPES = [
   { key: "like", emoji: "👍" },
@@ -37,19 +40,22 @@ function useReactionState(initialCount: number) {
 
 function ReactionChip({
   emoji,
+  initialCount,
   isLoggedIn,
   onRequireLogin,
 }: {
   emoji: string;
+  initialCount: number;
   isLoggedIn: boolean;
   onRequireLogin: () => void;
 }) {
-  const { active, count, toggle } = useReactionState(0);
+  const { active, count, toggle } = useReactionState(initialCount);
+  const { run } = useWriteActions();
 
   return (
     <button
       type="button"
-      onClick={() => (isLoggedIn ? toggle() : onRequireLogin())}
+      onClick={() => run(() => (isLoggedIn ? toggle() : onRequireLogin()))}
       aria-pressed={active}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
@@ -67,11 +73,15 @@ function ReactionChip({
 export function ReactionButton({
   variant,
   initialCount,
+  initialCounts = {},
 }: {
   variant: ReactionVariant;
   initialCount: number;
+  /** 複数リアクション案での種類ごとの数(APIのデータ)。ない種類は0とする */
+  initialCounts?: Partial<Record<ReactionKey, number>>;
 }) {
   const { user, openLogin } = useMockAuth();
+  const { run } = useWriteActions();
   const single = useReactionState(initialCount);
 
   if (variant === "multiple") {
@@ -81,6 +91,7 @@ export function ReactionButton({
           <ReactionChip
             key={type.key}
             emoji={type.emoji}
+            initialCount={initialCounts[type.key] ?? 0}
             isLoggedIn={!!user}
             onRequireLogin={openLogin}
           />
@@ -92,7 +103,7 @@ export function ReactionButton({
   return (
     <button
       type="button"
-      onClick={() => (user ? single.toggle() : openLogin())}
+      onClick={() => run(() => (user ? single.toggle() : openLogin()))}
       aria-pressed={single.active}
       className={cn(
         "inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors",
