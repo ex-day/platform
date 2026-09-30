@@ -1,0 +1,18 @@
+# Dependabot の設定（#120）
+# GitHub Actions の action の版上げを週1回確かめ、まとめて1つの PR にする。
+# apps/web（npm）・apps/api（Gradle）の依存は、PR が増えすぎないかを人が判断してから足す。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
