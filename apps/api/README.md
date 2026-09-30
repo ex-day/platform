@@ -2,7 +2,7 @@
 
 ex-day の API サーバー（Spring Boot、Java 25、Gradle Kotlin DSL）の土台。Issue [ex-day/platform#99](https://github.com/ex-day/platform/issues/99) で作った。
 
-S01 のセクション一覧と、各セクションの推薦カードを返す API を実装している。
+S01 のセクション一覧と、各セクションの推薦カード、S03 の Discovery 詳細を返す API を実装している。
 
 ## 使う技術
 
@@ -45,6 +45,8 @@ Testcontainers が Docker を使うため、Docker Engine が動いている必�
 4. `JdbcClient` でサンプルデータを読み、公開中の Discovery の件数と、PostGIS の関数（`ST_Distance`）が使えることを確かめる。
 
 本番・ローカル（`docker compose up`）では、これまでどおり compose の flyway コンテナがマイグレーションを流す。API の起動時にはマイグレーションを流さない（`spring.flyway.enabled=false`）。
+
+手元の Docker が colima の場合、Testcontainers の Ryuk（リソース回収用コンテナ）がコンテナ起動に失敗することがある（Docker ソケットのマウントで `operation not supported` エラー）。その場合は `TESTCONTAINERS_RYUK_DISABLED=true` を設定してから `./gradlew test` を実行する。CI（GitHub Actions）では不要（設定なしで成功することを確認済み）。
 
 ## 起動
 
@@ -105,7 +107,7 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 
 - 生成タスク：`./gradlew openApiGenerate`。`compileJava` が依存するため、通常のビルド（`./gradlew build`）で自動的に流れる。
 - コントローラーは、生成された interface（例：`io.github.exday.api.generated.api.S01Api`）を実装する。OpenAPI と実装が食い違うとコンパイルで分かる。
-- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：この Issue 時点では `S01Api` のみ実装しているため、`S03Api` のパスは 404 になる）。
+- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：`S03Api` のうち `GET /discoveries/{discoveryId}` のみ実装しているため、`GET /discoveries/{discoveryId}/posts` は 501 になる）。
 
 ## パッケージ名
 
@@ -123,3 +125,15 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 - 仮の評価として季節一致を優先し、その中で代表の場所への距離順に並べてから limit を適用する。同点は公開ID順で固定する。評価は `DiscoveryRecommendation` に分離している。
 
 DB を使う API テストは `db/Dockerfile` とマイグレーション・サンプルデータを使い、春／秋、距離制限、公開状態、カードの内容とエラー応答を検証する。
+
+## Discovery 詳細
+
+`GET /api/v1/discoveries/{discoveryId}` で1件の Discovery の詳細を返す。成立済み・公開中でなければ 404（`application/problem+json`）を返す。
+
+- Value（`recommendations`／`otherValues`）：今の季節に一致する・通年・季節条件なしの Value を `recommendations`、季節が合わない Value を `otherValues` に振り分ける。
+- Findings（`findings`）：`backedBy`（出典）があるものは反応集計（`reactions`）を含めず、ないものだけ種別（`value`／`theory`）に応じた反応（understand／wantToGo、または maybe）を返す。
+- タグ（`tags`）：投稿由来のタグと運営が付けたタグを合わせて重複なく返す。
+- 反応（`reactions`）：Discovery 全体への like／surprised／love の集計。
+- 関連（`relations`）：派生元（`derivedFrom`）・派生先（`derivedTo`）・関連（`related`）の3つに分け、それぞれ相手 Discovery の一番の Value（推薦度順の先頭）と代表の場所・画像でカードを組み立てる。
+
+DB を使う API テストは、可視性を書き換える 404 のケースがあるためテストごとにサンプルデータを再投入し、春／秋の振り分け、派生元・関連のカード組み立て、404 応答を検証する。
