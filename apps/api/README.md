@@ -71,6 +71,42 @@ EXDAY_DB_PASSWORD=exday \
 ./gradlew bootRun
 ```
 
+## 「今」と「いる場所」の設定
+
+推薦は「今」と「いる場所」を軸にする。開発中は、この2つを設定で固定して画面を確かめられる。設定を空にすると、実際の日時（Asia/Tokyo）と既定エリア（桜木町駅の付近）を使う。使ってみる人の現在地は API で受け取らない（[#89](https://github.com/ex-day/platform/issues/89) の決定）。
+
+設定は Spring の設定プロパティで指定する。環境変数や `application.properties`、`application.yaml` から渡せる。
+
+| キー | 既定値 | 説明 |
+| --- | --- | --- |
+| `exday.dev.clock.now` | （空）＝実時計 | 「今」を固定する ISO 8601 の日時。例：`2026-04-02T15:00:00+09:00` |
+| `exday.dev.location.name` | （空）＝既定エリア | 「いる場所」の表示名。`lat`・`lng` と合わせて設定する |
+| `exday.dev.location.lat` | （空） | 緯度 |
+| `exday.dev.location.lng` | （空） | 経度 |
+| `exday.dev.default-location.name` | `桜木町駅` | 「いる場所」が未指定のときの既定エリアの表示名 |
+| `exday.dev.default-location.lat` | `35.4509` | 既定エリアの緯度 |
+| `exday.dev.default-location.lng` | `139.6309` | 既定エリアの経度 |
+
+`clock.now` が空なら `context.clockSource` は `system`、指定していれば `fixed` を返す。`location.*` が空なら `context.locationSource` は `default`、指定していれば `fixed` を返す。季節は「今」の月から決める（3〜5月：spring、6〜8月：summer、9〜11月：autumn、12〜2月：winter。タイムゾーンは Asia/Tokyo）。
+
+例：4月2日の15時に桜木町駅の前にいるとして起動する。
+
+```bash
+EXDAY_DEV_CLOCK_NOW=2026-04-02T15:00:00+09:00 \
+EXDAY_DEV_LOCATION_NAME=桜木町駅 \
+EXDAY_DEV_LOCATION_LAT=35.4509 \
+EXDAY_DEV_LOCATION_LNG=139.6309 \
+./gradlew bootRun
+```
+
+## OpenAPI からの生成
+
+API のインターフェース（Spring の interface）と、モデル（DTO）は [`docs/api/openapi.yaml`](../../docs/api/openapi.yaml) から生成する。[openapi-generator-gradle-plugin](https://github.com/OpenAPITools/openapi-generator/tree/master/modules/openapi-generator-gradle-plugin) を使う。生成物は `build/generated/openapi/` 配下に置き、Git には commit しない（ビルドのたびに生成する）。
+
+- 生成タスク：`./gradlew openApiGenerate`。`compileJava` が依存するため、通常のビルド（`./gradlew build`）で自動的に流れる。
+- コントローラーは、生成された interface（例：`io.github.exday.api.generated.api.S01Api`）を実装する。OpenAPI と実装が食い違うとコンパイルで分かる。
+- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：この Issue 時点では `S01Api` のみ実装しているため、`S03Api` のパスは 404 になる）。
+
 ## パッケージ名
 
 `io.github.exday.api` を仮に使っている。別の案があれば PR で提案してほしい。
