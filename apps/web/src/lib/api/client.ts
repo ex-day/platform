@@ -1,8 +1,8 @@
 // 画面から API を呼ぶ共通の処理(Issue #112)。
 //
 // - 型は docs/api/openapi.yaml から openapi-typescript で作る(./schema.d.ts。`npm run gen:api`)。
-// - API はサーバー側(Server Component)からだけ呼ぶ。呼び先の URL はブラウザへ公開しない
-//   (NEXT_PUBLIC_ を付けない環境変数で渡す)。
+// - API はサーバー側(Server Component・Route Handler)からだけ呼ぶ。呼び先の URL はブラウザへ公開しない
+//   (NEXT_PUBLIC_ を付けない環境変数で渡す)。ブラウザ側からは同じオリジンの中継を通す(./relay.ts、./browser-client.ts。#113)。
 // - キャッシュはせず、毎回 API から取る(#89)。
 import "server-only";
 import createClient from "openapi-fetch";

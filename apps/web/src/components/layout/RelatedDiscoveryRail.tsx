@@ -30,7 +30,8 @@ export function RelatedDiscoveryRail({
   items: RelatedDiscoverySummary[];
   placeVariant: "text" | "map";
   hrefBase: string;
-  seeMoreHref: string;
+  /** 渡さない場合は「さらに見る」を出さない(行き先の画面がまだないため。#113) */
+  seeMoreHref?: string;
 }) {
   if (items.length === 0) return null;
 
@@ -51,7 +52,7 @@ export function RelatedDiscoveryRail({
             className={useRail ? cn("w-40", RAIL_ITEM_CLASS) : "w-40"}
           />
         ))}
-        {hasMore ? (
+        {hasMore && seeMoreHref ? (
           <Link
             href={seeMoreHref}
             className="flex w-40 shrink-0 snap-start flex-col items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground hover:border-primary hover:text-primary md:w-auto"

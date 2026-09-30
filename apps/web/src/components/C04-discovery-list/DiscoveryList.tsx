@@ -15,6 +15,7 @@ const GRID: Record<"a" | "b" | "c", string> = {
   c: "grid grid-cols-2 gap-3 md:grid-cols-1 md:gap-4 lg:grid-cols-2",
 };
 
-export function DiscoveryList({ items, layout = "a", extra }: { items: RelatedDiscoverySummary[]; layout?: "a" | "b" | "c"; extra?: ReactNode }) {
-  return <div data-testid="discovery-list" data-layout={layout} className={GRID[layout]}>{items.map((item, index) => <DiscoveryCard key={`${item.id}-${index}`} item={item} placeVariant="text" layout={layout} hrefBase={MOCK_DISCOVERY_HREF_BASE} />)}{extra}</div>;
+// hrefBase: カードのリンク先の基点(@/lib/discovery-href)。未指定はモックのS03
+export function DiscoveryList({ items, layout = "a", extra, hrefBase = MOCK_DISCOVERY_HREF_BASE }: { items: RelatedDiscoverySummary[]; layout?: "a" | "b" | "c"; extra?: ReactNode; hrefBase?: string }) {
+  return <div data-testid="discovery-list" data-layout={layout} className={GRID[layout]}>{items.map((item, index) => <DiscoveryCard key={`${item.id}-${index}`} item={item} placeVariant="text" layout={layout} hrefBase={hrefBase} />)}{extra}</div>;
 }

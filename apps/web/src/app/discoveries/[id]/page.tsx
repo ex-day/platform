@@ -5,8 +5,9 @@
 // - 書き込みの操作(投稿・返信・リアクション・資料の提供)は、押すと「準備中」と出すだけにする(#89)。
 // - 表現案の比較用バー・探索段階の切り替えは付けない。モックのデータでの比較は /mock/discoveries/[id] に残した。
 // - 表現案は決定済みの既定値で表示する(Hero切替=サムネイル、リアクション=複数、場所=テキスト)。
+// - 行き先の画面がないリンクは外す(Issue #113)。関係するDiscoveryの「さらに見る」は出さず、
+//   タグ(Discoveryのタグ、声の本文の#タグ)はリンクにしない(モックの S02 へ移ってしまうため)。
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DiscoveryDetailHero } from "@/components/C19-discovery-detail-hero/DiscoveryDetailHero";
 import { ReactionButton } from "@/components/C10-reaction-button/ReactionButton";
@@ -25,7 +26,6 @@ import {
   toValueItem,
 } from "@/lib/api/discovery-view";
 import { DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
-import { tagSearchHref } from "@/lib/mock-data/tags";
 import { NotReadyWriteActions } from "@/lib/write-actions";
 
 type Props = {
@@ -82,16 +82,11 @@ export default async function DiscoveryDetailPage({ params }: Props) {
           ) : null}
           <ReactionButton key={discovery.id} variant="multiple" initialCount={0} initialCounts={discovery.reactions} />
           {discovery.tags.length > 0 ? (
-            // Discoveryのタグ(属する声のタグと運営が付けたタグを集めたもの。DEC-0009 決定10)
+            // Discoveryのタグ(属する声のタグと運営が付けたタグを集めたもの。DEC-0009 決定10)。リンクにしない(#113)
             <ul aria-label="タグ" className="flex flex-wrap gap-2 text-xs">
               {discovery.tags.map((tag) => (
                 <li key={tag}>
-                  <Link
-                    href={tagSearchHref(tag)}
-                    className="rounded-full border px-2.5 py-1 text-muted-foreground hover:text-foreground"
-                  >
-                    #{tag}
-                  </Link>
+                  <span className="rounded-full border px-2.5 py-1 text-muted-foreground">#{tag}</span>
                 </li>
               ))}
             </ul>
@@ -117,6 +112,7 @@ export default async function DiscoveryDetailPage({ params }: Props) {
           derivationMarkers={thread.derivationMarkers.map(toDerivationMarker)}
           derivedOriginNotice={thread.derivedOrigin}
           hrefBase={DISCOVERY_HREF_BASE}
+          tagLinks={false}
         />
 
         <RelatedDiscoveryRail
@@ -124,21 +120,18 @@ export default async function DiscoveryDetailPage({ params }: Props) {
           items={derivedFrom.map(toRelatedSummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
-          seeMoreHref={`${DISCOVERY_HREF_BASE}/${id}/related/derived-from`}
         />
         <RelatedDiscoveryRail
           heading="この発見から広がったDiscovery"
           items={derivedTo.map(toRelatedSummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
-          seeMoreHref={`${DISCOVERY_HREF_BASE}/${id}/related/derived-to`}
         />
         <RelatedDiscoveryRail
           heading="関連するDiscovery"
           items={related.map(toRelatedSummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
-          seeMoreHref={`${DISCOVERY_HREF_BASE}/${id}/related/related`}
         />
       </div>
     </NotReadyWriteActions>

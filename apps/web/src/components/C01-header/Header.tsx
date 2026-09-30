@@ -23,16 +23,19 @@ export function NewPostEntryLink({ className }: { className?: string }) {
   );
 }
 
-export function Header() {
+// showSearch=false で検索(C06)を外す。API のデータの S01 では外している(#89、#113)
+export function Header({ showSearch = true }: { showSearch?: boolean }) {
   return (
     <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2 md:h-16 md:flex-nowrap md:gap-4 md:py-0">
         <Link href="/" className="shrink-0 text-lg font-bold tracking-tight">
           ex-day
         </Link>
-        <div className="order-3 w-full min-w-0 md:order-none md:flex-1">
-          <Search />
-        </div>
+        {showSearch ? (
+          <div className="order-3 w-full min-w-0 md:order-none md:flex-1">
+            <Search />
+          </div>
+        ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <NewPostEntryLink />
           <UserMenu />
