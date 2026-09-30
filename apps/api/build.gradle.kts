@@ -39,6 +39,8 @@ openApiGenerate {
             "useTags" to "true",
             "openApiNullable" to "false",
             "useBeanValidation" to "true",
+            // 任意項目（写真など）は値がなければ JSON から省く。
+            "additionalModelTypeAnnotations" to "@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)",
             "dateLibrary" to "java8",
             "hideGenerationTimestamp" to "true",
             "documentationProvider" to "none",

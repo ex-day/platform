@@ -40,6 +40,9 @@ import org.springframework.test.context.TestPropertySource;
 })
 class DiscoverySectionsApiTest {
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    DiscoveryCandidateQueries queries;
+
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
         new ParameterizedTypeReference<>() {};
 
