@@ -12,6 +12,7 @@ info:
     - 「今」と「いる場所」は、開発用の設定ファイル（YAML）で固定できる。固定しない場合は実際の日時と既定エリア（桜木町駅の付近）を使う。
       どちらを使ったかはレスポンスの `context` で返し、画面と API で食い違わないようにする。
     - 使ってみる人の現在地は、今は受け取らない（試す人の情報を取らない。場所を変えたいときは設定ファイルで変える）。
+    - JSON の項目名は camelCase。エラーは RFC 9457（application/problem+json）。
 
     ## 季節と推薦の考え方
     「本当に今の季節のおすすめ」であることを大事にする。Value の季節の条件（DEC-0002）と「今」の季節を比べて、次のように扱う。
@@ -21,7 +22,15 @@ info:
     | 「今」の季節と一致 | する | 高い |
     | 通年、または季節の条件がない | する | 一致より低い |
     | 「今」の季節と違う | しない（S03 では「その他の魅力」に出す） | ― |
-    - JSON の項目名は camelCase。エラーは RFC 9457（application/problem+json）。
+
+    ## 並び順は「推薦順」
+    推薦の結果を返す配列（S01 のセクションのカード、S03 の Hero の推薦）は、推薦度の高い順（推薦順）に並べる。
+    推薦度の評価要素は、距離・季節・時間・Value の Condition、将来はユーザーの興味・嗜好などを想定する。
+    具体的なスコアリング・重み付け・評価ロジックはこの約束事に含めず、後続で設計する。
+    「距離順」など特定の並べ方を約束しない（PoC の段階の簡易な実装、たとえば「季節の一致を優先し、次に距離を見る」を約束事として固定しない）。
+
+    Discovery 自体の推薦順位と、その Discovery で代表して見せる Value の選択は、別の評価として扱う。
+    同じ Discovery に「今おすすめ」の Value が複数ある場合、同じ Discovery が異なる Value を伴って、別の推薦候補として複数現れてよい。
   license:
     name: MIT
     identifier: MIT
@@ -64,12 +73,15 @@ paths:
       operationId: getDiscoverySectionItems
       summary: S01 の1つのセクションのカード（C05（discovery-section）の中身）を取得する
       description: |
-        - nearby：推薦する Value（季節が一致、または通年・条件なし）を1つ以上持つ Discovery を、いる場所から近い順に並べる。
-          季節違いの Value しかない Discovery は出さない。
-        - season：「今」の季節と一致する Value を持つ Discovery。今は通年・条件なしの Value だけの Discovery は出さない。
-          季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。並びはいる場所から近い順。
+        セクションは推薦の候補を絞り込む条件であり、並び順ではない。どのセクションも、候補を推薦順（推薦度の高い順）で返す。
+
+        - nearby：いる場所の周辺にある Discovery の、推薦する Value（季節が一致、または通年・条件なし）を候補とする。
+          季節違いの Value は候補にしない。
+        - season：「今」の季節と一致する Value を候補とする。今は通年・条件なしの Value は候補にしない。
+          季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。
         - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
-        - 各カードの価値（subject・value）は、推薦する Value のうち、おすすめ度がいちばん高いもの（季節の一致を優先）。
+        - 1件のカードは、Discovery と、推薦の対象になった Value（valueId）の組。同じ Discovery が別の Value を伴って複数現れてよい。
+        - 「周辺」の範囲と推薦度の評価ロジックは約束事に含めない（冒頭の「並び順は推薦順」を参照）。
 
         続きの読み込みの単位（cursor 方式にするか等）は、S01 の無限スクロールを試すときに決める。今は limit までを返す。
       parameters:
@@ -105,7 +117,7 @@ paths:
         みんなの声（C26）は件数が増えるため、別の API（/discoveries/{discoveryId}/posts）で取る。
 
         Value の振り分けは API が行い、画面では評価しない（S03「評価ロジックはC19に持たせず」）。
-        - 推薦する Value（季節が一致、または通年・条件なし）→ `recommendations`（Hero）。おすすめ度の高い順（季節の一致が先）
+        - 推薦する Value（季節が一致、または通年・条件なし）→ `recommendations`（Hero）。推薦順（推薦度の高い順）
         - 推薦しない Value（季節違い）→ `otherValues`（その他の魅力）
       parameters:
         - $ref: '#/components/parameters/DiscoveryId'
@@ -236,11 +248,21 @@ components:
         key: { $ref: '#/components/schemas/SectionKey' }
         items:
           type: array
-          description: 0件のこともある（見せ方は画面で決める）
-          items: { $ref: '#/components/schemas/DiscoveryCard' }
+          description: 推薦順（推薦度の高い順）。0件のこともある（見せ方は画面で決める）
+          items: { $ref: '#/components/schemas/RecommendedDiscoveryCard' }
+    RecommendedDiscoveryCard:
+      description: 推薦の候補としてのカード。Discovery と、推薦の対象になった Value の組
+      allOf:
+        - $ref: '#/components/schemas/DiscoveryCard'
+        - type: object
+          required: [valueId]
+          properties:
+            valueId:
+              type: string
+              description: 推薦の対象になった Value。同じ Discovery が複数現れる場合の区別にもなる
     DiscoveryCard:
       type: object
-      description: C03（discovery-card）。Discovery と、推薦の対象になった Value の要約
+      description: C03（discovery-card）。Discovery と、代表して見せる Value の要約
       required: [id, title, subject, value, place]
       properties:
         id: { type: string }
@@ -250,7 +272,7 @@ components:
           description: 何についての価値か（例：桜並木、散策）
         value:
           type: string
-          description: 推薦の対象になった Value の短い説明
+          description: 代表して見せる Value の短い説明
         picture: { $ref: '#/components/schemas/Image' }
         place: { $ref: '#/components/schemas/PlaceSummary' }
     PlaceSummary:
@@ -286,7 +308,7 @@ components:
         context: { $ref: '#/components/schemas/EvaluationContext' }
         recommendations:
           type: array
-          description: Hero（C19）に渡す、推薦する Value。おすすめ度の高い順。0件でも Hero は標準 Hero で表示する（Issue #50）
+          description: Hero（C19）に渡す、推薦する Value。推薦順（推薦度の高い順）。0件でも Hero は標準 Hero で表示する（Issue #50）
           items: { $ref: '#/components/schemas/Recommendation' }
         otherValues:
           type: array
@@ -350,8 +372,16 @@ components:
           items: { $ref: '#/components/schemas/Season' }
     Finding:
       type: object
-      description: C25（わかってきたこと）の1件分。まだ見立てであり、断定の書き方にしない
-      required: [id, kind, text, reactions]
+      description: |
+        C25（わかってきたこと）の1件分。まだ見立てであり、断定の書き方にしない。
+        リアクションの有無は種類と裏付けで決まる（DEC-0009 決定9）。
+
+        | 種類 | backedBy | reactions |
+        |---|---|---|
+        | 価値（value） | なし | あり（understand・wantToGo） |
+        | 裏付けのない説（theory） | なし | あり（maybe） |
+        | 裏付けのある説（theory） | あり | なし（項目自体を返さない） |
+      required: [id, kind, text]
       properties:
         id: { type: string }
         kind:
@@ -361,10 +391,12 @@ components:
         text: { type: string }
         backedBy:
           type: string
-          description: 資料（出典）の裏付けがある説の出典名。ある説にはリアクションを付けない（DEC-0009 決定9）
+          description: 資料（出典）の裏付けがある説の出典名。説（theory）だけが持つ。ある場合は reactions を返さない
         reactions:
           type: object
-          description: 種類ごとのリアクション数。価値は understand（わかる）・wantToGo（行ってみたい）、裏付けのない説は maybe（そうかも）
+          description: |
+            種類ごとのリアクション数。価値は understand（わかる）・wantToGo（行ってみたい）、裏付けのない説は maybe（そうかも）。
+            裏付けのある説（backedBy がある）では返さない
           properties:
             understand: { type: integer, minimum: 0 }
             wantToGo: { type: integer, minimum: 0 }
@@ -514,6 +546,7 @@ components:
         key: nearby
         items:
           - id: ookagawa-sakura
+            valueId: v-ookagawa-cherry
             title: 大岡川の桜と風景の変化
             subject: 桜並木
             value: 川沿いに続く桜並木を、水面越しに眺められる
@@ -546,6 +579,10 @@ components:
             kind: theory
             text: 昔は今より桜の本数が少なかったのでは
             reactions: { maybe: 2 }
+          - id: f-3
+            kind: theory
+            text: 川沿いの桜は、戦後に植え直されたものが多い
+            backedBy: 横浜市の広報資料（サンプル）
         tags: [大岡川, 桜]
         reactions: { like: 4, surprised: 1, love: 6 }
         relations:
