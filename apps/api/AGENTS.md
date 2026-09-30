@@ -31,12 +31,10 @@
 ## テスト
 
 - DB を使うテストは Testcontainers で書く。使う PostgreSQL＋PostGIS は `db/Dockerfile` と同じ構成にする（本番と同じ拡張で SQL の正しさを確かめられるようにする）。
-- SQL を書いたり触ったりする変更では、実物の DB でのテストで振る舞いを固定する。
 
 ## Spring の使い方
 
 - Spring の暗黙の仕組みを使いすぎない。依存はコンストラクタで渡す等、素直な書き方に寄せる。
-- Field Injection や、暗黙の proxy・auto-configuration に強く依存する書き方は避ける。理由：AI が書いたコードを人が読んで判断できることを最優先にする（#89）。
 
 ## Spring Security
 
