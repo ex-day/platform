@@ -22,6 +22,12 @@ DB が起動したあと、`flyway` のコンテナがテーブルとサンプ�
 psql -h localhost -p 5433 -U exday exday
 ```
 
+手元に `psql` がない場合は、DB コンテナから入る:
+
+```bash
+docker compose exec db psql -U exday exday
+```
+
 ## テーブルやサンプルを変えるとき
 
 - **テーブル**：`migration/` に新しい番号のファイルを足す。一度流したファイルは書き換えない。
