@@ -107,6 +107,23 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
     }
 
     @Test
+    void 長さ64のIDは入力チェックを通り404を返す() {
+        var response = get("a".repeat(64));
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+    }
+
+    @Test
+    void 長さ65以上のIDはproblemJsonの400を返す() {
+        for (var id : List.of("a".repeat(65), "a".repeat(70))) {
+            var response = get(id);
+            assertThat(response.getStatusCode().value()).isEqualTo(400);
+            assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response.getBody()).containsEntry("status", 400).containsKeys("title")
+                .doesNotContainKeys("trace", "exception", "message");
+        }
+    }
+
+    @Test
     void 非公開のDiscoveryは404を返す() {
         jdbc.sql("UPDATE discovery SET visibility = 'HIDDEN' WHERE public_id = :id")
             .param("id", "FMI7GE306Hqw").update();
