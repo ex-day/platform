@@ -1,8 +1,10 @@
-# ex-day のローカル環境（Issue #89）
+# ex-day のローカル環境（Issue #89・#114）
 #
 #   docker compose up
 #
-# 今は DB と、テーブル・サンプルデータを入れる Flyway だけ。API と画面は、後の工程で足す。
+# DB、テーブル・サンプルデータを入れる Flyway、API、画面を起動する。
+# ブラウザで http://localhost:3000 を開く。手順はリポジトリ直下の README.md を参照。
+# 手元のポートは環境変数で変えられる（ほかのプロジェクトと同時に動かす場合）。
 services:
   db:
     build:
@@ -37,6 +39,38 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # API（apps/api）。Flyway がテーブルとサンプルデータを入れ終わってから起動する
+  api:
+    build:
+      # OpenAPI（docs/api/openapi.yaml）から生成するため、context はリポジトリ直下にする
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      EXDAY_DB_URL: jdbc:postgresql://db:5432/exday
+      EXDAY_DB_USER: exday
+      EXDAY_DB_PASSWORD: exday
+      # 開発用の「今」と「いる場所」（dev/exday-dev.local.yaml、git の管理外）を読む。なければ実際の日時と既定エリア
+      SPRING_CONFIG_IMPORT: optional:file:/config/exday-dev.local.yaml
+    volumes:
+      - ./dev:/config:ro
+    ports:
+      # 画面を手元で npm run dev するときの呼び先（apps/web の既定値 http://localhost:8080/api/v1）に合わせる
+      - "127.0.0.1:${EXDAY_API_PORT:-8080}:8080"
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+
+  # 画面（apps/web）。API はコンテナの中からサービス名（api）で呼ぶ
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      EXDAY_API_BASE_URL: http://api:8080/api/v1
+    ports:
+      - "127.0.0.1:${EXDAY_WEB_PORT:-3000}:3000"
+    depends_on:
+      - api
 
 volumes:
   db-data:

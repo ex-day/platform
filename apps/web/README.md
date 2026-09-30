@@ -45,6 +45,10 @@ S01（`/`）のセクション（C11）は、ブラウザ側（Client Component�
 - ブラウザ側の呼び出しは `src/lib/api/browser-client.ts`（同じ OpenAPI の型を使う）。
 - モックのデータの S01（比較用バー付き）は `/mock` に残している。
 
+## Docker で動かす（Issue #114）
+
+リポジトリ直下の `docker compose up` で、DB・API とあわせて画面も起動する（手順はリポジトリ直下の README）。画面のイメージは [`Dockerfile`](Dockerfile) で作る。`next.config.ts` の `output: "standalone"` で作った最小のサーバー（`server.js`）を Node で動かし、`EXDAY_API_BASE_URL` に `http://api:8080/api/v1` を渡す。
+
 ## CI（Issue #116）
 
 `apps/web/**`・`docs/api/openapi.yaml`・workflow 自身を変える PR（と `main` への push）で、GitHub Actions（`.github/workflows/web-build.yml`）が次を確かめる。Node の版は `.nvmrc` で固定している。
