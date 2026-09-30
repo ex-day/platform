@@ -123,7 +123,7 @@ paths:
         - $ref: '#/components/parameters/DiscoveryId'
       responses:
         '200':
-          description: Discovery の内容
+          description: Discovery の内容（CI 失敗確認用の一時変更）
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DiscoveryDetail' }
