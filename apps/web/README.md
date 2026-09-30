@@ -45,6 +45,15 @@ S01（`/`）のセクション（C11）は、ブラウザ側（Client Component�
 - ブラウザ側の呼び出しは `src/lib/api/browser-client.ts`（同じ OpenAPI の型を使う）。
 - モックのデータの S01（比較用バー付き）は `/mock` に残している。
 
+## CI（Issue #116）
+
+`apps/web/**`・`docs/api/openapi.yaml`・workflow 自身を変える PR（と `main` への push）で、GitHub Actions（`.github/workflows/web-build.yml`）が次を確かめる。Node の版は `.nvmrc` で固定している。
+
+1. `npm ci`
+2. `npm run lint`
+3. `npm run build`（型検査を含む。`RouteContext` 等の型は build 時に作られるため、`tsc --noEmit` 単独では実行しない）
+4. `npm run gen:api` のあと `git diff --exit-code src/lib/api/schema.d.ts`：API の型が `docs/api/openapi.yaml` とずれていれば失敗する。失敗したら `npm run gen:api` を実行し、作り直した `schema.d.ts` をコミットする。
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

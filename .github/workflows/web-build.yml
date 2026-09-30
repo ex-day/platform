@@ -1,0 +1,52 @@
+name: apps/web build
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "docs/api/openapi.yaml"
+      - ".github/workflows/web-build.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - "docs/api/openapi.yaml"
+      - ".github/workflows/web-build.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: npm run lint
+        run: npm run lint
+
+      # 型検査は next build に含まれる（RouteContext 等の型は build 時に作られるため、tsc 単独では検査しない）
+      - name: npm run build
+        run: npm run build
+
+      - name: API の型が openapi.yaml とずれていないか確かめる
+        run: |
+          npm run gen:api
+          if ! git diff --exit-code src/lib/api/schema.d.ts; then
+            echo "::error file=apps/web/src/lib/api/schema.d.ts::src/lib/api/schema.d.ts が docs/api/openapi.yaml とずれています。apps/web で npm run gen:api を実行し、作り直した schema.d.ts をコミットしてください。"
+            exit 1
+          fi
