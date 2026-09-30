@@ -1,0 +1,42 @@
+# ex-day のローカル環境（Issue #89）
+#
+#   docker compose up
+#
+# 今は DB と、テーブル・サンプルデータを入れる Flyway だけ。API と画面は、後の工程で足す。
+services:
+  db:
+    build:
+      context: ./db
+    environment:
+      POSTGRES_DB: exday
+      POSTGRES_USER: exday
+      POSTGRES_PASSWORD: exday
+    ports:
+      # ex-day/poc の DB（5432）と同時に動かせるように、手元のポートは 5433 にする
+      - "127.0.0.1:${EXDAY_DB_PORT:-5433}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exday -d exday"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # テーブル（db/migration）とサンプルデータ（db/sample）を入れて終わる
+  flyway:
+    image: flyway/flyway:11
+    command: >
+      -url=jdbc:postgresql://db:5432/exday
+      -user=exday
+      -password=exday
+      -locations=filesystem:/flyway/migration,filesystem:/flyway/sample
+      migrate
+    volumes:
+      - ./db/migration:/flyway/migration:ro
+      - ./db/sample:/flyway/sample:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:
