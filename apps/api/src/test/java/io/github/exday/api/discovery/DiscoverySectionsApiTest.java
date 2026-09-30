@@ -46,6 +46,9 @@ class DiscoverySectionsApiTest {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     DiscoveryDetailQueries discoveryDetailQueries;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    DiscoveryPostsQueries discoveryPostsQueries;
+
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
         new ParameterizedTypeReference<>() {};
 

@@ -2,7 +2,7 @@
 
 ex-day の API サーバー（Spring Boot、Java 25、Gradle Kotlin DSL）の土台。Issue [ex-day/platform#99](https://github.com/ex-day/platform/issues/99) で作った。
 
-S01 のセクション一覧と、各セクションの推薦カード、S03 の Discovery 詳細を返す API を実装している。
+S01 のセクション一覧と、各セクションの推薦カード、S03 の Discovery 詳細とみんなの声を返す API を実装している。
 
 ## 使う技術
 
@@ -107,7 +107,7 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 
 - 生成タスク：`./gradlew openApiGenerate`。`compileJava` が依存するため、通常のビルド（`./gradlew build`）で自動的に流れる。
 - コントローラーは、生成された interface（例：`io.github.exday.api.generated.api.S01Api`）を実装する。OpenAPI と実装が食い違うとコンパイルで分かる。
-- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：`S03Api` のうち `GET /discoveries/{discoveryId}` のみ実装しているため、`GET /discoveries/{discoveryId}/posts` は 501 になる）。
+- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：`S01Api` のうち実装していないメソッドがあれば、そのエンドポイントは 501 になる）。
 
 ## パッケージ名
 
@@ -137,3 +137,16 @@ DB を使う API テストは `db/Dockerfile` とマイグレーション・サ�
 - 関連（`relations`）：派生元（`derivedFrom`）・派生先（`derivedTo`）・関連（`related`）の3つに分け、それぞれ相手 Discovery の一番の Value（推薦度順の先頭）と代表の場所・画像でカードを組み立てる。
 
 DB を使う API テストは、可視性を書き換える 404 のケースがあるためテストごとにサンプルデータを再投入し、春／秋の振り分け、派生元・関連のカード組み立て、404 応答を検証する。
+
+## みんなの声
+
+`GET /api/v1/discoveries/{discoveryId}/posts` で、S03 のみんなの声（C26）を返す。Discovery がない、または公開状態が HIDDEN なら 404（`application/problem+json`）を返す。ページ送りは扱わない（Issue #53）。
+
+- 声（`posts`）：この Discovery を投稿先とする公開中の声を、投稿日時の古い順にすべて返す。`authorName` は投稿者の今のニックネーム（`user_profile`）。`postedAt` は日本時間（`+09:00`）で返す。
+- 返信先の引用（`replyTo`）：返信先（`post_reference` の REPLY）のうち公開中で投稿日時の最も古い1件を、投稿者の今のニックネームと本文の冒頭40文字（`excerpt`）で返す。
+- 資料（`media`）：その声とともに提供された資料（`media.post_id`）。`kind`・`source` は OpenAPI の enum（小文字）に変換し、画像は `image` を付ける。
+- 続きの注記（`continuedIn`）：`post_continuation` がある声に、公開中の派生先を付ける。
+- 派生の目印（`derivationMarkers`）：この Discovery が派生元の DERIVED の関係のうち、`origin_post_id`（公開中の声）と公開中の派生先があるもの。`afterPostId` はその声の ID。
+- 元の会話（`derivedOrigin`）：この Discovery が派生先なら、公開中の派生元（複数あれば最初に登録された関係のもの）。
+
+DB を使う API テストは、声の並び・派生の目印・続きの注記・元の会話・資料・返信先の引用、ニックネームの変更の反映、非公開の声の除外、404 応答を検証する。
