@@ -2,6 +2,7 @@ package io.github.exday.api.discovery;
 
 import io.github.exday.api.generated.api.S03Api;
 import io.github.exday.api.generated.model.DiscoveryDetail;
+import io.github.exday.api.generated.model.DiscoveryPosts;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,10 +12,15 @@ public class DiscoveryDetailController implements S03Api {
 
     private final DiscoveryDetailQueries queries;
     private final DiscoveryDetailAssembler assembler;
+    private final DiscoveryPostsQueries postsQueries;
+    private final DiscoveryPostsAssembler postsAssembler;
 
-    public DiscoveryDetailController(DiscoveryDetailQueries queries, DiscoveryDetailAssembler assembler) {
+    public DiscoveryDetailController(DiscoveryDetailQueries queries, DiscoveryDetailAssembler assembler,
+            DiscoveryPostsQueries postsQueries, DiscoveryPostsAssembler postsAssembler) {
         this.queries = queries;
         this.assembler = assembler;
+        this.postsQueries = postsQueries;
+        this.postsAssembler = postsAssembler;
     }
 
     @Override
@@ -22,5 +28,12 @@ public class DiscoveryDetailController implements S03Api {
         var summary = queries.findSummary(discoveryId)
             .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId));
         return ResponseEntity.ok(assembler.assemble(summary));
+    }
+
+    @Override
+    public ResponseEntity<DiscoveryPosts> getDiscoveryPosts(String discoveryId) {
+        long id = postsQueries.findDiscoveryId(discoveryId)
+            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId));
+        return ResponseEntity.ok(postsAssembler.assemble(id));
     }
 }

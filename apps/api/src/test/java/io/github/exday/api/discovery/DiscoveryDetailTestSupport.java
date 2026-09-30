@@ -82,4 +82,15 @@ abstract class DiscoveryDetailTestSupport {
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(200);
         return response.getBody();
     }
+
+    ResponseEntity<Map<String, Object>> getPosts(String discoveryId) {
+        return rest.exchange("/discoveries/" + discoveryId + "/posts", HttpMethod.GET, null,
+            new ParameterizedTypeReference<Map<String, Object>>() {});
+    }
+
+    Map<String, Object> postsBody(String discoveryId) {
+        var response = getPosts(discoveryId);
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(200);
+        return response.getBody();
+    }
 }
