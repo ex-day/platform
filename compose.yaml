@@ -50,8 +50,8 @@ services:
       EXDAY_DB_URL: jdbc:postgresql://db:5432/exday
       EXDAY_DB_USER: exday
       EXDAY_DB_PASSWORD: exday
-      # 開発用の「今」と「いる場所」（dev/exday-dev.yaml）を読む。ファイルが空なら実際の日時と既定エリア
-      SPRING_CONFIG_IMPORT: optional:file:/config/exday-dev.yaml
+      # 開発用の「今」と「いる場所」（dev/exday-dev.local.yaml、git の管理外）を読む。なければ実際の日時と既定エリア
+      SPRING_CONFIG_IMPORT: optional:file:/config/exday-dev.local.yaml
     volumes:
       - ./dev:/config:ro
     ports:

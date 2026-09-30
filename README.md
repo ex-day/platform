@@ -66,9 +66,14 @@ EXDAY_WEB_PORT=13000 EXDAY_API_PORT=18080 EXDAY_DB_PORT=15433 docker compose up
 
 おすすめは「今」と「いる場所」をもとに決まります。何も設定しなければ、実際の日時（日本時間）と既定の場所（桜木町駅の付近）を使います。
 
-開発中に固定したい場合は、[dev/exday-dev.yaml](dev/exday-dev.yaml) の例の `#` を外して値を書き、API を起動し直します。
+開発中に固定したい場合は、見本の [dev/exday-dev.example.yaml](dev/exday-dev.example.yaml) を `dev/exday-dev.local.yaml` にコピーして値を書き換え、API を起動し直します。`dev/exday-dev.local.yaml` は git の管理外（`.gitignore`）なので、書き換えたまま commit してしまうことはありません。
+
+```bash
+cp dev/exday-dev.example.yaml dev/exday-dev.local.yaml
+```
 
 ```yaml
+# dev/exday-dev.local.yaml
 exday:
   dev:
     clock:
@@ -83,7 +88,7 @@ exday:
 docker compose restart api
 ```
 
-ブラウザを再読み込みすると、S01 の「今の時期」が変わります（例：4月なら春の Discovery）。設定の意味は [apps/api/README.md](apps/api/README.md) の「「今」と「いる場所」の設定」を参照してください。試したあとは、ファイルを元に戻してから commit してください。
+ブラウザを再読み込みすると、S01 の「今の時期」が変わります（例：4月なら春の Discovery）。実際の日時と既定の場所に戻すには、`dev/exday-dev.local.yaml` を消して `docker compose restart api` します。設定の意味は [apps/api/README.md](apps/api/README.md) の「「今」と「いる場所」の設定」を参照してください。
 
 ### 止める・作り直す
 
