@@ -147,12 +147,15 @@ export function PostThread({
   derivationMarkers = [],
   derivedOriginNotice,
   hrefBase,
+  tagLinks = true,
 }: {
   initialPosts: DiscoveryPost[];
   derivationMarkers?: DerivationMarker[];
   derivedOriginNotice?: DiscoveryRef;
   /** 派生先などへのリンクの基点(@/lib/discovery-href) */
   hrefBase: string;
+  /** false で本文の#タグをリンクにしない(行き先の S02 がまだ API につながっていないため。#113) */
+  tagLinks?: boolean;
 }) {
   const { user, profile, requireLogin } = useMockAuth();
   const { notReady, run } = useWriteActions();
@@ -259,7 +262,7 @@ export function PostThread({
           ) : null}
         </div>
         {quoted ? <ReplyQuote target={quoted} onJump={() => jumpTo(quoted.id)} /> : null}
-        {post.body ? <BodyWithTags body={post.body} /> : null}
+        {post.body ? <BodyWithTags body={post.body} links={tagLinks} /> : null}
         {post.media.length > 0 ? (
           <div className="flex flex-col gap-2 sm:max-w-md">
             {post.media.map((media) => (

@@ -158,12 +158,14 @@ export function TagAwareTextarea({
   );
 }
 
-/** 投稿後の本文。#タグを入力欄の強調と同じ判定・見た目で表示する(押下でタグを条件にS02へ) */
-export function BodyWithTags({ body }: { body: string }) {
+/** 投稿後の本文。#タグを入力欄の強調と同じ判定・見た目で表示する(押下でタグを条件にS02へ。links=false ではリンクにしない) */
+export function BodyWithTags({ body, links = true }: { body: string; links?: boolean }) {
   return (
     <p className="whitespace-pre-wrap break-words text-sm leading-6">
       {splitByTags(body).map((segment, i) =>
-        segment.isTag ? (
+        segment.isTag && !links ? (
+          <span key={i} className={TAG_TEXT_CLASS}>{segment.text}</span>
+        ) : segment.isTag ? (
           <Link key={i} href={tagSearchHref(segment.text.slice(1))} className={cn(TAG_TEXT_CLASS, "hover:underline")}>
             {segment.text}
           </Link>
