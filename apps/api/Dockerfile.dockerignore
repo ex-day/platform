@@ -1,0 +1,8 @@
+# apps/api/Dockerfile の context（リポジトリ直下）から、ビルドに使うものだけを送る
+*
+!apps/api/gradlew
+!apps/api/gradle/
+!apps/api/settings.gradle.kts
+!apps/api/build.gradle.kts
+!apps/api/src/main/
+!docs/api/openapi.yaml

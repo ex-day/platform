@@ -33,6 +33,72 @@ ex-dayでは、ユーザーがすでに知っているものを探すだけで�
 
 設計・検討の過程そのものを残しながら、MVP実装へ進めています。
 
+## ローカルで動かす
+
+リポジトリを clone して `docker compose up` すると、DB・API・画面が起動し、S01（おすすめの一覧）と S03（Discovery の詳細）を手元で触れます。Docker（Docker Compose v2）が必要です。
+
+> 画面に出るデータは、利用のイメージを伝えるためのサンプルです。史実や実際の場所・出来事と異なる場合があります。
+
+### 起動する
+
+```bash
+docker compose up
+```
+
+初回はイメージのビルドに数分かかります。起動したら、ブラウザで <http://localhost:3000> を開きます。S01 のカードを押すと S03 に移ります。
+
+起動するもの（[compose.yaml](compose.yaml)）：
+
+| サービス | 内容 | 手元のポート（既定） |
+| --- | --- | --- |
+| `db` | PostgreSQL ＋ PostGIS（[db/](db/)） | `127.0.0.1:5433` |
+| `flyway` | テーブルとサンプルデータを入れて終わる | なし |
+| `api` | API（[apps/api/](apps/api/)）。`flyway` の完了を待って起動する | `127.0.0.1:8080`（`/api/v1`） |
+| `web` | 画面（[apps/web/](apps/web/)）。API はコンテナの中から `http://api:8080/api/v1` で呼ぶ | `127.0.0.1:3000` |
+
+ほかのプロジェクトとポートがぶつかる場合は、環境変数で変えられます。
+
+```bash
+EXDAY_WEB_PORT=13000 EXDAY_API_PORT=18080 EXDAY_DB_PORT=15433 docker compose up
+```
+
+### 「今」と「いる場所」を変える
+
+おすすめは「今」と「いる場所」をもとに決まります。何も設定しなければ、実際の日時（日本時間）と既定の場所（桜木町駅の付近）を使います。
+
+開発中に固定したい場合は、[dev/exday-dev.yaml](dev/exday-dev.yaml) の例の `#` を外して値を書き、API を起動し直します。
+
+```yaml
+exday:
+  dev:
+    clock:
+      now: "2026-04-02T15:00:00+09:00"
+    location:
+      name: 桜木町駅
+      lat: 35.4509
+      lng: 139.6309
+```
+
+```bash
+docker compose restart api
+```
+
+ブラウザを再読み込みすると、S01 の「今の時期」が変わります（例：4月なら春の Discovery）。設定の意味は [apps/api/README.md](apps/api/README.md) の「「今」と「いる場所」の設定」を参照してください。試したあとは、ファイルを元に戻してから commit してください。
+
+### 止める・作り直す
+
+```bash
+# 止める（Ctrl+C でも止まる）。DB のデータは残る
+docker compose down
+
+# ソースを変えたあと、イメージを作り直して起動する
+docker compose up --build
+
+# DB のデータも消して、何もない状態から作り直す
+docker compose down -v
+docker compose up --build
+```
+
 ## Join the Project
 
 ex-dayは現在、個人で立ち上げている実験的なプロジェクトです。

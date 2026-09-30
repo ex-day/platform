@@ -50,7 +50,9 @@ Testcontainers が Docker を使うため、Docker Engine が動いている必�
 
 ## 起動
 
-前提として、リポジトリ直下で `docker compose up` により DB が起動していること。
+リポジトリ直下の `docker compose up` で、DB・画面とあわせて API もコンテナで起動する（[`Dockerfile`](Dockerfile)、手順はリポジトリ直下の README）。ここでは、手元で `bootRun` する場合を書く。
+
+前提として、リポジトリ直下で `docker compose up db flyway` により DB が起動していること。
 
 ```bash
 ./gradlew bootRun
