@@ -2,7 +2,7 @@
 
 ex-day の API サーバー（Spring Boot、Java 25、Gradle Kotlin DSL）の土台。Issue [ex-day/platform#99](https://github.com/ex-day/platform/issues/99) で作った。
 
-現時点では API のエンドポイントは無く、**ビルドと、DB につないだテストが Java 25 で通ること**までを目的とする。エンドポイントは後続の Issue で足す。
+S01 のセクション一覧と、各セクションの推薦カードを返す API を実装している。
 
 ## 使う技術
 
@@ -110,3 +110,16 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 ## パッケージ名
 
 `io.github.exday.api` を仮に使っている。別の案があれば PR で提案してほしい。
+
+## セクションの推薦カード
+
+`GET /api/v1/discovery-sections/{sectionKey}/discoveries?limit=8` でカードを取得する。
+`sectionKey` は `nearby` または `season`、`limit` は 1〜20（省略時は8）。
+未知の key は404、不正な limit は400を `application/problem+json` で返す。
+
+- `nearby`：設定の場所から `exday.recommendation.nearby-radius-meters` メートル以内（既定3000、正の値）の代表の場所を持ち、季節が一致・通年・季節条件なしの Value。
+- `season`：今の季節と一致する Value。距離の上限は設けない。
+- 成立済み・公開中の Discovery だけが対象。同じ Discovery の異なる Value は別カードとして返す。
+- 仮の評価として季節一致を優先し、その中で代表の場所への距離順に並べてから limit を適用する。同点は公開ID順で固定する。評価は `DiscoveryRecommendation` に分離している。
+
+DB を使う API テストは `db/Dockerfile` とマイグレーション・サンプルデータを使い、春／秋、距離制限、公開状態、カードの内容とエラー応答を検証する。
