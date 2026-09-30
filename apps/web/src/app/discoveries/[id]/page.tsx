@@ -75,12 +75,12 @@ export default async function DiscoveryDetailPage({ params }: Props) {
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-4">
           <h1 className="text-2xl font-bold">{discovery.title}</h1>
-          <DiscoveryDetailHero recommendations={recommendations} switchStyle="thumbnail" />
-          <DiscoveryEmergingTerms findings={findings} />
+          <DiscoveryDetailHero key={discovery.id} recommendations={recommendations} switchStyle="thumbnail" />
+          <DiscoveryEmergingTerms key={discovery.id} findings={findings} />
           {discovery.body ? (
             <p className="whitespace-pre-line text-sm leading-relaxed">{discovery.body}</p>
           ) : null}
-          <ReactionButton variant="multiple" initialCount={0} initialCounts={discovery.reactions} />
+          <ReactionButton key={discovery.id} variant="multiple" initialCount={0} initialCounts={discovery.reactions} />
           {discovery.tags.length > 0 ? (
             // Discoveryのタグ(属する声のタグと運営が付けたタグを集めたもの。DEC-0009 決定10)
             <ul aria-label="タグ" className="flex flex-wrap gap-2 text-xs">
@@ -112,6 +112,7 @@ export default async function DiscoveryDetailPage({ params }: Props) {
         ) : null}
 
         <PostThread
+          key={discovery.id}
           initialPosts={posts}
           derivationMarkers={thread.derivationMarkers.map(toDerivationMarker)}
           derivedOriginNotice={thread.derivedOrigin}
