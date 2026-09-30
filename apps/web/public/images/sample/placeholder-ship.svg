@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" role="img" aria-label="仮の画像（船）">
+<title>仮の画像（船）</title>
+<rect width="640" height="360" fill="#dcecf7"/>
+<rect y="230" width="640" height="130" fill="#3f86c4"/>
+<polygon points="170,230 470,230 430,280 210,280" fill="#ffffff" stroke="#34495e" stroke-width="4"/>
+<rect x="260" y="180" width="120" height="50" fill="#f4f4f4" stroke="#34495e" stroke-width="4"/>
+<rect x="300" y="130" width="24" height="50" fill="#c0392b"/>
+<circle cx="285" cy="205" r="8" fill="#34495e"/><circle cx="320" cy="205" r="8" fill="#34495e"/><circle cx="355" cy="205" r="8" fill="#34495e"/>
+<text x="620" y="340" text-anchor="end" font-family="sans-serif" font-size="18" fill="#00000066">SAMPLE</text>
+</svg>

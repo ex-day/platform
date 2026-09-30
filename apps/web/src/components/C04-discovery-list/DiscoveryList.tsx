@@ -7,6 +7,7 @@
 import type { ReactNode } from "react";
 import { DiscoveryCard } from "@/components/C03-discovery-card/DiscoveryCard";
 import type { RelatedDiscoverySummary } from "@/lib/mock-data/discovery";
+import { MOCK_DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
 
 const GRID: Record<"a" | "b" | "c", string> = {
   a: "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4",
@@ -15,5 +16,5 @@ const GRID: Record<"a" | "b" | "c", string> = {
 };
 
 export function DiscoveryList({ items, layout = "a", extra }: { items: RelatedDiscoverySummary[]; layout?: "a" | "b" | "c"; extra?: ReactNode }) {
-  return <div data-testid="discovery-list" data-layout={layout} className={GRID[layout]}>{items.map((item, index) => <DiscoveryCard key={`${item.id}-${index}`} item={item} placeVariant="text" layout={layout} />)}{extra}</div>;
+  return <div data-testid="discovery-list" data-layout={layout} className={GRID[layout]}>{items.map((item, index) => <DiscoveryCard key={`${item.id}-${index}`} item={item} placeVariant="text" layout={layout} hrefBase={MOCK_DISCOVERY_HREF_BASE} />)}{extra}</div>;
 }

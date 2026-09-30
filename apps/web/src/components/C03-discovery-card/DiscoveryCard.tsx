@@ -12,18 +12,21 @@ import { cn } from "@/lib/utils";
 export function DiscoveryCard({
   item,
   placeVariant,
+  hrefBase,
   className,
   layout = "a",
 }: {
   item: RelatedDiscoverySummary;
   placeVariant: "text" | "map";
+  /** リンク先の基点(@/lib/discovery-href)。モックのデータは/mock/discoveriesへ移す */
+  hrefBase: string;
   className?: string;
   // S02のレイアウト比較案(Issue #31)。a: 縦型(既定) / b: Mobileのみ横型 / c: PC横型・Mobile 2列コンパクト
   layout?: "a" | "b" | "c";
 }) {
   return (
     <Link
-      href={`/discoveries/${item.id}`}
+      href={`${hrefBase}/${item.id}`}
       className={cn(
         "flex flex-col overflow-hidden rounded-lg border transition-colors hover:border-primary",
         layout === "b" && "max-md:flex-row",
@@ -36,15 +39,22 @@ export function DiscoveryCard({
         layout === "b" && "max-md:h-auto max-md:w-28 max-md:shrink-0",
         layout === "c" && "h-24 md:h-auto md:w-40 md:shrink-0",
       )}>
-        <ImageIcon className="h-4 w-4" aria-hidden />
-        {item.picture ?? "no image"}
+        {item.pictureUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.pictureUrl} alt={item.picture ?? ""} className="h-full w-full object-cover" />
+        ) : (
+          <>
+            <ImageIcon className="h-4 w-4" aria-hidden />
+            {item.picture ?? "no image"}
+          </>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <h4 className="text-sm font-semibold">{item.title}</h4>
         <p className="line-clamp-2 text-xs text-muted-foreground">
           {item.subject} / {item.value}
         </p>
-        {placeVariant === "map" ? (
+        {placeVariant === "map" && item.place.lat !== undefined && item.place.lng !== undefined ? (
           <div className="mt-1 flex h-16 items-center justify-center gap-1 rounded bg-muted text-[11px] text-muted-foreground">
             <MapPinIcon className="h-3.5 w-3.5" aria-hidden />
             {item.place.lat.toFixed(3)}, {item.place.lng.toFixed(3)}

@@ -238,7 +238,7 @@ function ProfileSection() {
           </div>
           <p>
             表示名の反映：
-            <Link href="/discoveries/sample-1" className="underline hover:text-foreground">
+            <Link href="/mock/discoveries/sample-1" className="underline hover:text-foreground">
               S03のみんなの声
             </Link>
             （「過去のやりとりをすべて見る」で展開した3件目がこのユーザーの声）

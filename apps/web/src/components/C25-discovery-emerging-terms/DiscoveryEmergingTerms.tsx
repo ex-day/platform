@@ -11,6 +11,7 @@ import { useState } from "react";
 import { BookOpenIcon } from "lucide-react";
 import { useMockAuth } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
+import { useWriteActions } from "@/lib/write-actions";
 import type { DiscoveryFinding } from "@/lib/mock-data/discovery";
 
 type ReactionKey = "understand" | "wantToGo" | "maybe";
@@ -23,13 +24,14 @@ const REACTION_LABELS: Record<ReactionKey, string> = {
 
 function FindingReaction({ reactionKey, initialCount }: { reactionKey: ReactionKey; initialCount: number }) {
   const { user, openLogin } = useMockAuth();
+  const { run } = useWriteActions();
   const [active, setActive] = useState(false);
   const count = initialCount + (active ? 1 : 0);
   return (
     <button
       type="button"
       aria-pressed={active}
-      onClick={() => (user ? setActive((v) => !v) : openLogin())}
+      onClick={() => run(() => (user ? setActive((v) => !v) : openLogin()))}
       className={cn(
         "rounded-full border px-2 py-0.5 text-xs transition-colors",
         active ? "border-primary bg-primary/10 text-primary" : "border-input hover:bg-accent",

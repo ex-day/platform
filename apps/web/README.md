@@ -20,6 +20,18 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## API への接続（Issue #112）
+
+S03（`/discoveries/[id]`）は API（`apps/api`）のデータで表示する。API はサーバー側（Server Component）からだけ呼び、キャッシュはしない。
+
+| 環境変数 | 既定値 | 説明 |
+| --- | --- | --- |
+| `EXDAY_API_BASE_URL` | `http://localhost:8080/api/v1` | API の呼び先（サーバー側でだけ使う。ブラウザには公開しない） |
+
+- API の型（`src/lib/api/schema.d.ts`）は、`docs/api/openapi.yaml` から `openapi-typescript` で作り、コミットしている。`openapi.yaml` を変えたら `npm run gen:api` で作り直す。
+- API の呼び出しは `src/lib/api/`（`client.ts`・`discovery.ts`）、API の型からコンポーネントの props への変換は `src/lib/api/discovery-view.ts` に置く。
+- モックのデータの S03（表現案の比較用バー付き）は `/mock/discoveries/[id]`（例：`/mock/discoveries/sample-1`）に残している。
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

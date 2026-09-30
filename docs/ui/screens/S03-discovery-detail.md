@@ -4,7 +4,8 @@
 
 ## 画面パス
 - `/discoveries/[id]`
-- `[id]`はモックでは仮ID（例: `sample-1`）を使用する。本番のDiscovery識別子の形式は別途決定する。
+- `[id]`はDiscoveryの識別子。APIのデータで表示する（Issue #112）。本番のDiscovery識別子の形式は別途決定する。
+- モックのデータ（仮ID。例: `sample-1`）と表現案の比較用バーは、`/mock/discoveries/[id]`に残している（Issue #112）。
 
 ## 対象端末
 - PC

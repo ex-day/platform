@@ -18,6 +18,7 @@ import { useMockAuth } from "@/lib/mock-auth";
 import { cn } from "@/lib/utils";
 import { filesToDraftMedia, type DraftMedia } from "@/lib/mock-data/media";
 import { MOCK_NEW_DISCOVERY_ID, MOCK_SIMILAR_DISCOVERIES } from "@/lib/mock-data/post-new";
+import { MOCK_DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
 
 type Props = {
   onClose: () => void;
@@ -77,7 +78,7 @@ export function PostNew({ onClose, similarCount = "some" }: Props) {
                       </li>
                     ))}
                   </ul>
-                  <Link href={`/discoveries/${d.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit")}>
+                  <Link href={`${MOCK_DISCOVERY_HREF_BASE}/${d.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit")}>
                     この話に加わる
                   </Link>
                 </li>
@@ -85,7 +86,7 @@ export function PostNew({ onClose, similarCount = "some" }: Props) {
             </ul>
           </section>
         ) : null}
-        <Link href={`/discoveries/${MOCK_NEW_DISCOVERY_ID}`} className={cn(buttonVariants(), "w-full")}>
+        <Link href={`${MOCK_DISCOVERY_HREF_BASE}/${MOCK_NEW_DISCOVERY_ID}`} className={cn(buttonVariants(), "w-full")}>
           自分の話を見る
         </Link>
         <p className="text-xs text-muted-foreground">

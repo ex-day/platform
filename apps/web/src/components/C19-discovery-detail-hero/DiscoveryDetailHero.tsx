@@ -48,7 +48,10 @@ export function DiscoveryDetailHero({
       className="overflow-hidden rounded-xl border"
     >
       <div className="flex min-h-48 flex-col justify-end gap-3 bg-muted p-6">
-        {current.media ? (
+        {current.media?.url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={current.media.url} alt={current.media.alt} className="mb-2 h-40 w-full rounded-md bg-background/60 object-cover" />
+        ) : current.media ? (
           <div className="mb-2 flex h-40 items-center justify-center gap-2 rounded-md bg-background/60 text-sm text-muted-foreground">
             <ImageIcon className="h-5 w-5" aria-hidden />
             {current.media.alt}
@@ -112,7 +115,10 @@ export function DiscoveryDetailHero({
                       : "border-input",
                   )}
                 >
-                  {rec.media ? (
+                  {rec.media?.url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={rec.media.url} alt="" className="h-full w-full rounded-md object-cover" />
+                  ) : rec.media ? (
                     <ImageIcon className="h-4 w-4" aria-hidden />
                   ) : (
                     `案${i + 1}`

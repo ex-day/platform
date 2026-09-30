@@ -23,11 +23,13 @@ export function RelatedDiscoveryRail({
   heading,
   items,
   placeVariant,
+  hrefBase,
   seeMoreHref,
 }: {
   heading: string;
   items: RelatedDiscoverySummary[];
   placeVariant: "text" | "map";
+  hrefBase: string;
   seeMoreHref: string;
 }) {
   if (items.length === 0) return null;
@@ -45,6 +47,7 @@ export function RelatedDiscoveryRail({
             key={item.id}
             item={item}
             placeVariant={placeVariant}
+            hrefBase={hrefBase}
             className={useRail ? cn("w-40", RAIL_ITEM_CLASS) : "w-40"}
           />
         ))}

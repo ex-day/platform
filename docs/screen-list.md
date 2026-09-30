@@ -8,7 +8,7 @@ IDの採番・廃止・参照のルールは[各種設計資料の作成方針](
 |----|----|----|----|
 |S01|[Discovery提案（サービスTOP）](ui/screens/S01-top.md)|`/`||
 |S02|[Discovery探索一覧](ui/screens/S02-discovery-list.md)|`/discoveries`||
-|S03|[Discovery詳細](ui/screens/S03-discovery-detail.md)|`/discoveries/[id]`|`[id]`はモック用の仮ID(例: `sample-1`)。本番のDiscovery識別子の形式は別途決定する(ex-day_logical_entity_design.md参照)。wikiのようなコンテンツ名ベースのURLも検討したが、名称の決定者・一意性(同名Subjectが別Discoveryとして存在し得る)・表題変更時の旧URL扱い等の追加論点が生じるため、今回はID方式のまま進める|
+|S03|[Discovery詳細](ui/screens/S03-discovery-detail.md)|`/discoveries/[id]`|`[id]`はDiscoveryの識別子(APIのデータで表示する。Issue #112)。モックのデータ(仮ID。例: `sample-1`)は表現案の比較用に`/mock/discoveries/[id]`に残している。本番のDiscovery識別子の形式は別途決定する(ex-day_logical_entity_design.md参照)。wikiのようなコンテンツ名ベースのURLも検討したが、名称の決定者・一意性(同名Subjectが別Discoveryとして存在し得る)・表題変更時の旧URL扱い等の追加論点が生じるため、今回はID方式のまま進める|
 |S05|[知識・疑問詳細](ui/screens/S05-contribution-detail.md)|`/contributions/[id]`|Discoveryの元となった知識|
 |S06|[知識・疑問一覧](ui/screens/S06-contribution-list.md)|`/contributions`|Discoveryの元となった知識の一覧|
 |S07|[新規ユーザー登録](ui/screens/S07-signup.md)|`/signup`|アカウントの作成は認証サービス側で行い、ex-dayの画面は初回ログイン時のニックネーム設定（本名と関係のない候補が入った状態で確認して決める）とする（[Issue #74](https://github.com/ex-day/platform/issues/74)）。認証の画面の方式と本定義の書き直しは[Issue #75](https://github.com/ex-day/platform/issues/75)の決定後|

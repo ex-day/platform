@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
       { source: "/contributions/new", destination: "/posts/new", permanent: false },
       { source: "/contributions/new/confirm", destination: "/posts/new", permanent: false },
       // モックでは投稿先のDiscoveryを引けないため、固定のS03へ移す
-      { source: "/contributions/:id/edit", destination: "/discoveries/sample-1", permanent: false },
+      { source: "/contributions/:id/edit", destination: "/mock/discoveries/sample-1", permanent: false },
     ];
   },
 };

@@ -19,6 +19,8 @@ export type DiscoveryValueItem = {
   value: string;
   /** 実画像は用いず、モックでは説明キャプションのプレースホルダーとして扱う */
   picture?: string;
+  /** 画像のURL(APIのデータで表示する場合)。ない場合はpictureをキャプションとして表示する */
+  pictureUrl?: string;
   body: string;
   conditions: DiscoveryCondition[];
 };
@@ -27,13 +29,15 @@ export type DiscoveryRecommendation = {
   id: string;
   message: string;
   participationMessage?: string;
-  media?: { alt: string };
+  /** urlはAPIのデータで表示する場合の画像。ない場合はaltをキャプションとして表示する */
+  media?: { alt: string; url?: string };
 };
 
 export type DiscoveryPlace = {
   text: string;
-  lat: number;
-  lng: number;
+  /** APIのPlaceSummaryは座標を返さないため、APIのデータでは持たない */
+  lat?: number;
+  lng?: number;
 };
 
 export type RelatedDiscoverySummary = {
@@ -42,6 +46,8 @@ export type RelatedDiscoverySummary = {
   value: string;
   title: string;
   picture?: string;
+  /** 画像のURL(APIのデータで表示する場合)。ない場合はpictureをキャプションとして表示する */
+  pictureUrl?: string;
   place: DiscoveryPlace;
 };
 
@@ -73,6 +79,8 @@ export type DiscoveryPost = {
   replyTo?: string;
   /** 派生した話の続きと見立てられた場合の派生先(F02の解析結果。見立てのため再解析で変わり得る) */
   continuedIn?: DiscoveryRef;
+  /** 声への共感の数(APIのデータ)。モックでは持たず0とする */
+  reactionCount?: number;
 };
 
 /** C25。わかってきたこと(Finding)。種類は説と価値(DEC-0009 決定4) */

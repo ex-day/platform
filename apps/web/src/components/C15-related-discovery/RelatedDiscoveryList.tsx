@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ChevronRightIcon, ImageIcon } from "lucide-react";
 import { DiscoveryCard } from "@/components/C03-discovery-card/DiscoveryCard";
 import type { RelatedDiscoverySummary } from "@/lib/mock-data/discovery";
+import { MOCK_DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
 
 export function RelatedDiscoveryList({
   items,
@@ -27,7 +28,7 @@ export function RelatedDiscoveryList({
       {variant === "card" ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {items.map((item) => (
-            <DiscoveryCard key={item.id} item={item} placeVariant="text" />
+            <DiscoveryCard key={item.id} item={item} placeVariant="text" hrefBase={MOCK_DISCOVERY_HREF_BASE} />
           ))}
         </div>
       ) : (
@@ -35,7 +36,7 @@ export function RelatedDiscoveryList({
           {items.map((item) => (
             <Link
               key={item.id}
-              href={`/discoveries/${item.id}`}
+              href={`${MOCK_DISCOVERY_HREF_BASE}/${item.id}`}
               className="flex items-center gap-3 rounded-md border p-2 transition-colors hover:border-primary"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
