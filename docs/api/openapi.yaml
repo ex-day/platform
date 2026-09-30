@@ -528,7 +528,7 @@ components:
         context:
           now: '2026-04-02T15:00:00+09:00'
           season: spring
-          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          location: { name: 桜木町駅, lat: 35.4509, lng: 139.6309 }
           clockSource: fixed
           locationSource: fixed
         sections:
@@ -540,49 +540,49 @@ components:
         context:
           now: '2026-04-02T15:00:00+09:00'
           season: spring
-          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          location: { name: 桜木町駅, lat: 35.4509, lng: 139.6309 }
           clockSource: fixed
           locationSource: fixed
         key: nearby
         items:
-          - id: ookagawa-sakura
-            valueId: v-ookagawa-cherry
+          - id: FMI7GE306Hqw
+            valueId: cbff44a80f3d
             title: 大岡川の桜と風景の変化
             subject: 桜並木
             value: 川沿いに続く桜並木を、水面越しに眺められる
-            picture: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+            picture: { url: /images/sample/placeholder-sakura.svg, alt: 仮の画像（大岡川の桜並木） }
             place: { name: 大岡川（桜木町駅〜蒔田） }
     DiscoveryOokagawaApril:
       summary: 大岡川の桜（4月に見た場合）
       value:
-        id: ookagawa-sakura
+        id: FMI7GE306Hqw
         title: 大岡川の桜と風景の変化
-        body: 桜木町駅の近くから南へ続く大岡川の桜並木。いつから桜の名所になったのか、昔を知る人の記憶や写真が集まっている。（利用イメージのサンプルで、史実と異なる場合がある）
+        body: 桜木町駅の近くから南へ続く大岡川の桜並木。いつから桜の名所になったのか、昔を知る人の記憶や写真が集まっている。
         place: { name: 大岡川（桜木町駅〜蒔田） }
         context:
           now: '2026-04-02T15:00:00+09:00'
           season: spring
-          location: { name: 桜木町駅, lat: 35.6507, lng: 139.6310 }
+          location: { name: 桜木町駅, lat: 35.4509, lng: 139.6309 }
           clockSource: fixed
           locationSource: fixed
         recommendations:
-          - valueId: v-ookagawa-cherry
-            message: 今、川沿いの桜が見頃です
-            media: { url: /images/placeholder-1.svg, alt: 仮の画像（大岡川の桜並木） }
+          - valueId: cbff44a80f3d
+            message: 桜の季節です。川沿いの桜並木を歩いてみませんか
+            media: { url: /images/sample/placeholder-sakura.svg, alt: 仮の画像（大岡川の桜並木） }
         otherValues: []
         findings:
-          - id: f-1
+          - id: 682a50cdb46e
             kind: value
             text: 夜は川面に映る桜も楽しめるらしい
             reactions: { understand: 3, wantToGo: 5 }
-          - id: f-2
+          - id: acc144e78940
             kind: theory
             text: 昔は今より桜の本数が少なかったのでは
             reactions: { maybe: 2 }
-          - id: f-3
+          - id: 5a701ec4708b
             kind: theory
-            text: 川沿いの桜は、戦後に植え直されたものが多い
-            backedBy: 横浜市の広報資料（サンプル）
+            text: 昔の川沿いは、今より建物が低く空が広かった
+            backedBy: 提供された昔の写真
         tags: [大岡川, 桜]
         reactions: { like: 4, surprised: 1, love: 6 }
         relations:
@@ -593,17 +593,17 @@ components:
       summary: 大岡川の桜のみんなの声（抜粋）
       value:
         posts:
-          - id: p-1
+          - id: 5b4a5ef496de
             authorName: ななしさん
-            postedAt: '2026-03-30T10:12:00+09:00'
-            body: 大岡川って昔から桜の名所だったのかな？ #大岡川
+            postedAt: '2026-03-18T12:10:00+09:00'
+            body: 大岡川って昔から桜の名所だったのかな？ #大岡川 #桜
             media: []
             reactionCount: 3
-          - id: p-2
-            authorName: みなとの散歩人
-            postedAt: '2026-03-30T18:40:00+09:00'
+          - id: 1438b564c85b
+            authorName: 大岡川の近所
+            postedAt: '2026-03-18T19:40:00+09:00'
             body: 子どものころは、今ほど桜は多くなかった気がします。
-            replyTo: { postId: p-1, authorName: ななしさん, excerpt: 大岡川って昔から桜の名所だったのかな？ }
+            replyTo: { postId: 5b4a5ef496de, authorName: ななしさん, excerpt: 大岡川って昔から桜の名所だったのかな？ }
             media: []
             reactionCount: 1
         derivationMarkers: []
