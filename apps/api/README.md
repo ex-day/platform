@@ -46,6 +46,8 @@ Testcontainers が Docker を使うため、Docker Engine が動いている必�
 
 本番・ローカル（`docker compose up`）では、これまでどおり compose の flyway コンテナがマイグレーションを流す。API の起動時にはマイグレーションを流さない（`spring.flyway.enabled=false`）。
 
+手元の Docker が colima の場合、Testcontainers の Ryuk（リソース回収用コンテナ）がコンテナ起動に失敗することがある（Docker ソケットのマウントで `operation not supported` エラー）。その場合は `TESTCONTAINERS_RYUK_DISABLED=true` を設定してから `./gradlew test` を実行する。CI（GitHub Actions）では不要（設定なしで成功することを確認済み）。
+
 ## 起動
 
 前提として、リポジトリ直下で `docker compose up` により DB が起動していること。

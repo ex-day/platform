@@ -85,8 +85,8 @@ public class DiscoveryDetailQueries {
         """;
 
     private static final String FIND_RELATIONS = """
-        SELECT dr.relation_type = 'DERIVED' AND dr.to_discovery_id = :discoveryId AS derived_from,
-               dr.relation_type = 'DERIVED' AND dr.from_discovery_id = :discoveryId AS derived_to,
+        SELECT dr.relation_type = :derived AND dr.to_discovery_id = :discoveryId AS derived_from,
+               dr.relation_type = :derived AND dr.from_discovery_id = :discoveryId AS derived_to,
                od.id AS other_id, od.public_id AS other_public_id, od.title AS other_title,
                op.name AS other_place_name
         FROM discovery_relation dr
@@ -170,6 +170,7 @@ public class DiscoveryDetailQueries {
         return jdbcClient.sql(FIND_RELATIONS)
             .param("discoveryId", discoveryId)
             .param("visibility", "PUBLIC")
+            .param("derived", "DERIVED")
             .query((rs, rowNum) -> new DiscoveryRelationRow(
                 rs.getBoolean("derived_from"), rs.getBoolean("derived_to"),
                 rs.getLong("other_id"), rs.getString("other_public_id"), rs.getString("other_title"),
