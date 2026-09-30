@@ -105,7 +105,7 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 
 - 生成タスク：`./gradlew openApiGenerate`。`compileJava` が依存するため、通常のビルド（`./gradlew build`）で自動的に流れる。
 - コントローラーは、生成された interface（例：`io.github.exday.api.generated.api.S01Api`）を実装する。OpenAPI と実装が食い違うとコンパイルで分かる。
-- 未実装のエンドポイントは、生成された interface の `default` 実装が `501 Not Implemented` を返す。
+- 生成された interface を実装するコントローラー Bean を登録しているエンドポイントについては、interface の未実装メソッド（コントローラーで override していないメソッド）が `default` 実装で `501 Not Implemented` を返す。コントローラー Bean そのものを登録していない interface のエンドポイントは、ルーティング自体が登録されないため `404 Not Found` になる（例：この Issue 時点では `S01Api` のみ実装しているため、`S03Api` のパスは 404 になる）。
 
 ## パッケージ名
 
