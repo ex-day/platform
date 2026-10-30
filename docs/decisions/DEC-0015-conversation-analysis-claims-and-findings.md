@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（方針は人間が 2026-10-31 に決定（platform#127 の手順1）。本文は Claude が作成し、レビュー待ち）
+Accepted（方針は人間が 2026-10-31 に決定（platform#127 の手順1、PR #128 のレビュー対応の確認）。本文は Claude が作成し、ChatGPT のレビュー（PR #128）を経て、人間が採用した）
 
 ## Date
 
