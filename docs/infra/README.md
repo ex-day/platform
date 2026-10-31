@@ -6,7 +6,8 @@ ex-day を動かすための、クラウド・認証サービス・費用の調�
 |---|---|---|
 | [cost-model.md](cost-model.md) | 月間PVごとの費用（AWS・認証・AI の解析）と広告収入、損益分岐 | #81 |
 | [cost_model.py](cost_model.py) | 上の見積もりの計算。前提と単価を直して計算し直す | #81 |
-| [auth-service-comparison.md](auth-service-comparison.md) | 認証サービス（Auth0・Cognito）の比較。パスキー、パスワードをなくす条件、API の公開（③）、MAU と料金 | #75 |
+| [auth-service-comparison.md](auth-service-comparison.md) | 認証サービス（Auth0・Cognito）の比較。パスキー、パスワードをなくす条件、M2M と③、MAU と料金 | #75 |
+| [cognito-trial.md](cognito-trial.md) | Cognito を試す手順と、結果の記録 | #75 |
 
 ## 更新のしかた
 

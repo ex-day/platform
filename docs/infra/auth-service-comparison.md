@@ -133,6 +133,8 @@ PR #130 のレビューで整理した。
 
 ## 次に確かめること
 
+手順は [cognito-trial.md](cognito-trial.md)。
+
 - Cognito の無料の範囲で：パスキーとメールの OTP でパスワードをなくせるか、ログインの画面（managed login）の使い勝手と日本語、Google ログインとのつなぎ方
 - Cognito の M2M：提供先ごとの App Client とスコープの作り方、トークンの有効期限の設定
 - ③（必要になったとき）：Cognito のトークン生成前の Lambda で、トークンの発行を拒めるか
