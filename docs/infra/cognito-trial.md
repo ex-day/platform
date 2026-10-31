@@ -40,6 +40,18 @@ https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-po
 - 2026-10-31：Essentials で、選択ベースのサインインにパスキーを足すと「パスワードなし：アクティブ」になった。**「パスワード」は有効な選択肢から外せない**（コンソールで固定）。パスワードなしで登録できるか、登録・ログインの画面でパスワードが見えるかは、手順5-1で確かめる
 - 2026-10-31：managed login の登録の画面が `lang=ja` で日本語になった。利用規約・プライバシーポリシーへのリンクも出た。見た目の編集（branding editor）は、使い方がよく分からなかった（人）
 - 2026-10-31：**登録の画面で、パスワードとパスワードの確認を求められた**（パスキーとパスワードだけが有効で、メールの OTP はまだ足していない時点）。メールの OTP を足し、App Client で `ALLOW_USER_AUTH` を許可したうえで、パスワードの欄が消えるかを確かめる
+- 2026-10-31：メールの OTP を足し、`ALLOW_USER_AUTH` を許可しても、登録の画面のパスワードの欄は消えなかった。**公式に「Managed login and the hosted UI require a password in the sign-up page, even if passwordless authentication is permitted.」とある**（https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow-things-to-know.html ）。パスワードなしで登録できるのは、API（`SignUp`）で登録する場合だけ
+- 同じ文書より：Google などの外部のログインは、API での認証ではできず、managed login か hosted UI を通す（OIDC のライブラリで受ける）
+- 2026-10-31：Google をつないだが、ログインの画面に Google のボタンが出ていない（App Client の「ログインページ」の ID プロバイダーの設定を確かめる）
+
+### パスワードなしの登録をどうするか（選択肢）
+
+| 案 | 中身 | 気になる点 |
+|---|---|---|
+| 1 | 登録だけ ex-day の画面（サーバー側で `SignUp` をパスワードなしで呼ぶ）。ログインは managed login（メールの OTP・パスキー） | 登録の部分だけ自前になる（トークンは扱わない）。ボットの大量登録への手当てが要る。メールのコードが2回にならない流れにできるか、確かめる |
+| 2 | 新しい登録は Google・Apple だけにする | メールで登録したい人の受け皿がない。Google・Apple でログインする人は、Cognito のパスキーを使わない（パスキーは Cognito のユーザーのもの） |
+| 3 | 登録のときだけパスワードを作ってもらい、そのあとはパスキー・メールの OTP | 「パスワードを持たない」方針に反する |
+| 4 | Auth0 に戻る | パスキーでの登録はパスワードなしでできた（画面の見本）。ただしメールの OTP が要り、その機能は Early Access。費用の崖は変わらない |
 
 **自前の画面の代わりになる形（hybrid）**：ex-day のログインのモーダル（C08）に「Google で続ける」「Apple で続ける」「メール・パスキーで続ける」を置き、Google・Apple は `identity_provider` で直接、メール・パスキーだけ managed login に任せる。どれも OIDC の認可コードのフローなので、標準のライブラリが使える。以前の経験でライブラリが使えなかったのは、画面を全部自前にして Cognito の API（`InitiateAuth` など）を直接呼んだためと思われる。この形なら、画面の大半は ex-day のものにしつつ、そうならずに済む見込み。
 
