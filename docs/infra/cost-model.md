@@ -1,6 +1,6 @@
 # 費用と収益の見積もり（月間PVごと）
 
-最終更新：2026-10-31（#81）
+最終更新：2026-10-31（#81。PR #130 のレビューを反映）
 
 ex-day を AWS で動かした場合の、月間PVごとの費用（AWS・認証・AI の解析）と広告収入、収支がとんとんになる PV を見積もる。**仮置きの前提による概算**であり、実測や単価の変化に合わせて更新していく。
 
@@ -14,6 +14,7 @@ ex-day を AWS で動かした場合の、月間PVごとの費用（AWS・認証
 - 当初の費用は **AWS の最小構成の固定費（月 約2.3万円）** がほとんど。月100万PVまでは、ほぼ同じ構成で足りる見込み
 - AI の解析（F02）は小さい。投稿1件 0.5円で、月100万PVで 約5,000円。モデルを Sonnet 相当（約10倍）にしても 約4.6万円
 - **認証の費用は、ログインする人の数（MAU）で大きく変わる。** Auth0 は 25,000 MAU を超えると月 約37万円（$2,100）からになる。Web だけでは月 約500万PV のあたり、アプリを出すと利用者数そのものが MAU になるので、もっと早く来る（[auth-service-comparison.md](auth-service-comparison.md)）
+- 外部の事業者からのデータ登録（M2M）の認証の費用は、Cognito で提供先100・1日1回なら月 約1,200円と小さい
 
 ## 前提
 
@@ -51,7 +52,8 @@ ex-day を AWS で動かした場合の、月間PVごとの費用（AWS・認証
 | Fargate（ARM、東京） | vCPU 時間 $0.04045、GB 時間 $0.00442 | https://issoh.co.jp/tech/details/3304 （Price List API 2026-10-19 版） |
 | RDS for PostgreSQL（東京） | db.t4g.small $37／月、db.t4g.medium $74／月 | https://www.bytebase.com/dbcost/rds/compare/t-small.md 、https://www.bytebase.com/dbcost/rds/instance/db.t4g.medium.md 。large 以上は倍々の見込み |
 | CloudFront の定額プラン | Free $0（100万要求・100GB）、Pro $15（1,000万・50TB）、Business $200（1.25億・50TB）、Premium $1,000〜 | https://docs.aws.amazon.com/PricingPlanManager/latest/UserGuide/plans.html |
-| Auth0（B2C） | Free 25,000 MAU まで。Essentials 30,000 MAU $2,100、40,000 $2,800、50,000 $3,500。それより上は営業 | https://auth0.com/de/pricing.md |
+| Auth0（B2C） | Free 25,000 MAU まで。Essentials 30,000 MAU $2,100（公式の料金画面で確かめた）。40,000 $2,800・50,000 $3,500 は参考試算（今の公式画面では個別見積もりの扱い） | https://auth0.com/pricing 、https://auth0.com/de/pricing.md |
+| Cognito M2M | 成功したトークン発行1回 $0.00225（us-east-1 の例）。無料枠なし、App Client の数での課金なし | https://aws.amazon.com/cognito/pricing/ |
 | Cognito Essentials | 10,000 MAU まで無料（期限なし）、超えた分 $0.015／MAU | https://aws.amazon.com/cognito/pricing/ |
 | パブリック IPv4 | $0.005／時間 | AWS の公式（以前から公表） |
 | **未確認（記憶の値）** | ALB $0.0243／時間・LCU $0.008、RDS gp3 $0.138／GB 月、CloudWatch Logs 取り込み $0.76／GB、CloudFront 従量（日本）$0.114／GB・$0.012／1万要求 | 契約の前に料金ページで確かめる |
@@ -125,7 +127,20 @@ ex-day を AWS で動かした場合の、月間PVごとの費用（AWS・認証
 | 100,000 | 1,232,000 | 237,600 |
 | 300,000 | 3,696,000 | 765,600 |
 
-Auth0 の 50,000 MAU より上は公開の価格がなく、$0.07／MAU で延ばした見込み（交渉で下がる可能性がある）。
+Auth0 の 40,000 MAU より上は参考試算（40,000・50,000 は過去に公開されていた段階の値、50,000 超は $0.07／MAU で延ばした値）。採用を考えるなら、Auth0 から書面の見積もりを取る。
+
+### 外部の事業者からのデータ登録（M2M）の認証の費用（Cognito、円／月、税込み）
+
+自治体・観光団体・イベント情報の事業者などのシステムが、提供先ごとの `client_id`／`client_secret` でトークンを取り、有効期限まで使い回してデータを登録する場合（[auth-service-comparison.md](auth-service-comparison.md) の「外部の事業者からのデータ登録」）。データ1件ごとではなく、トークンの発行回数で課金される。
+
+| 提供先 | トークンの取得 | 月間のトークン発行 | 月額 |
+|---|---|---|---|
+| 10 | 1日1回 | 300 | 119 |
+| 100 | 1日1回 | 3,000 | 1,188 |
+| 10 | 1時間に1回 | 7,200 | 2,851 |
+| 100 | 1時間に1回 | 72,000 | 28,512 |
+
+Auth0 は Free・Essentials で月 1,000 トークンまで（追加の購入は Professional 以上）。少し超えただけでプランの段差が出うる。
 
 ## 費用を下げる余地
 

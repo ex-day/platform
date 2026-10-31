@@ -49,18 +49,28 @@ def cloudfront(pv):
 
 
 def auth0(mau):
-    """Auth0 の月額（B2C）。Free は 25,000 MAU まで"""
+    """Auth0 の月額（B2C）。Free は 25,000 MAU まで。
+    30,000 MAU の $2,100 は公式の料金画面で確かめた。40,000・50,000 の値と 50,000 超の
+    $0.07/MAU は参考試算（今の公式画面では個別見積もりの扱い）。採用するなら書面の見積もりを取る"""
     if mau <= 25000:
         return 0
-    for m, p in [(30000, 2100), (40000, 2800), (50000, 3500)]:  # Essentials の公式の段階
+    for m, p in [(30000, 2100), (40000, 2800), (50000, 3500)]:
         if mau <= m:
             return p
-    return mau * 0.07  # 50,000 超は営業との個別見積もり。$0.07/MAU で延ばした見込み
+    return mau * 0.07
 
 
 def cognito(mau):
-    """Cognito Essentials の月額。10,000 MAU まで無料"""
+    """Cognito Essentials の月額。10,000 MAU まで無料（期限なし）"""
     return max(0, mau - 10000) * 0.015
+
+
+COGNITO_M2M = 0.00225  # 成功したトークン発行1回（us-east-1 の例。無料枠なし、App Client の数での課金なし）
+
+
+def cognito_m2m(partners, tokens_per_day):
+    """外部の事業者（提供先）が、トークンを有効期限まで使い回してデータを登録する場合の月額"""
+    return partners * tokens_per_day * 30 * COGNITO_M2M
 
 
 def infra(pv):
@@ -156,3 +166,8 @@ if __name__ == "__main__":
     print("|---|---|---|")
     for mau in (10000, 25000, 30000, 50000, 100000, 300000):
         print(f"| {f(mau)} | {f(auth0(mau)*TAX*YEN)} | {f(cognito(mau)*TAX*YEN)} |")
+    print("\n## 外部の事業者からのデータ登録（M2M）の認証の費用（Cognito、円／月、税込み）\n")
+    print("| 提供先 | トークンの取得 | 月間のトークン発行 | 月額 |")
+    print("|---|---|---|---|")
+    for p, t, label in [(10, 1, "1日1回"), (100, 1, "1日1回"), (10, 24, "1時間に1回"), (100, 24, "1時間に1回")]:
+        print(f"| {p} | {label} | {f(p*t*30)} | {f(cognito_m2m(p, t)*TAX*YEN)} |")
