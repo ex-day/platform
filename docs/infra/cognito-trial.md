@@ -27,6 +27,18 @@ https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-man
 - managed login ができるのは、登録・ログイン・MFA・パスキーの登録まで。属性の変更などの「プロフィールの管理」は、アプリの側で作る
 - ログインの画面の cookie は1時間。それを過ぎたら、もう一度ログインする
 
+https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow-methods.html より：
+
+- パスワードなし（passwordless）を有効にすると、**利用者はパスワードなしで登録でき**、ログインのときにパスワードなしの方法を選ぶ。ただし、パスワードを持たない利用者も、API（`ChangePassword`）で前のパスワードなしにパスワードを設定できる（ex-day はこの操作を画面に出さない）
+- パスキーは、ほかに少なくとも1つの方法と一緒でないと有効にできない（メールの OTP を組み合わせる）
+- managed login は、登録の直後にパスキーの登録を勧める。ログインの画面のセッション（cookie、1時間）がある間は、パスキーの登録用のページへ送って足してもらうこともできる（F：ex-day の設定の画面からは、このページへ送る形になる見込み）
+- パスキーの RP ID は、Cognito のドメイン、独自ドメイン、第三者のドメイン（managed login を使わず、API を直接呼ぶ場合）のいずれか
+- メールのコードで入ると、メールアドレスが確認済みになる
+
+### 試した結果（途中）
+
+- 2026-10-31：Essentials で、選択ベースのサインインにパスキーを足すと「パスワードなし：アクティブ」になった。**「パスワード」は有効な選択肢から外せない**（コンソールで固定）。パスワードなしで登録できるか、登録・ログインの画面でパスワードが見えるかは、手順5-1で確かめる
+
 **自前の画面の代わりになる形（hybrid）**：ex-day のログインのモーダル（C08）に「Google で続ける」「Apple で続ける」「メール・パスキーで続ける」を置き、Google・Apple は `identity_provider` で直接、メール・パスキーだけ managed login に任せる。どれも OIDC の認可コードのフローなので、標準のライブラリが使える。以前の経験でライブラリが使えなかったのは、画面を全部自前にして Cognito の API（`InitiateAuth` など）を直接呼んだためと思われる。この形なら、画面の大半は ex-day のものにしつつ、そうならずに済む見込み。
 
 ## 準備
