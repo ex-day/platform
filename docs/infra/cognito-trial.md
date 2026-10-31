@@ -42,7 +42,12 @@ https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-po
 - 2026-10-31：**登録の画面で、パスワードとパスワードの確認を求められた**（パスキーとパスワードだけが有効で、メールの OTP はまだ足していない時点）。メールの OTP を足し、App Client で `ALLOW_USER_AUTH` を許可したうえで、パスワードの欄が消えるかを確かめる
 - 2026-10-31：メールの OTP を足し、`ALLOW_USER_AUTH` を許可しても、登録の画面のパスワードの欄は消えなかった。**公式に「Managed login and the hosted UI require a password in the sign-up page, even if passwordless authentication is permitted.」とある**（https://docs.aws.amazon.com/cognito/latest/developerguide/authentication-flow-things-to-know.html ）。パスワードなしで登録できるのは、API（`SignUp`）で登録する場合だけ
 - 同じ文書より：Google などの外部のログインは、API での認証ではできず、managed login か hosted UI を通す（OIDC のライブラリで受ける）
-- 2026-10-31：Google をつないだが、ログインの画面に Google のボタンが出ていない（App Client の「ログインページ」の ID プロバイダーの設定を確かめる）
+- 2026-10-31：Google をつないだが、ログインの画面に Google のボタンが出ていない（App Client の「ログインページ」の ID プロバイダーの設定を確かめる）→ 設定して出た
+- 2026-10-31：**Google でのログインが通り、コールバックまで戻った（C は OK）。** ユーザー名は `google_<Google の sub>`、`identities` に Google の `userId` が入った。つまずいた点：
+  - Google 側の OAuth クライアントに、承認済みのリダイレクト URI `https://<Cognito のドメイン>/oauth2/idpresponse` と JavaScript 生成元を登録しないと `redirect_uri_mismatch` になる（独自ドメインにしたら登録し直す）
+  - Cognito の Google の「許可されたスコープ」に、Google の画面に出る省略形（`.../auth/userinfo.email`）を書くと `invalid_scope` になる。`openid email` と書く
+  - メールが「未検証」になる。属性の対応に `email_verified ← email_verified` を足す
+- 試しのユーザープールはシドニー（ap-southeast-2）に作った。本番は東京で作り直す
 
 ### パスワードなしの登録をどうするか（選択肢）
 
