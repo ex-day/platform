@@ -48,6 +48,10 @@ https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-po
   - Cognito の Google の「許可されたスコープ」に、Google の画面に出る省略形（`.../auth/userinfo.email`）を書くと `invalid_scope` になる。`openid email` と書く
   - メールが「未検証」になる。属性の対応に `email_verified ← email_verified` を足す
 - 試しのユーザープールはシドニー（ap-southeast-2）に作った。本番は東京で作り直す
+- 2026-10-31：**案1を試した。** Mac の curl で `SignUp` をパスワードなしで呼ぶ（AWS のアクセスキーは要らない。`ClientId` と `SecretHash` だけ）→ 確認コードのメールが届いた（入れずにおく）→ managed login で同じメールアドレスを入れると、選択肢を出さずにメールのコードの画面へ進んだ（使える方法がメールのコードだけのため）→ 新しく届いたコードでログインでき、コールバックへ戻った
+- 2026-10-31：API で登録した人には、ログインのあとにパスキーの登録は勧められなかった（公式どおり：すでに登録済みでパスキーのない人には勧めない）。ログインのセッションがある間に `/passkeys/add?client_id=...&redirect_uri=...` を開くと、「パスキーでサインインをセットアップ」の画面が出て、パスキーを登録できた（F は OK。ex-day の設定の画面からはこのページへ送る）。最初は `redirect_uri` が合わず「リクエストが無効です」になった（コールバックの URL と完全に一致させ、URL エンコードする）
+- 2026-10-31：パスキーを登録したあと、ログインの画面で同じメールアドレスを入れると、「パスキーでサインイン」と「E メールのワンタイムパスワード」が出た。**パスワードなしの登録とログインが、案1の形で一通りつながった（B は案1で OK）**
+- まだ：確認コードのメール（登録のとき）を送らずに済むか、登録した人の確認の状態、D（標準のライブラリ）、E（M2M）
 
 ### パスワードなしの登録をどうするか（選択肢）
 
@@ -152,9 +156,9 @@ https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-po
 
 | # | 結果 | メモ |
 |---|---|---|
-| A | | |
-| B | | |
-| C | | |
-| D | | |
-| E | | |
-| F | | |
+| A | 一部 OK | 日本語、利用規約・プライバシーポリシーのリンクは OK。見た目の編集は未評価。登録の画面はパスワードを求める（managed login の仕様）ので、登録は ex-day の画面で作る（案1） |
+| B | 案1で OK | API でパスワードなしに登録 → managed login でメールのコードでログイン → パスキーを登録 → 次からパスキーかメールのコード |
+| C | OK | `google_<sub>`、`identities`。`email_verified` の対応を足す |
+| D | 未 | |
+| E | 未 | |
+| F | OK | `/passkeys/add` へ送って登録できる |
