@@ -1,0 +1,124 @@
+# AWS の構成（MVP）
+
+最終更新：2026-11-01（#129）
+
+ex-day を AWS で動かすときの、部品ごとの選び方と、手元の Docker との対応のまとめ。決定は [DEC-0017](../decisions/DEC-0017-aws-architecture-mvp.md)。認証は [DEC-0016](../decisions/DEC-0016-auth-cognito-and-user-identity.md)、費用は [cost-model.md](cost-model.md)。
+
+## 方針
+
+人の判断（2026-11-01）：
+
+- **運営は1人。OS の更新や、サーバーのセキュリティの問題を抱えない**（サーバーを自分で持たない、管理型のサービスを使う）
+- **環境は本番だけ。開発・確かめは手元の Docker**（`docker compose up`）。開発者が増えたら検証の環境を足す
+- **手元の Docker で試せる範囲が大きい構成にする**
+- ログインの処理（BFF）は Spring（API）に置く。トークンなどの認証の情報をどこに置くかを、また考え直さずに済むように
+- インフラは AWS CDK（TypeScript）で書く（Terraform にも関心はあるが、いったん CDK）
+
+「手元の Docker で試せる範囲を大きくする」ために、次を守る。
+
+- **アプリの中身は、標準のやり取りで外とつなぐ**：認証は OIDC、DB は PostgreSQL、ファイルは S3 の API、ログは標準出力。AWS 固有の部品は、入口（CloudFront・ALB）・置き場（ECS・RDS）・設定の渡し方の外側に限る
+- **AWS にしかない仕組みを、アプリの処理の流れに入れない**：Lambda のトリガー、Step Functions、SQS などは、要るまで使わない。キューが要るときは、まず PostgreSQL の表で作る（`SELECT … FOR UPDATE SKIP LOCKED`）
+- **同じコンテナイメージを、手元と本番で使う**。違いは環境変数（設定）だけにする
+
+## 全体の図
+
+```mermaid
+flowchart LR
+  user[利用者のブラウザ]
+  partner[外部の事業者のシステム（将来、M2M）]
+
+  subgraph aws[AWS 東京リージョン]
+    cf[CloudFront（定額プラン、WAF 込み）]
+    cognito[Cognito Essentials（managed login、独自ドメイン）]
+    ses[SES（メール）]
+    s3[S3（写真）]
+    subgraph vpc[VPC]
+      alb[ALB]
+      subgraph ecs[ECS Fargate]
+        web[画面 Next.js]
+        api[API Spring Boot（BFF）]
+        job[AI の解析の定期タスク]
+      end
+      rds[(RDS for PostgreSQL 18<br/>PostGIS・pgRouting・pgvector)]
+    end
+    sched[EventBridge Scheduler]
+    ssm[Parameter Store / Secrets Manager]
+    logs[CloudWatch Logs・アラーム]
+  end
+
+  anthropic[Anthropic の API]
+  google[Google のログイン]
+
+  user --> cf
+  cf -- "/api/*" --> alb
+  cf -- "それ以外" --> alb
+  cf -- "写真" --> s3
+  alb --> web
+  alb --> api
+  web -- "SSR（cookie を付けて）" --> api
+  user -- "ログイン" --> cognito
+  cognito --> google
+  cognito --> ses
+  api -- "OIDC（認可コード）" --> cognito
+  api --> rds
+  api --> s3
+  sched --> job
+  job --> rds
+  job --> anthropic
+  partner -. "client credentials（将来）" .-> cognito
+  partner -. "API" .-> cf
+  ecs --> logs
+  ssm --> ecs
+```
+
+## 部品ごとの選び方
+
+| 部品 | 選んだもの | 理由・補足 | 外したもの |
+|---|---|---|---|
+| リージョン | 東京（ap-northeast-1） | 利用者の近く。データの置き場所 | ― |
+| 入口・配信 | CloudFront（定額プランの Free・Pro から）→ ALB | パスで振り分け（`/api/*` は API、それ以外は画面）、同じドメインにまとめる（cookie が素直になる）。定額プランに WAF・DDoS 対策が入る。ALB を外に出さず、CloudFront の VPC オリジンで内側に置けるかは作るときに確かめる | ― |
+| 画面（Next.js） | ECS Fargate | SSR・OGP のため。API と同じ仕組みに載せ、部品を増やさない | Amplify Hosting・Vercel（入口とドメインが分かれる、仕組みが増える） |
+| API（Spring Boot） | ECS Fargate | コンテナをそのまま動かす。ECS Express Mode で作りを簡単にできるかは作るときに見る | App Runner（新規の受け付けを終えた）、EC2（OS の更新を持つ） |
+| ログインの処理（BFF） | API（Spring）。Spring Security の OAuth2 Client。セッションは DB に置く（Spring Session JDBC） | トークンはサーバー側だけ。タスクが複数になっても、入れ替えてもログインが切れない。画面の SSR は、ブラウザの cookie を付けて API を呼ぶ | Next.js に置く（Auth.js）：トークンの置き場を考え直すことになる |
+| DB | RDS for PostgreSQL 18（db.t4g.small、Single-AZ から） | PostGIS 3.6.3・pgRouting 3.8.0・pgvector 0.8.2 が使える（#129 で確かめた）。利用が増えたら大きくし、Multi-AZ にする | Aurora（PostgreSQL 18 と拡張への対応が未確認、費用が高い） |
+| AI の解析の定期処理（#127） | EventBridge Scheduler → ECS のタスク（RunTask） | API と同じコンテナイメージを、別の起動コマンドで使う。毎回起動して終わる（#127 の設定の読み込みと合う） | Lambda（仕組みとコードの置き場が増える、手元で同じに動かしにくい） |
+| 写真 | S3 → CloudFront | アプリからは S3 の API で扱う | ― |
+| 設定・秘密 | Systems Manager Parameter Store（無料）を基本に、ECS が環境変数として渡す。DB のパスワードは RDS と Secrets Manager の連携 | アプリは環境変数を読むだけ（手元と同じ） | ― |
+| メール | SES（独自ドメイン、日本語） | Cognito のメールの OTP の送信元（DEC-0016） | Cognito の既定のメール送信（1日の通数の上限、英語） |
+| 認証 | Cognito Essentials（独自ドメイン） | DEC-0016 | ― |
+| ネットワーク | VPC。Fargate はパブリックのサブネット（セキュリティグループで ALB からだけ受ける）、RDS はプライベートのサブネット。**NAT ゲートウェイは置かない** | NAT は月 約$45 かかる。外への通信（Anthropic の API、Cognito など）は Fargate のパブリック IP で出す | NAT ゲートウェイ、VPC エンドポイント（要るまで） |
+| ログ・監視 | アプリは標準出力に JSON で出し、CloudWatch Logs へ。CloudWatch のアラーム、AWS Budgets | メールアドレスをログに出さない・伏せる（DEC-0016 決定5） | 外の監視サービス（要るまで） |
+| デプロイ | GitHub Actions → ECR → ECS。GitHub からは OIDC で AWS に入る | アクセスキーを GitHub に置かない | ― |
+| インフラの定義 | AWS CDK（TypeScript） | AWS に特化し、書く量が少ない。AI に書かせてレビューで直す | Terraform（関心はある。今は CDK）、手作業（再現できない） |
+| 環境 | 本番だけ | 開発は手元の Docker | 検証の環境（開発者が増えたら足す） |
+
+## 手元の Docker との対応
+
+| 本番（AWS） | 手元（Docker） | 同じか |
+|---|---|---|
+| CloudFront → ALB（パスで振り分け） | リバースプロキシのコンテナ（例：Caddy・nginx）で同じ振り分け。1つのオリジン（例：`http://localhost:8000`）にまとめる | 振り分けと cookie の振る舞いは同じにする。WAF・キャッシュは手元にない |
+| ECS（画面・API） | 同じコンテナイメージ | 同じ |
+| AI の解析の定期タスク | 同じイメージを `docker compose run` で起動（手で、または手元の cron） | 起動のしかただけ違う |
+| RDS for PostgreSQL 18＋拡張 | 今の `db`（PostgreSQL 18＋PostGIS。pgRouting・pgvector を足す） | 版をそろえる |
+| ログインのセッション（Spring Session JDBC） | 同じ（DB の表） | 同じ |
+| Cognito | 2通りを選べるようにする：(1) 手元の OIDC のモック（候補：navikt の mock-oauth2-server）で、ネットにつながずに動かす、(2) 開発用の Cognito のユーザープール（無料の範囲）につないで、本物の流れを確かめる | 標準の OIDC なので、ログインはどちらでも同じコードで動く。Cognito 専用の3か所（登録の `SignUp`、パスキーの登録への転送、ログアウト）は、モックのときは手元用の差し替えで動かす |
+| S3 | S3 互換のコンテナ（候補：LocalStack、MinIO など。ライセンス・配布の状況は作るときに確かめる） | アプリは S3 の API で書くので同じ |
+| Parameter Store・Secrets Manager | 環境変数（`.env`、git の管理外） | アプリは環境変数を読むだけ |
+| SES | 手元では Cognito がメールを送る（開発用のユーザープールのとき）。アプリが自分でメールを送る機能は今はない | ― |
+| CloudWatch Logs | 標準出力（`docker compose logs`） | 同じ書式 |
+| Anthropic の API | 本物の API（キーは環境変数）、または記録した応答で差し替え | ― |
+
+手元で確かめられないもの：CloudFront・WAF・ALB の細かい振る舞い、ECS の起動・入れ替え、RDS の性能、IAM の権限、Cognito の独自ドメイン・SES。これらは本番の構築のときに確かめる。
+
+## 費用
+
+[cost-model.md](cost-model.md) の構成（Fargate 2タスク、ALB、RDS db.t4g.small、CloudFront）が、この構成に当たる。月100万PV までは固定費 約2.3万円（税込み）。この構成で増えるものは小さい（Secrets Manager の秘密1つ 月$0.40、ECR、開発用の Cognito は無料の範囲）。
+
+## 作るときに確かめること
+
+- CloudFront の VPC オリジンで、ALB を外に出さずに置けるか
+- ECS Express Mode で、ALB・自動の拡張・ネットワークの作りがどこまで簡単になるか（1つの ALB を画面と API で共有できるか）
+- Spring Session JDBC と、画面の SSR からの API の呼び方（cookie の受け渡し、CSRF）
+- 手元の OIDC のモックと、Cognito 専用の3か所の差し替えの作り
+- RDS の pgRouting・pgvector の版と、手元の `db` の版をそろえる方法
+- CDK のスタックの分け方（ネットワーク・DB・アプリ・認証）と、DB を消さない設定（削除の保護、スナップショット）
