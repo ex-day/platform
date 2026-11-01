@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（方針は人間が 2026-11-01 に決定。本文は Claude が作成し、レビュー待ち）
+Accepted（方針は人間が 2026-11-01 に決定。本文は Claude が作成し、PR #130 のレビューを経て 2026-11-01 に Accepted）
 
 ## Date
 
