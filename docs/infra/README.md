@@ -8,6 +8,7 @@ ex-day を動かすための、クラウド・認証サービス・費用の調�
 | [cost_model.py](cost_model.py) | 上の見積もりの計算。前提と単価を直して計算し直す | #81 |
 | [auth-service-comparison.md](auth-service-comparison.md) | 認証サービス（Auth0・Cognito）の比較。パスキー、パスワードをなくす条件、M2M と③、MAU と料金 | #75 |
 | [cognito-trial.md](cognito-trial.md) | Cognito を試す手順と、結果の記録 | #75 |
+| [aws-architecture.md](aws-architecture.md) | AWS の構成（MVP）：部品ごとの選び方、全体の図、手元の Docker との対応 | #129 |
 
 ## 更新のしかた
 

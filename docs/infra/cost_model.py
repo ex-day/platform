@@ -29,7 +29,19 @@ RDS = {"db.t4g.small": 37, "db.t4g.medium": 74,
        "db.t4g.large": 148, "db.t4g.xlarge": 296}  # RDS for PostgreSQL 月額（large 以上は倍々の見込み）
 GP3 = 0.138                         # RDS gp3 の GB 月（未確認）
 LOGS = 0.76                         # CloudWatch Logs 取り込みの GB（未確認）
-MISC = 10                           # Route 53・Secrets・ECR・S3（写真）・監視・定期処理・SES・ドメイン
+# その他の部品（未確認の単価を含む。cost-model.md の単価の表）
+R53_ZONE, R53_PER_M_QUERY = 0.50, 0.40      # Route 53 のホストゾーン、100万問い合わせ
+SECRET = 0.40                               # Secrets Manager 1つ（DB のパスワード）。ほかは Parameter Store（無料）
+ECR_GB, ECR_STORED_GB = 0.10, 3             # ECR の GB 月、置いておくイメージの量
+S3_GB = 0.025                               # S3 標準の GB 月（写真）
+PHOTO_MB_PER_POST = 0.75                    # 投稿の半分に写真、変換後を含め 1.5MB
+SES_PER_1000 = 0.10                         # SES 1,000通
+EMAILS_PER_MAU = 0.5                        # メールのコードを使う割合（パスキーの人は送らない）
+ALARM, ALARMS = 0.10, 10                    # CloudWatch のアラーム1つ、数
+LOG_STORE_GB = 0.033                        # CloudWatch Logs の保存の GB 月（30日で消す）
+JOB_MIN_PER_DAY_BASE = 10                   # AI の解析などの定期タスク（1 vCPU・2GB）の1日の分数（固定分）
+JOB_MIN_PER_POST = 0.01                     # 投稿1件あたりに増える分数
+DOMAIN = 2                                  # ドメイン（.jp を年 約3,000〜4,000円で見込む）
 AI_YEN_PER_POST = 0.5               # Haiku の標準経路 0.25円（#127）＋門番・抜き取り・投稿時の確認で2倍
 
 
@@ -73,6 +85,25 @@ def cognito_m2m(partners, tokens_per_day):
     return partners * tokens_per_day * 30 * COGNITO_M2M
 
 
+def misc_parts(pv, mau_rate=None):
+    """その他の部品の月額（ドル、税抜き）の内訳"""
+    mau = pv * (MAU_RATE if mau_rate is None else mau_rate)
+    posts = pv * POST_RATE
+    log_gb = pv * ORIGIN_REQ_PER_PV * LOG_KB_PER_ORIGIN_REQ / 1e6
+    job_hours = (JOB_MIN_PER_DAY_BASE + posts / 30 * JOB_MIN_PER_POST) * 30 / 60
+    return dict(
+        route53=R53_ZONE + pv * 0.05 / 1e6 * R53_PER_M_QUERY,
+        secrets=SECRET,
+        ecr=ECR_GB * ECR_STORED_GB,
+        s3_photos=posts * 12 * PHOTO_MB_PER_POST / 1000 * S3_GB,  # 1年分たまった量で見る
+        ses=mau * EMAILS_PER_MAU / 1000 * SES_PER_1000,
+        alarms=ALARM * ALARMS,
+        log_storage=log_gb * LOG_STORE_GB,
+        jobs=job_hours * (1 * FG_VCPU + 2 * FG_GB),
+        domain=DOMAIN,
+    )
+
+
 def infra(pv):
     """AI・認証を除く AWS の月額（ドル、税抜き）、構成の説明、内訳"""
     peak_rps = pv / (30 * 86400) * ORIGIN_REQ_PER_PV * PEAK
@@ -92,14 +123,65 @@ def infra(pv):
     k = 2 if multi else 1
     parts = dict(
         fargate=sum(c * FG_VCPU * H + g * FG_GB * H + IPV4 for c, g in tasks),
-        alb=ALB + ALB_LCU * max(1, peak_rps / 25) + 2 * IPV4,
+        # ALB は内部（CloudFront の VPC オリジンから入る）ので、パブリック IPv4 は要らない
+        alb=ALB + ALB_LCU * max(1, peak_rps / 25),
         rds=RDS[db] * k + storage * GP3 * k,
         logs=pv * ORIGIN_REQ_PER_PV * LOG_KB_PER_ORIGIN_REQ / 1e6 * LOGS,
-        misc=MISC,
+        misc=sum(misc_parts(pv).values()),
         cloudfront=cloudfront(pv),
     )
     desc = f"Fargate {len(tasks)}タスク・{db}{'（Multi-AZ）' if multi else ''}"
     return sum(parts.values()), desc, parts
+
+
+def infra_config(pv, tasks, db, multi, storage, cdn_plan=None):
+    """構成を決めて AWS の月額（ドル、税抜き）を出す（シナリオ用）"""
+    peak_rps = pv / (30 * 86400) * ORIGIN_REQ_PER_PV * PEAK
+    k = 2 if multi else 1
+    parts = dict(
+        fargate=sum(c * FG_VCPU * H + g * FG_GB * H + IPV4 for c, g in tasks),
+        alb=ALB + ALB_LCU * max(1, peak_rps / 25),  # 内部の ALB（パブリック IPv4 なし）
+        rds=RDS[db] * k + storage * GP3 * k,
+        logs=pv * ORIGIN_REQ_PER_PV * LOG_KB_PER_ORIGIN_REQ / 1e6 * LOGS,
+        misc=sum(misc_parts(pv).values()),
+        cloudfront=cloudfront(pv) if cdn_plan is None else cdn_plan,
+    )
+    return sum(parts.values()), parts
+
+
+SCENARIOS = [
+    # 名前, 月間PV, タスク（vCPU, GB）, DB, Multi-AZ, ストレージGB, メモ
+    ("1 MVP の最低の稼働", 1e5, [(0.5, 1), (0.5, 2)], "db.t4g.small", False, 30,
+     "画面・API 1つずつ。DB は最小（CPU クレジットに注意）"),
+    ("2 DB のメモリを増やした比較（実測前の仮置き）", 1e6, [(0.5, 1), (1, 2)], "db.t4g.medium", False, 50,
+     "t4g.medium は small と同じ 2 vCPU・基準の CPU 20% で、メモリだけ2倍。CPU が詰まる場合の解決にはならない。"
+     "測った結果で t4g.large・xlarge、CPU が一定の M 系、メモリ優先の R 系と比べる"),
+    ("3 利用者・運営が増えたあと", 5e6, [(1, 2)] * 2 + [(1, 3)] * 2, "db.t4g.large", True, 100,
+     "Multi-AZ、タスク4つ、ログ・AI の実行が増える"),
+]
+
+# 短命の検証環境（必要なときだけ CDK で作り、確かめたら消す）
+EPHEMERAL_HOURS = 2
+
+
+def ephemeral_run(with_rds):
+    """1回あたりのドル（税抜き）。CloudFront・ALB・Fargate 2タスク（＋一時 RDS）を EPHEMERAL_HOURS 動かす"""
+    h = EPHEMERAL_HOURS
+    fargate = (0.5 * FG_VCPU + 1 * FG_GB + 0.005) * h + (0.5 * FG_VCPU + 2 * FG_GB + 0.005) * h
+    alb = (0.0243 + 0.008) * h  # 内部の ALB（パブリック IPv4 なし）
+    rds = RDS["db.t4g.small"] / H * h if with_rds else 0
+    return fargate + alb + rds
+
+
+# RDS の T4g の CPU クレジットの追加料金（Unlimited モード。24時間の平均が基準の CPU を超えた分）
+RDS_SURPLUS_PER_VCPU_HOUR = 0.075   # RDS for PostgreSQL。予約の割引の対象外
+T4G_BASELINE = 0.20                 # 1 vCPU あたりの基準の CPU（small・medium とも）
+T4G_VCPU = 2                        # small・medium とも 2 vCPU
+
+
+def t4g_surplus(avg_cpu):
+    """1か月の平均の CPU 使用率（0〜1）が基準を超えたときの、1か月の追加料金（ドル、税抜き）"""
+    return max(0.0, avg_cpu - T4G_BASELINE) * T4G_VCPU * H * RDS_SURPLUS_PER_VCPU_HOUR
 
 
 def month(pv, rpm, auth="auth0", ai_yen=AI_YEN_PER_POST, mau_rate=MAU_RATE):
@@ -153,6 +235,33 @@ if __name__ == "__main__":
     for pv in pvs:
         t, _, p = infra(pv)
         print(f"| {f(pv)} | " + " | ".join(f"{v:,.1f}" for v in p.values()) + f" | {t:,.1f} |")
+    print("\n## その他の部品の内訳（ドル／月、税抜き）\n")
+    keys = list(misc_parts(1e3).keys())
+    print("| 月間PV | " + " | ".join(keys) + " | 計 |")
+    print("|---|" + "---|" * (len(keys) + 1))
+    for pv in pvs:
+        mp = misc_parts(pv)
+        print(f"| {f(pv)} | " + " | ".join(f"{v:,.2f}" for v in mp.values()) + f" | {sum(mp.values()):,.2f} |")
+    print("\n## 構成のシナリオ（円／月、税込み。認証は Cognito、AI は 0.5円／投稿）\n")
+    print("| シナリオ | 月間PV | 構成 | AWS | 認証 | AI | 計 | 収入 RPM200 | メモ |")
+    print("|---|---|---|---|---|---|---|---|---|")
+    for name, pv, tasks, db, multi, st, memo in SCENARIOS:
+        t, _ = infra_config(pv, tasks, db, multi, st)
+        aws_yen = t * TAX * YEN
+        au = cognito(pv * MAU_RATE) * TAX * YEN
+        ai = pv * POST_RATE * AI_YEN_PER_POST
+        conf = f"Fargate {len(tasks)}タスク・{db}{'（Multi-AZ）' if multi else ''}"
+        print(f"| {name} | {f(pv)} | {conf} | {f(aws_yen)} | {f(au)} | {f(ai)} | {f(aws_yen + au + ai)} | {f(pv/5)} | {memo} |")
+    print("\n## RDS の CPU クレジットの追加料金（db.t4g.small・medium、円／月、税込み）\n")
+    print("| 1か月の平均の CPU 使用率 | 追加料金 |")
+    print("|---|---|")
+    for c in (0.2, 0.3, 0.5, 0.8):
+        print(f"| {c*100:.0f}% | {f(t4g_surplus(c)*TAX*YEN)} |")
+    print("\n## 短命の検証環境（1回あたり、円、税込み）\n")
+    for with_rds in (False, True):
+        y = ephemeral_run(with_rds) * TAX * YEN
+        print(f"- {EPHEMERAL_HOURS}時間・{'一時の RDS あり' if with_rds else 'DB はコンテナ'}：約 {y:,.0f}円（月10回で 約 {y*10:,.0f}円）")
+
     print("\n## 感度\n")
     for ai in (0.5, 4.6):
         for pv in (1e6, 1e7):
