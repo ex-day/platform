@@ -123,7 +123,8 @@ def infra(pv):
     k = 2 if multi else 1
     parts = dict(
         fargate=sum(c * FG_VCPU * H + g * FG_GB * H + IPV4 for c, g in tasks),
-        alb=ALB + ALB_LCU * max(1, peak_rps / 25) + 2 * IPV4,
+        # ALB は内部（CloudFront の VPC オリジンから入る）ので、パブリック IPv4 は要らない
+        alb=ALB + ALB_LCU * max(1, peak_rps / 25),
         rds=RDS[db] * k + storage * GP3 * k,
         logs=pv * ORIGIN_REQ_PER_PV * LOG_KB_PER_ORIGIN_REQ / 1e6 * LOGS,
         misc=sum(misc_parts(pv).values()),
@@ -139,7 +140,7 @@ def infra_config(pv, tasks, db, multi, storage, cdn_plan=None):
     k = 2 if multi else 1
     parts = dict(
         fargate=sum(c * FG_VCPU * H + g * FG_GB * H + IPV4 for c, g in tasks),
-        alb=ALB + ALB_LCU * max(1, peak_rps / 25) + 2 * IPV4,
+        alb=ALB + ALB_LCU * max(1, peak_rps / 25),  # 内部の ALB（パブリック IPv4 なし）
         rds=RDS[db] * k + storage * GP3 * k,
         logs=pv * ORIGIN_REQ_PER_PV * LOG_KB_PER_ORIGIN_REQ / 1e6 * LOGS,
         misc=sum(misc_parts(pv).values()),
@@ -152,8 +153,9 @@ SCENARIOS = [
     # 名前, 月間PV, タスク（vCPU, GB）, DB, Multi-AZ, ストレージGB, メモ
     ("1 MVP の最低の稼働", 1e5, [(0.5, 1), (0.5, 2)], "db.t4g.small", False, 30,
      "画面・API 1つずつ。DB は最小（CPU クレジットに注意）"),
-    ("2 DB に余裕を持たせた通常", 1e6, [(0.5, 1), (1, 2)], "db.t4g.medium", False, 50,
-     "経路の計算（pgRouting）と AI の解析が DB を取り合っても余裕がある形"),
+    ("2 DB のメモリを増やした比較（実測前の仮置き）", 1e6, [(0.5, 1), (1, 2)], "db.t4g.medium", False, 50,
+     "t4g.medium は small と同じ 2 vCPU・基準の CPU 20% で、メモリだけ2倍。CPU が詰まる場合の解決にはならない。"
+     "測った結果で t4g.large・xlarge、CPU が一定の M 系、メモリ優先の R 系と比べる"),
     ("3 利用者・運営が増えたあと", 5e6, [(1, 2)] * 2 + [(1, 3)] * 2, "db.t4g.large", True, 100,
      "Multi-AZ、タスク4つ、ログ・AI の実行が増える"),
 ]
@@ -166,9 +168,20 @@ def ephemeral_run(with_rds):
     """1回あたりのドル（税抜き）。CloudFront・ALB・Fargate 2タスク（＋一時 RDS）を EPHEMERAL_HOURS 動かす"""
     h = EPHEMERAL_HOURS
     fargate = (0.5 * FG_VCPU + 1 * FG_GB + 0.005) * h + (0.5 * FG_VCPU + 2 * FG_GB + 0.005) * h
-    alb = (0.0243 + 0.008 + 2 * 0.005) * h
+    alb = (0.0243 + 0.008) * h  # 内部の ALB（パブリック IPv4 なし）
     rds = RDS["db.t4g.small"] / H * h if with_rds else 0
     return fargate + alb + rds
+
+
+# RDS の T4g の CPU クレジットの追加料金（Unlimited モード。24時間の平均が基準の CPU を超えた分）
+RDS_SURPLUS_PER_VCPU_HOUR = 0.075   # RDS for PostgreSQL。予約の割引の対象外
+T4G_BASELINE = 0.20                 # 1 vCPU あたりの基準の CPU（small・medium とも）
+T4G_VCPU = 2                        # small・medium とも 2 vCPU
+
+
+def t4g_surplus(avg_cpu):
+    """1か月の平均の CPU 使用率（0〜1）が基準を超えたときの、1か月の追加料金（ドル、税抜き）"""
+    return max(0.0, avg_cpu - T4G_BASELINE) * T4G_VCPU * H * RDS_SURPLUS_PER_VCPU_HOUR
 
 
 def month(pv, rpm, auth="auth0", ai_yen=AI_YEN_PER_POST, mau_rate=MAU_RATE):
@@ -239,6 +252,11 @@ if __name__ == "__main__":
         ai = pv * POST_RATE * AI_YEN_PER_POST
         conf = f"Fargate {len(tasks)}タスク・{db}{'（Multi-AZ）' if multi else ''}"
         print(f"| {name} | {f(pv)} | {conf} | {f(aws_yen)} | {f(au)} | {f(ai)} | {f(aws_yen + au + ai)} | {f(pv/5)} | {memo} |")
+    print("\n## RDS の CPU クレジットの追加料金（db.t4g.small・medium、円／月、税込み）\n")
+    print("| 1か月の平均の CPU 使用率 | 追加料金 |")
+    print("|---|---|")
+    for c in (0.2, 0.3, 0.5, 0.8):
+        print(f"| {c*100:.0f}% | {f(t4g_surplus(c)*TAX*YEN)} |")
     print("\n## 短命の検証環境（1回あたり、円、税込み）\n")
     for with_rds in (False, True):
         y = ephemeral_run(with_rds) * TAX * YEN

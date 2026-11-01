@@ -81,7 +81,7 @@ flowchart LR
 | 画面（Next.js） | ECS Fargate | SSR・OGP のため。API と同じ仕組みに載せ、部品を増やさない | Amplify Hosting・Vercel（入口とドメインが分かれる、仕組みが増える） |
 | API（Spring Boot） | ECS Fargate | コンテナをそのまま動かす。ECS Express Mode で作りを簡単にできるかは作るときに見る | App Runner（新規の受け付けを終えた）、EC2（OS の更新を持つ） |
 | ログインの処理（BFF） | API（Spring）。Spring Security の OAuth2 Client。セッションは DB に置く（Spring Session JDBC） | トークンはサーバー側だけ。タスクが複数になっても、入れ替えてもログインが切れない。画面の SSR は、ブラウザの cookie を付けて API を呼ぶ | Next.js に置く（Auth.js）：トークンの置き場を考え直すことになる |
-| DB | RDS for PostgreSQL 18（db.t4g.small、Single-AZ から） | PostGIS 3.6.3・pgRouting 3.8.0・pgvector 0.8.2 が使える（#129 で確かめた）。**大きさは容量ではなく、経路の計算の CPU・メモリ・同時の接続で決める**（DEC-0017 決定7）。測って上げる条件を決め、Multi-AZ にする条件も決める | Aurora（PostgreSQL 18 と拡張への対応が未確認、費用が高い） |
+| DB | RDS for PostgreSQL 18（db.t4g.small、Single-AZ から） | PostGIS 3.6.3・pgRouting 3.8.0・pgvector 0.8.2 が使える（#129 で確かめた）。**大きさは容量ではなく、経路の計算の CPU・メモリ・同時の接続で決める**（DEC-0017 決定7）。t4g.small と medium は同じ 2 vCPU・基準 20%（medium はメモリだけ2倍）。測った結果で T4g の上の大きさ、M 系・R 系を比べ、上げる条件と Multi-AZ にする条件を決める。CPU クレジットの追加料金を見る | Aurora（PostgreSQL 18 と拡張への対応が未確認、費用が高い） |
 | AI の解析の定期処理（#127） | EventBridge Scheduler → ECS のタスク（RunTask） | API と同じコンテナイメージを、別の起動コマンドで使う。毎回起動して終わる（#127 の設定の読み込みと合う） | Lambda（仕組みとコードの置き場が増える、手元で同じに動かしにくい） |
 | 写真 | S3 → CloudFront | アプリからは S3 の API で扱う | ― |
 | 設定・秘密 | Systems Manager Parameter Store（無料）を基本に、ECS が環境変数として渡す。DB のパスワードは RDS と Secrets Manager の連携 | アプリは環境変数を読むだけ（手元と同じ） | ― |
@@ -91,7 +91,7 @@ flowchart LR
 | ログ・監視 | アプリは標準出力に JSON で出し、CloudWatch Logs へ。CloudWatch のアラーム、AWS Budgets | メールアドレスをログに出さない・伏せる（DEC-0016 決定5） | 外の監視サービス（要るまで） |
 | デプロイ | GitHub Actions → ECR → ECS。GitHub からは OIDC で AWS に入る | アクセスキーを GitHub に置かない | ― |
 | インフラの定義 | AWS CDK（TypeScript） | AWS に特化し、書く量が少ない。AI に書かせてレビューで直す | Terraform（関心はある。今は CDK）、手作業（再現できない） |
-| 環境 | 常に動かすのは本番だけ。必要なときだけ短命の検証環境 | 開発は手元の Docker。AWS 固有の部分は短命の検証環境（1回 約40〜60円） | 常に動かす検証の環境（開発者が増えたら足す） |
+| 環境 | 常に動かすのは本番だけ。必要なときだけ短命の検証環境 | 開発は手元の Docker。AWS 固有の部分は短命の検証環境（1回 約35〜50円） | 常に動かす検証の環境（開発者が増えたら足す） |
 | デプロイの安全 | ECS の回路遮断と CloudWatch のアラームで自動で戻す、イメージは digest で固定、デプロイのあとのスモークテスト、後方互換の DB のマイグレーション | DEC-0017 決定8 | ― |
 
 ## 手元の Docker との対応
@@ -118,11 +118,13 @@ flowchart LR
 
 | シナリオ | 構成 | 月額 |
 |---|---|---|
-| 1 MVP の最低の稼働（低い負荷のときの床。予算の値ではない） | Fargate 2タスク・db.t4g.small（Single-AZ） | 約2.2万円 |
-| 2 DB に余裕を持たせた通常 | API を 1 vCPU、db.t4g.medium | 約3.3万円 |
-| 3 利用者・運営が増えたあと | Fargate 4タスク、db.t4g.large（Multi-AZ） | 約14万円 |
+| 1 MVP の最低の稼働（低い負荷のときの床。予算の値ではない） | Fargate 2タスク・db.t4g.small（Single-AZ） | 約2.1万円 |
+| 2 DB のメモリを増やした比較（実測前の仮置き。t4g.medium は CPU を増やさない） | API を 1 vCPU、db.t4g.medium | 約3.2万円 |
+| 3 利用者・運営が増えたあと | Fargate 4タスク、db.t4g.large（Multi-AZ） | 約13万円 |
 
-短命の検証環境は1回（2時間）約40〜60円。開発用の Cognito は無料の範囲。
+T4g は CPU を使い続けると CPU クレジットの追加料金が出る（平均 50% で 月 約5,800円）。
+
+短命の検証環境は1回（2時間）約35〜50円。開発用の Cognito は無料の範囲。
 
 ## テストと確かめ方
 
