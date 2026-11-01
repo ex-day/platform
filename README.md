@@ -165,6 +165,9 @@ platform/
 
 要求、MVPスコープ、画面設計、UI/UX設計など、サービスを形にしていく過程のドキュメントを管理します。
 
+- 重要な判断とその理由：[docs/decisions/](docs/decisions/)
+- インフラ・費用の調査：[docs/infra/](docs/infra/)（[月間PVごとの費用と収益の見積もり](docs/infra/cost-model.md)、[認証サービスの比較](docs/infra/auth-service-comparison.md)）
+
 ### `apps/web`
 
 Webフロントエンドを配置します。
