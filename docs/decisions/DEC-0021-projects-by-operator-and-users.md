@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（方針は人間が 2026-11-02〜03 に platform#134・#135 で決定。本文は Claude が作成。PR #136 のレビュー（人と ChatGPT の壁打ちによる指摘：コースと Discovery、企画（作品）と Discovery の同一性の分離）を 2026-11-04 に反映し、レビュー待ち）
+Accepted（方針は人間が 2026-11-02〜03 に platform#134・#135 で決定。本文は Claude が作成。PR #136 のレビュー（人と ChatGPT の壁打ちによる指摘：コースと Discovery、企画（作品）と Discovery の同一性の分離）を 2026-11-04 に反映し、PR #136 の再レビュー（ブロッカーなし）と人の確認を経て 2026-11-04 に Accepted）
 
 ## Date
 

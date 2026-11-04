@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed（方針は人間が 2026-11-01〜03 に platform#134・#135 で決定。本文は Claude が作成し、レビュー待ち）
+Accepted（方針は人間が 2026-11-01〜03 に platform#134・#135 で決定。本文は Claude が作成し、PR #136 の再レビュー（ブロッカーなし）と人の確認を経て 2026-11-04 に Accepted）
 
 ## Date
 
