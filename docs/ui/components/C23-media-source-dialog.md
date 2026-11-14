@@ -1,4 +1,6 @@
 # C23 media source dialog
+
+> **MVP の対象外（2026-11-15。[Issue #135](https://github.com/ex-day/platform/issues/135)）**。IDと定義ファイルは残し、二次開発で使うかを決める。資料は二次開発（[MVP スコープ](../../ex-day_mvp_scope.md) 14節）。資料を独立した Entity にしたこと（論理エンティティ設計 4.8節）に合わせて、二次開発で中身を見直す。以下は v0.3 の定義のまま。
 ## 機能概要
 Discoveryへ提供された資料ごとに、出典状態と出典情報を登録・編集するダイアログコンポーネント。資料はPostの属性ではなくDiscoveryに対して提供されるものとして扱い、出典・提供者を資料自体に保持し、どのPost（声）とともに提供されたかを辿れるようにする（[DEC-0005](../../decisions/DEC-0005-contribution-thread-and-comment.md) 決定8、[DEC-0009](../../decisions/DEC-0009-conversation-understanding-and-tags.md) 決定6）。
 

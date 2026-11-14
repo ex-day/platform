@@ -1,12 +1,23 @@
-# C14 contribution content
-## 機能概要
+# C14 知識・疑問内容（廃止）
+
+> **廃止（2026-11-15）**。IDは欠番とし、再利用しない。本ファイルは過去の参照のために残す。以下の「廃止前の定義」は当時の記録であり、現在の仕様ではない。
+
+## 廃止の理由と代わり
+- S05（知識・疑問詳細）の廃止。Post は会話のページで見せる。
+- 代わり：C26（会話の投稿と返信）
+- 関係するDEC／Issue：[DEC-0020](../../decisions/DEC-0020-place-conversation-discovery.md)、[DEC-0011](../../decisions/DEC-0011-id-numbering-rules.md)、[Issue #135](https://github.com/ex-day/platform/issues/135)
+
+## 廃止前の定義
+
+（元の見出し：C14 contribution content）
+### 機能概要
 知識・疑問そのものを表示する共通Component。投稿原文と添付資料を保持して表示し、後から変わる解釈・分類・Discoveryとの関係とは分ける。
 
-## 対象端末
+### 対象端末
 - PC
 - モバイル
 
-## 表示項目
+### 表示項目
 | 論理名 | 物理名 | 種別 | 繰り返し | 親 | データ元 | データ項目 | 対象端末 | 備考 |
 |--------|--------|------|----------|----|----------|------------|----------|------|
 | 投稿種別 | contribution_type | text | - | - | API | type | PC/モバイル | 知識／疑問 |
@@ -18,10 +29,10 @@
 | 投稿日時 | contribution_posted_at | text | - | - | API | postedAt | PC/モバイル | 出来事の対象時点と区別する |
 | 投稿者 | contribution_author | text/link | - | - | API | author | PC/モバイル | 公開範囲に従って表示 |
 
-## アクション
+### アクション
 - 初期表示時
   - 投稿原文・添付資料・投稿情報を表示する。後から得た解釈で原文を置き換えない。
 
-## 検討事項
+### 検討事項
 - 資料の種別ごとの表示・再生・ダウンロード方法と投稿者プロフィールへの遷移はデザイン・実装設計で決める。許可するMedia Type等は[Issue #35](https://github.com/ex-day/platform/issues/35)に従う。
 - `contribution_media`は既存ドメイン／論理Entity設計の仮定義Mediaとの対応を示すUI上の名称であり、Mediaの属性・関係やAPI／物理データ構造の最終形は本Componentでは確定しない。
