@@ -1,5 +1,7 @@
 # F03: similar-discovery-guide（似たDiscoveryの案内）
 
+> **MVP の対象外（2026-11-15。[Issue #135](https://github.com/ex-day/platform/issues/135)）**。IDと定義ファイルは残し、二次開発で使うかを決める。初期の MVP から外した（人の判断、2026-11-15）。投稿の直後は場所の共有の誘いを出すので、案内を重ねると負担が増える。器の前提（成立前の Discovery）もなくなった。以下は v0.3 の定義のまま。
+
 ## 状態
 - **番号・機能の分け方は候補**。Issue #67のPRでAIが提案し、人間がレビューで確定する（[DEC-0011](../../decisions/DEC-0011-id-numbering-rules.md)）。
 

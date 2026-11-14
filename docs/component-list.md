@@ -2,33 +2,49 @@
 
 IDの採番・廃止・参照のルールは[各種設計資料の作成方針](各種設計資料作成方針.md)の「画面・コンポーネント・機能のIDの採番ルール」（[DEC-0011](decisions/DEC-0011-id-numbering-rules.md)）に従う。IDは変えず、廃止したIDは再利用しない。
 
+2026-11-15：根本整理（DEC-0019〜0023、[Issue #135](https://github.com/ex-day/platform/issues/135)）、[MVP スコープ v0.4](ex-day_mvp_scope.md)、[画面一覧](screen-list.md)の作り直しに合わせて作り直した。新しいコンポーネント（C28〜）の番号は候補であり、人が PR のレビューで確定する（作成方針「コンポーネントの新規追加（採番）」）。既存のコンポーネントの定義ファイル（`docs/ui/components/`）は v0.3 の中身のままで、画面の設計で直す。新しいコンポーネントの定義ファイルはまだない。
+
 ## 現行
 
-| 機能ID | 機能名                                                                            | 備考                                                                                   |
-|--------|-----------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
-| C01    | [共通ヘッダー](ui/components/C01-header.md)                                       | 新規投稿の入口「話す」を持つ（Issue #67）                                              |
-| C02    | [共通フッター](ui/components/C02-footer.md)                                       |                                                                                        |
-| C03    | [Discovery Card](ui/components/C03-discovery-card.md)                             |                                                                                        |
-| C04    | [Discovery List](ui/components/C04-discovery-list.md)                             | C03（Discovery Card）の集合（検索結果等）                                              |
-| C05    | [Discovery Section](ui/components/C05-discovery-section.md)                       | C03（Discovery Card）の集合（嗜好等のグループ化結果）                                  |
-| C06    | [Discovery検索・絞り込み](ui/components/C06-search.md)                            |                                                                                        |
-| C07    | [ドロップダウンメニュー](ui/components/C07-dropdown-menu.md)                      | ユーザーメニュー。新規投稿の導線はC01（共通ヘッダー）の「話す」へ移した                |
-| C08    | [ログイン認証ダイアログ](ui/components/C08-login-dialog.md)                       |                                                                                        |
-| C09    | [ローディング](ui/components/C09-loading.md)                                      |                                                                                        |
-| C10    | [リアクションボタン](ui/components/C10-reaction-button.md)                        | Post・Discovery・わかってきたこと（価値・説）・Valueへのリアクション（DEC-0009 決定9） |
-| C11    | [Discovery Sections](ui/components/C11-discovery-sections.md)                     | モバイル時タブ管理と、PC時のSection管理を行う                                          |
-| C12    | [Discovery Value](ui/components/C12-discovery-value.md)                           | Discoveryの魅力を表示する                                                              |
-| C14    | [知識・疑問内容](ui/components/C14-contribution-content.md)                       | 投稿原文・添付資料・投稿情報を表示。要否と再構成は[Issue #68](https://github.com/ex-day/platform/issues/68)の判断待ち |
-| C15    | [Discovery関連情報](ui/components/C15-related-discovery.md)                       | 確定した関連Discoveryを表示                                                            |
-| C16    | [知識・疑問の現在状態](ui/components/C16-contribution-status.md)                  | 投稿者本人に現在の状態を表示。要否と再構成はIssue #68の判断待ち                        |
-| C17    | [この投稿から見つかった価値](ui/components/C17-contribution-impact.md)              | Contributionからex-dayが解釈・形成した価値をまとめるセクションとして、投稿者本人にDiscovery単位のC20を0..n件表示。要否と再構成はIssue #68の判断待ち |
-| C18    | [確認・補完導線](ui/components/C18-contribution-confirmation.md)                  | 確認が必要な投稿者本人に表示。要否と再構成はIssue #68の判断待ち                        |
-| C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md)                  | 評価済みRecommendationから今伝えたい価値を直感的に提示 |
-| C20    | [Discovery Impact](ui/components/C20-discovery-impact.md)                         | 1つのDiscoveryについて、わかってきたこと・Valueの出所となった会話を示す単位。利用する画面（S05・S09）の再構成はIssue #68の判断待ち |
-| C23    | [資料出典登録ダイアログ](ui/components/C23-media-source-dialog.md)                | Discoveryへ提供された資料ごとに出典状態と出典情報を登録・編集するダイアログ |
-| C25    | [わかってきたこと（Discovery Emerging Terms）](ui/components/C25-discovery-emerging-terms.md) | 会話から読み取られたわかってきたこと（説・価値）を示し、種類ごとのリアクションを扱う（DEC-0009） |
-| C26    | [みんなの声（Post Thread）](ui/components/C26-post-thread.md)                     | Discoveryの会話（Post）を時系列に表示し、その場で声を寄せられる。返信先の引用、タグ、派生の誘導を含む |
-| C27    | [新しい話を始める（Post New）](ui/components/C27-post-new.md)                     | **番号は候補（レビューで確定）**。ヘッダーの「話す」から開く新規投稿のモーダル。URL（`/posts/new`）を持つ |
+| 機能ID | 機能名 | 使う画面 | MVP での中身・変更点 |
+|--------|--------|----------|----------------------|
+| C01    | [共通ヘッダー](ui/components/C01-header.md) | 全画面 | 「話す」（新しい話を始める）に加えて、「寄り道」と検索を持つ。運営としてログインしたときの運営の入口 |
+| C02    | [共通フッター](ui/components/C02-footer.md) | 全画面 | そのまま |
+| C03    | [Discovery Card](ui/components/C03-discovery-card.md) | S01・S02・S12・S13・S15 | 場所を見出しにして出せる（「小机城址：春は地元の人しか来ない桜の穴場」。DEC-0022） |
+| C04    | [結果の一覧](ui/components/C04-discovery-list.md) | S02・S12 | 旧名「Discovery List」。場所（C28）・Discovery（C03）・企画（C29）・探しています（C30）のカードを並べる |
+| C05    | [TOP の枠](ui/components/C05-discovery-section.md) | S01 | 旧名「Discovery Section」。企画・いま・この時期・近くの発見・番付・見本・声を待っている・探しています のどれか1つの枠 |
+| C06    | [検索・絞り込み](ui/components/C06-search.md) | C01・S02 | 旧名「Discovery検索・絞り込み」。対象を場所・企画に広げる。絞り込み：種類、地域、時期、探しています |
+| C07    | [ドロップダウンメニュー](ui/components/C07-dropdown-menu.md) | C01 | ユーザーメニュー。「自分の話」（S09）への入口 |
+| C08    | [ログイン認証ダイアログ](ui/components/C08-login-dialog.md) | 投稿・企画の作成の確定時 | そのまま（DEC-0010 決定2） |
+| C09    | [ローディング](ui/components/C09-loading.md) | 全画面 | そのまま |
+| C10    | [リアクションボタン](ui/components/C10-reaction-button.md) | S03・S14・S15 | 対象：Post、Discovery・Value・わかってきたこと（価値）、裏付けのない説、問い（「自分も気になる」）。場所の候補への声は C33 で扱う |
+| C11    | [TOP の枠の並び](ui/components/C11-discovery-sections.md) | S01 | 旧名「Discovery Sections」。中身のある枠だけを出し、データの量に合わせて重みを移す。PC とスマホの並び（DEC-0022） |
+| C12    | [Discovery Value](ui/components/C12-discovery-value.md) | S03 | 何を体験できるか（価値と条件） |
+| C15    | [Discovery関連情報](ui/components/C15-related-discovery.md) | S03 | 関わる Discovery。統合された Discovery から統合先への案内にも使う |
+| C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md) | S03 | 今伝えたい価値を直感的に出す |
+| C25    | [わかってきたこと](ui/components/C25-discovery-emerging-terms.md) | S14・S03 | 会話から読み取った説・価値（見立て。DEC-0015）。会話のページ（S14）を主にし、Discovery のページでは由来の会話の分を出す |
+| C26    | [会話の投稿と返信](ui/components/C26-post-thread.md) | S14・S15 | 旧名「みんなの声（Post Thread）」。会話の Post を時系列で出し、その場で返信できる。タグと派生の誘導は MVP では外す |
+| C27    | [新しい話を始める（Post New）](ui/components/C27-post-new.md) | C01・S03・S13・S15 | 本文だけを入力する（DEC-0023）。入口（場所・Discovery・企画）を引き継ぐ。投稿の直後に C31（場所の共有の誘い）を出す。タグの補完は MVP では外す |
+| C28    | 場所カード | S01・S02・S12・S15 | **新規（番号は候補）**。場所の名前、種類、その場所の発見・会話の数、寄り道では「そこで何分過ごせるか」 |
+| C29    | 企画カード | S01・S02・S13・S17 | **新規（番号は候補）**。表題、呼びかけ、型、作った人（運営・ユーザー） |
+| C30    | 探していますのカード | S01・S02・S13 | **新規（番号は候補）**。場所が決まっていない会話・問い。「このあたりで探している人がいます」 |
+| C31    | 場所の共有の誘い | C27 | **新規（番号は候補）**。候補があればワンタップで確かめる、なければ C32 で選ぶ。「あとで」「共有しない」（DEC-0023） |
+| C32    | 場所を選ぶ部品 | C31・S16 | **新規（番号は候補）**。地図で指す、現在地の近くから選ぶ。文字を打たせない |
+| C33    | 場所の候補と採用 | S14 | **新規（番号は候補）**。検討中の場所の候補、「ここかも」「違うと思う」の声、採用・再検討中の表示、採用する操作（問いを立てた人・投稿した人・運営） |
+| C34    | 問いと回答の採用 | S14 | **新規（番号は候補）**。「投稿者が採用した回答あり」「現在の回答あり」「新しい情報が寄せられ、再検討中」「引き続き募集中」。「解決済み」と言わない |
+| C35    | 小さな地図（ここから） | S01・S03・S13 | **新規（番号は候補）**。ここから行ける範囲を小さく出し、押すと S12 へ |
+| C36    | 寄り道の地図と条件 | S12 | **新規（番号は候補）**。起点・使える時間・終点の入力、全画面の地図（そこで何分過ごせるか）、寄り道先のまとまり（○○のあたり） |
+| C37    | 企画の並び | S15・S16 | **新規（番号は候補）**。項目（場所・Discovery）と順番・順位、根拠（推定の値、声の数）を横に添える。S16 では並べ替える |
+| C38    | 運営の操作 | S03・S13・S14・S15 | **新規（番号は候補）**。運営としてログインしたときだけ出す操作（成立の取り消し、付け替え、統合、場所の採用の直し、企画を閉じる、非公開）と、判断の記録の表示。権限はサーバー側で判定する（画面一覧「運営の権限」） |
+| C39    | 通報 | S03・S14・S15 | **新規（番号は候補）**。会話・Post・Discovery・企画を通報する |
+
+## MVP の対象外
+
+ID と定義ファイルは残し、二次開発で使うかを決める。
+
+| 機能ID | 機能名 | 理由 |
+|--------|--------|------|
+| C23    | [資料出典登録ダイアログ](ui/components/C23-media-source-dialog.md) | 資料は二次開発（[MVP スコープ](ex-day_mvp_scope.md) 14節）。資料を独立した Entity にしたこと（論理設計 4.8節）に合わせて、二次開発で中身を見直す |
 
 ## 廃止済み
 
@@ -37,6 +53,11 @@ IDは欠番とし、再利用しない。定義ファイルは経緯の参照の
 | 機能ID | 機能名 | 廃止の理由 | 代わり | 関係するDEC／Issue |
 |--------|--------|------------|--------|--------------------|
 | C13    | [Discovery Recommendation（廃止）](ui/components/C13-discovery-recommendation.md) | 表示責務がHeroと重複した | C19（Discovery詳細 Hero）へ責務統合 | S03 Heroレビュー（2026-09-19） |
+| C14    | [知識・疑問内容（廃止）](ui/components/C14-contribution-content.md) | S05（知識・疑問詳細）の廃止。Post は会話のページで見せる | C26（会話の投稿と返信） | DEC-0020、Issue #135 |
+| C16    | [知識・疑問の現在状態（廃止）](ui/components/C16-contribution-status.md) | 成立前の Discovery を器とする前提の状態表示がなくなった | S09（自分の話）、C33（場所の候補と採用）、C34（問いと回答の採用） | DEC-0020、Issue #135 |
+| C17    | [この投稿から見つかった価値（廃止）](ui/components/C17-contribution-impact.md) | S05・旧 S09 の再構成（Issue #68）は、会話が器になって前提が変わった | S09（自分の話）の「自分の会話から分かってきたこと」、C25（わかってきたこと） | DEC-0020、Issue #68・#135 |
+| C18    | [確認・補完導線（廃止）](ui/components/C18-contribution-confirmation.md) | 投稿した人への確認・補完は、場所の共有の誘いと会話の中の問いで扱う | C31（場所の共有の誘い）、C34（問いと回答の採用） | DEC-0023、Issue #135 |
+| C20    | [Discovery Impact（廃止）](ui/components/C20-discovery-impact.md) | S05・旧 S09 の再構成の前提が変わった。由来は Discovery のページで見せる | S03 の由来の会話、S09（自分の話） | DEC-0020、Issue #68・#135 |
 | C21    | [Contribution CTA（廃止）](ui/components/C21-contribution-cta.md)                 | 新規投稿の入口はヘッダーの「話す」に置き換わった | C01（共通ヘッダー）の「話す」。S02の0件時の誘導は、S02の画面定義の中に「話す」のモーダルを開くボタンとして直接書く | Issue #67 |
-| C22    | [場所入力（廃止）](ui/components/C22-location-input.md)                           | 投稿時に場所を入力させない | ―（場所はDiscoveryに帰属し、会話から形成する） | DEC-0005、Issue #67 |
-| C24    | [時期・期間入力（廃止）](ui/components/C24-time-period-input.md)                  | 投稿時に時期を入力させない | ―（時期はDiscoveryに帰属し、会話から形成する） | DEC-0005、Issue #67 |
+| C22    | [場所入力（廃止）](ui/components/C22-location-input.md)                           | 投稿時に場所を入力させない | C31（場所の共有の誘い）・C32（場所を選ぶ部品）。投稿の入力欄には場所を置かない（DEC-0023） | DEC-0005、DEC-0023、Issue #67 |
+| C24    | [時期・期間入力（廃止）](ui/components/C24-time-period-input.md)                  | 投稿時に時期を入力させない | ―（時期は会話から取り出し、Discovery の Value の条件にする） | DEC-0005、Issue #67 |
