@@ -10,7 +10,7 @@ IDの採番・廃止・参照のルールは[各種設計資料の作成方針](
 |--------|--------|----------|----------------------|
 | C01    | [共通ヘッダー](ui/components/C01-header.md) | 全画面 | 「話す」（新しい話を始める）に加えて、「寄り道」と検索を持つ。運営としてログインしたときの運営の入口 |
 | C02    | [共通フッター](ui/components/C02-footer.md) | 全画面 | そのまま |
-| C03    | [Discovery Card](ui/components/C03-discovery-card.md) | S01・S02・S09・S12・S13・S14・S15 | 場所を見出しにして出せる（「小机城址：春は地元の人しか来ない桜の穴場」。DEC-0022） |
+| C03    | [Discovery Card](ui/components/C03-discovery-card.md) | S01・S02・S03・S09・S12・S13・S14・S15 | 場所を見出しにして出せる（「小机城址：春は地元の人しか来ない桜の穴場」。DEC-0022） |
 | C04    | [結果の一覧](ui/components/C04-discovery-list.md) | S02・S12 | 旧名「Discovery List」。場所（C28）・Discovery（C03）・企画（C29）・探しています（C30）のカードを並べる |
 | C05    | [TOP の枠](ui/components/C05-discovery-section.md) | S01 | 旧名「Discovery Section」。企画・いま・この時期・近くの発見・番付・見本・声を待っている・探しています のどれか1つの枠 |
 | C06    | [検索・絞り込み](ui/components/C06-search.md) | C01・S02 | 旧名「Discovery検索・絞り込み」。対象を場所・企画に広げる。絞り込み：種類、地域、時期、探しています |
