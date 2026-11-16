@@ -22,7 +22,7 @@ IDの採番・廃止・参照のルールは[各種設計資料の作成方針](
 | C12    | [Discovery Value](ui/components/C12-discovery-value.md) | S03 | 何を体験できるか（価値と条件） |
 | C15    | [Discovery関連情報](ui/components/C15-related-discovery.md) | S03 | 関わる Discovery。統合された Discovery から統合先への案内にも使う |
 | C19    | [Discovery詳細 Hero](ui/components/C19-discovery-detail-hero.md) | S03 | 今伝えたい価値を直感的に出す |
-| C25    | [わかってきたこと](ui/components/C25-discovery-emerging-terms.md) | S14・S03 | 会話から読み取った説・価値（見立て。DEC-0015）。会話のページ（S14）を主にし、Discovery のページでは由来の会話の分を出す |
+| C25    | [わかってきたこと](ui/components/C25-discovery-emerging-terms.md) | S14・S03 | 会話から読み取った説・価値（見立て。DEC-0015）。会話のページ（S14）を主にし、Discovery のページでは、その Discovery に関わる説・価値（異論・反証を含む）を、もとになった会話と、成立のあとにその発見から始まった会話の両方から出す |
 | C26    | [会話の投稿と返信](ui/components/C26-post-thread.md) | S14・S15 | 旧名「みんなの声（Post Thread）」。1つの会話の Post を時系列で出し、その場で返信できる。返信の確定時に F10（禁止語のチェック、暫定公開）を通す。タグと派生の誘導は MVP では外す。会話の一覧・要約は C40 |
 | C27    | [新しい話を始める（Post New）](ui/components/C27-post-new.md) | C01・S03・S13・S15 | 本文だけを入力する（DEC-0023）。入口（場所・Discovery・企画）を引き継ぐ。投稿の直後、**誘いの対象のときだけ** C31（場所の共有の誘い）を出す（条件は C31）。投稿の確定時に F10（禁止語のチェック、暫定公開）を通す。タグの補完は MVP では外す |
 | C28    | 場所カード | S01・S02・S03・S12・S15 | **新規（番号は候補）**。場所の名前、種類、その場所の発見・会話の数、寄り道では「そこで何分過ごせるか」 |
