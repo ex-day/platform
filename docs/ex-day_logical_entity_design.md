@@ -167,7 +167,7 @@ classDiagram
     Conversation "0..*" --> "0..1" Project : 入口
     Conversation "0..*" --> "0..1" Media : 入口
 
-    Project "1" -- "1" Conversation : 企画そのものの会話
+    Project "1" -- "0..1" Conversation : 企画そのものの会話
     Project "1" *-- "0..*" ProjectItem : 並び
     ProjectItem "0..*" --> "0..1" Place : 指す
     ProjectItem "0..*" --> "0..1" Discovery : 指す
@@ -583,7 +583,7 @@ classDiagram
 | まとめ | 順位なし（条件で集める） | ゆっくり花見ができる場所 |
 | 記憶 | 一覧より声が中心 | 地元のおやつの記憶 |
 
-**主な関係**：ProjectItem 0..*、企画そのものの会話 1、企画をきっかけにした会話（入口＝この企画）0..*、並びの履歴 0..*、Proposal の対象として 0..*、DiscoveryOrigin（由来＝企画）から 0..*、ContentReport の対象（**案**。DEC-0021 決定5）。
+**主な関係**：ProjectItem 0..*、企画そのものの会話 0..1（最初の発言のときに、最初の Post と同じトランザクションで作る。2026-11-16 の人の判断）、企画をきっかけにした会話（入口＝この企画）0..*、並びの履歴 0..*、Proposal の対象として 0..*、DiscoveryOrigin（由来＝企画）から 0..*、ContentReport の対象（**案**。DEC-0021 決定5）。
 
 **論理制約**：
 
@@ -1258,7 +1258,7 @@ v0.1 の Topic（話題）は外した（DEC-0015）。DiscoveryHypothesis（発
 - User は UserInterest・Post・企画・資料・Reaction を0件以上持つ。興味が指定されなくても探索できる
 - 場所は Discovery・会話がなくても存在する。場所どうしの関係は種類ごとに持ち、1本の木にしない
 - 会話は Post を1件以上持ち、Post は会話に1つだけ属する。会話は採用した場所の紐付き（ConversationPlace。PlaceAdoption から導く）を0件以上持つ。0件（場所未定）も正常である。会話を始めた Post は、場所の共有の誘い（LocationSharingPrompt）を0..1持つ。会話は入口（場所・Discovery・企画・資料のどれか）を0..1持つ
-- 企画は、企画そのものの会話をちょうど1つ持つ。企画をきっかけにした会話（入口＝企画）は0件以上
+- 企画は、企画そのものの会話を0..1持つ（最初の発言のときに作る）。企画をきっかけにした会話（入口＝企画）は0件以上
 - Post は場所・時期・分類・Value・Subject を直接持たない。Post から主張（Claim）を取り出し、主張がわかってきたこと（Finding）の根拠になる。Finding と問いは会話に属する
 - Discovery は場所を1つ以上（DiscoveryPlace。役割・順番・期間つき）、Value を1件以上、由来を1件以上持つ。成立前の状態を持たない
 - 各 Value は Condition を0件以上持てる。Condition がない軸には依存しない
@@ -1317,7 +1317,7 @@ v0.1 の Topic（話題）は外した（DEC-0015）。DiscoveryHypothesis（発
 
 ### 10.5 鶴見の急坂と、雪の日のタクシー（企画と記憶）
 
-1. 運営またはユーザーが Project「鶴見の急坂番付（推定）」（型＝番付）を作る。ProjectItem は坂の Place を指し、Place の推定の値（勾配）の順を最初の並びにする。企画そのものの会話が1つできる
+1. 運営またはユーザーが Project「鶴見の急坂番付（推定）」（型＝番付）を作る。ProjectItem は坂の Place を指し、Place の推定の値（勾配）の順を最初の並びにする。企画そのものの会話は、最初の発言のときにできる
 2. 企画そのものの会話で「この坂も入れて」と Proposal（対象＝企画、種類＝項目の追加）が出て、作った人が取り込む（Decision、並びの履歴）
 3. 入口＝この企画の Conversation が [坂B] について始まる：「雪の日、タクシーが坂を上れず坂の下で下ろされた」。ConversationPlace は [坂B]
 4. Discovery「雪の日はタクシーでも上れない坂」が成立する（DiscoveryPlace＝[坂B]、DiscoveryOrigin＝この会話）。ProjectItem から指してもよい
