@@ -34,6 +34,8 @@ public class DiscoveryDetailQueries {
         """;
 
     // 統合先をたどる（循環は統合の処理で作らないが、念のため通った Discovery を2度通らない）。最後の統合先を返す。
+    // 最後の Discovery からさらに統合の関係が出ている（循環している、または深さの上限で止まった）ときは、
+    // 最後の統合先を決められないので has_next を true にし、統合先を返さない（F12 で循環を作らないようにする）。
     private static final String FIND_FINAL_MERGE_TARGET = """
         WITH RECURSIVE chain (id, depth, path) AS (
             SELECT CAST(:discoveryId AS bigint), 0, ARRAY[CAST(:discoveryId AS bigint)]
@@ -45,7 +47,9 @@ public class DiscoveryDetailQueries {
              WHERE NOT r.to_discovery_id = ANY (c.path)
                AND c.depth < :maxDepth
         )
-        SELECT c.depth, v.public_id, v.title
+        SELECT c.depth, v.public_id, v.title,
+               EXISTS (SELECT 1 FROM discovery_relation n
+                        WHERE n.from_discovery_id = c.id AND n.kind = :merged AND n.status = :active) AS has_next
           FROM chain c
           LEFT JOIN visible_discovery v ON v.id = c.id
          ORDER BY c.depth DESC
@@ -122,7 +126,7 @@ public class DiscoveryDetailQueries {
         """;
 
     private static final String FIND_STARTED_CONVERSATION_IDS = """
-        SELECT c.id, count(*) OVER () AS total
+        SELECT c.id
           FROM visible_conversation c
          WHERE c.entry_discovery_id = :discoveryId
          ORDER BY c.created_at DESC, c.public_id
@@ -174,7 +178,7 @@ public class DiscoveryDetailQueries {
              GROUP BY pi.project_id
         )
         SELECT pr.public_id, pr.title, pr.type, pr.creator_kind, up.nickname AS creator_name,
-               m.discovery_position, m.place_position, count(*) OVER () AS total
+               m.discovery_position, m.place_position
           FROM matched m
           JOIN visible_project pr ON pr.id = m.project_id
           JOIN user_profile up ON up.user_id = pr.creator_user_id
@@ -210,8 +214,11 @@ public class DiscoveryDetailQueries {
     /** 公開のビューで見えた Discovery。 */
     record DiscoveryRow(long id, String publicId, String title, String summary) {}
 
-    /** 統合をたどった結果。depth が 0 なら統合されていない。統合先が見えないときは targetPublicId が null。 */
-    record MergeRow(int depth, String targetPublicId, String targetTitle) {}
+    /**
+     * 統合をたどった結果。depth が 0 なら統合されていない。統合先が見えないとき、
+     * または最後の統合先を決められないとき（hasNext）は、統合先を返さない。
+     */
+    record MergeRow(int depth, String targetPublicId, String targetTitle, boolean hasNext) {}
 
     record PlaceRow(long discoveryId, String publicId, String name, String spatialType, String role, Integer seq,
             LocalDate validFrom, LocalDate validTo, String description, String geoJson, List<String> kinds) {}
@@ -266,7 +273,7 @@ public class DiscoveryDetailQueries {
             .param("active", ACTIVE)
             .param("maxDepth", MAX_MERGE_DEPTH)
             .query((rs, rowNum) -> new MergeRow(
-                rs.getInt("depth"), rs.getString("public_id"), rs.getString("title")))
+                rs.getInt("depth"), rs.getString("public_id"), rs.getString("title"), rs.getBoolean("has_next")))
             .single();
     }
 

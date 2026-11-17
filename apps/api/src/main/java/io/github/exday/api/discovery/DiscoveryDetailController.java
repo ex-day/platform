@@ -9,19 +9,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class DiscoveryDetailController implements S03Api {
 
-    private final DiscoveryDetailQueries queries;
-    private final DiscoveryDetailAssembler assembler;
+    private final DiscoveryDetailService service;
 
-    public DiscoveryDetailController(DiscoveryDetailQueries queries, DiscoveryDetailAssembler assembler) {
-        this.queries = queries;
-        this.assembler = assembler;
+    public DiscoveryDetailController(DiscoveryDetailService service) {
+        this.service = service;
     }
 
     /** 一般のユーザーに見えない（ない・非公開・成立を取り消した）Discovery は 404。 */
     @Override
     public ResponseEntity<DiscoveryDetail> getDiscovery(String discoveryId) {
-        var discovery = queries.findDiscovery(discoveryId)
-            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId));
-        return ResponseEntity.ok(assembler.assemble(discovery));
+        return ResponseEntity.ok(service.find(discoveryId)
+            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId)));
     }
 }

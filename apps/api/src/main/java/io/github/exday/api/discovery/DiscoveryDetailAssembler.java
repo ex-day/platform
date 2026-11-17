@@ -126,7 +126,7 @@ public class DiscoveryDetailAssembler {
             return new NotMerged().status(NotMerged.StatusEnum.NONE);
         }
         var merged = new Merged().status(Merged.StatusEnum.MERGED);
-        if (row.targetPublicId() != null) {
+        if (row.targetPublicId() != null && !row.hasNext()) {
             merged.setTarget(new DiscoveryRef().id(row.targetPublicId()).title(row.targetTitle()));
         }
         return merged;

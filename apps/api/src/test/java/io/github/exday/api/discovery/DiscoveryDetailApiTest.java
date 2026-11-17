@@ -15,6 +15,12 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "exday.dev.clock.now=2026-04-02T15:00:00+09:00")
 class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
 
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    DiscoveryDetailQueries queries;
+
     @Test
     @SuppressWarnings("unchecked")
     void 会話から成立した散歩のDiscoveryを区画ごとに返す() {
@@ -209,6 +215,50 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
         jdbc.sql("UPDATE discovery SET visibility = 'HIDDEN' WHERE public_id = :id")
             .param("id", sid("disc:kozukue")).update();
         assertThat(body(sid("disc:roses"))).containsEntry("merge", Map.of("status", "merged"));
+    }
+
+    @Test
+    void 統合が循環しているときは統合されたことだけを返す() {
+        // 循環は統合の処理（F12）で作らないが、作られていても最後の統合先を決めずに返す
+        merge("disc:roses", "disc:kozukue");
+        merge("disc:kozukue", "disc:roses");
+        assertThat(body(sid("disc:roses"))).containsEntry("merge", Map.of("status", "merged"));
+    }
+
+    @Test
+    void 読み取りのトランザクションの中では途中で非公開になった会話も同じ時点のまま読む() throws Exception {
+        // S03 の応答を作るのと同じ REPEATABLE READ の読み取り専用トランザクションで、もとになった会話を2回読む。
+        // 1回目と2回目の間に、別の接続で会話を非公開にしても、2回目は1回目と同じ時点（スナップショット）で読む
+        var template = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        template.setReadOnly(true);
+        template.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        long walk = jdbc.sql("SELECT id FROM discovery WHERE public_id = :id").param("id", sid("disc:walk"))
+            .query(Long.class).single();
+        var counts = template.execute(status -> {
+            int before = queries.findOriginConversationIds(walk).size();
+            try (var other = java.sql.DriverManager.getConnection(
+                    POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                 var update = other.prepareStatement("UPDATE conversation SET visibility = 'HIDDEN' WHERE public_id = ?")) {
+                update.setString(1, sid("conv:walk"));
+                update.executeUpdate();
+            } catch (java.sql.SQLException e) {
+                throw new IllegalStateException(e);
+            }
+            int after = queries.findOriginConversationIds(walk).size();
+            return List.of(before, after);
+        });
+        assertThat(counts).containsExactly(1, 1);
+        // 次のリクエスト（新しいトランザクション）からは出ない
+        assertThat(body(sid("disc:walk"))).containsEntry("originConversations", List.of());
+    }
+
+    @Test
+    void S03の応答はREPEATABLE_READの読み取り専用トランザクションで作る() throws Exception {
+        var transactional = DiscoveryDetailService.class.getMethod("find", String.class)
+            .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+        assertThat(transactional.readOnly()).isTrue();
+        assertThat(transactional.isolation())
+            .isEqualTo(org.springframework.transaction.annotation.Isolation.REPEATABLE_READ);
     }
 
     @Test
