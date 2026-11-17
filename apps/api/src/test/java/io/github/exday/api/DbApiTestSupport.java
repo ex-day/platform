@@ -19,8 +19,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.images.builder.ImageFromDockerfile;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -31,15 +29,22 @@ import org.testcontainers.utility.DockerImageName;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-@Testcontainers
 public abstract class DbApiTestSupport {
     private static final Path DB_DIR = Path.of("../../db").toAbsolutePath().normalize();
 
-    @Container
+    /**
+     * テストのクラスをまたいで1つの DB を使う（Spring のテストのコンテキストはクラスをまたいで再利用されるため、
+     * クラスごとに DB を作り直すと、再利用されたコンテキストが止まった DB を指してしまう）。
+     * 止めるのは Testcontainers（Ryuk）に任せる。
+     */
     protected static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(
         DockerImageName.parse(new ImageFromDockerfile("exday-api-db-test", false)
             .withDockerfile(DB_DIR.resolve("Dockerfile")).get())
             .asCompatibleSubstituteFor("postgres"));
+
+    static {
+        POSTGRES.start();
+    }
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
