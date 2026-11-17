@@ -138,6 +138,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{conversationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S14（会話のページ）の内容を取得する
+         * @description 1つの会話の内容を、S14 の区画ごとに返す（画面定義 docs/ui/screens/S14-conversation.md「取得用 API で返すもの」）。
+         *     Post は、最初の Post と新しい Post の一定数だけを返す。それより前の Post は `getConversationPosts` で段階的に読む。
+         *
+         *     - **見えるもの**：一般のユーザーには、公開の会話だけを返す（DB の visible_conversation）。非公開の会話は、直接の識別子でも 404。
+         *       運営の権限で見る形は、認証（#75）のあとに足す
+         *     - **公開状態は対象ごとに独立して扱う**（DB 設計 2.5節）：非公開の Post は、識別子・時点・返信先だけを返す（HiddenPost）。
+         *       その Post を根拠にしたわかってきたこと・問い・場所の候補は、それ自身の公開状態で返す（F02・F10 で扱いを決め、外部公開の前に確定する）
+         *     - **統合**：統合された問い・わかってきたこと・Discovery は出さない。問い・わかってきたことの統合先が別の会話なら、その会話への案内を返す
+         *       （`moved`）。Discovery は最後の統合先を出す（公開の判定・循環の扱いは S03・S13 と同じ。DiscoverySummaryPage）
+         *     - **区画の中身がないとき**：配列は空、件数は 0。出すかどうかは画面で決める（場所の候補が空で場所が決まっていれば C33 を出さない、等）
+         *     - **件数**：区画ごとに上限を決め、上限のある区画は全体の数（`totalCount`）も返す。場所の状態は上限なし（採用は少数）。
+         *       Post の数は `postLimit` で変えられる（暫定の値。実際の画面で調整する）
+         *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+         *     - **返さないもの**：解析の状態（運用の記録の表がまだない）、運営の操作・判断の記録（認証 #75 のあと）、自分の Reaction・自分の声
+         *       （認証のあと）、企画の変更の出来事（企画そのものの会話でも S14 には混ぜない。S15 で混ぜる）
+         */
+        get: operations["getConversation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S14 の「これまでのやりとりを見る」で、それより前の Post を取得する
+         * @description カーソル（`before`）より前の Post を、新しい側から `limit` 件だけ選び、古い順に並べて返す。最初の Post は含めない
+         *     （getConversation がいつも返すので重複させない）。
+         *
+         *     - **並び**：投稿の時点の古い順、同じ時点なら識別子の順（安定した並び）。カーソルはこの並びのキーで比べるので、
+         *       読んでいる間に新しい Post が足されても範囲がずれない
+         *     - **カーソル**：getConversation の `posts.olderCursor`、またはこの API の `olderCursor`。さらに前の Post（最初の Post を除く）が
+         *       残っているときだけ返す。カーソルの中身を解釈しない
+         *     - 非公開の Post も枠として返し、件数に数える（HiddenPost）
+         *     - 会話が非公開、またはカーソルがこの会話のものでなければ 404。カーソルの形が合わなければ 400
+         */
+        get: operations["getConversationPosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -613,7 +675,7 @@ export interface components {
             related: components["schemas"]["DiscoverySummary"][];
         };
         /**
-         * @description Discovery のカード（C03）に出す要約。S03 の関係する Discovery で使う。
+         * @description Discovery のカード（C03）に出す要約。S03 の関係する Discovery、S13 のここでの発見、S14 のこの会話から生まれた発見で使う。
          *     S01 の DiscoveryCard（v0.1 の形）は、S01 の段でこの形にそろえる
          */
         DiscoverySummary: {
@@ -822,6 +884,330 @@ export interface components {
             items: components["schemas"]["NearbyPlace"][];
             totalCount: number;
         };
+        /** @description S14（会話のページ）の内容。区画ごとの読み方は画面定義の「取得用 API で返すもの」 */
+        ConversationDetail: {
+            id: components["schemas"]["PublicId"];
+            /**
+             * Format: date-time
+             * @description 会話の開始の時点
+             */
+            startedAt: string;
+            /** @description 公開の Post の数（非公開の Post は数えない）。まだ読んでいない Post があるかは `posts.olderCursor` で分かる */
+            publicPostCount: number;
+            /** @description 入口。入口のない会話と、入口の Discovery・企画が見えない（非公開・成立の取り消し）ときは返さない */
+            entry?: components["schemas"]["ConversationEntry"];
+            /**
+             * @description 場所の状態。会話と場所の採用した紐付き（採用中・再検討中。会話の採用と、会話の問いの回答の採用）。
+             *     並びは順番、順番がなければ採用の時点の順（同じなら採用の識別子の順）。0件なら場所未定。上限なし
+             */
+            places: components["schemas"]["ConversationPlaceItem"][];
+            posts: components["schemas"]["PostThread"];
+            placeCandidates: components["schemas"]["PlaceCandidatePage"];
+            questions: components["schemas"]["QuestionPage"];
+            findings: components["schemas"]["FindingPage"];
+            /** @description この会話から生まれた発見（由来＝この会話）。成立の新しい順 */
+            discoveries: components["schemas"]["DiscoverySummaryPage"];
+            reach: components["schemas"]["ReachPage"];
+        };
+        /** @description 会話の入口。`kind` で判別する。押すと入口のページ */
+        ConversationEntry: components["schemas"]["PlaceEntry"] | components["schemas"]["DiscoveryEntry"] | components["schemas"]["ProjectEntry"];
+        /** @description 場所のページから始めた会話。入口の場所が統合済みでも、その場所を返す（S13 が統合先へ案内する） */
+        PlaceEntry: {
+            /** @enum {string} */
+            kind: "place";
+            place: components["schemas"]["PlaceRef"];
+        };
+        /** @description Discovery のページから始めた会話。入口の Discovery が統合されていれば、最後の統合先を返す（S03 と同じ決まり） */
+        DiscoveryEntry: {
+            /** @enum {string} */
+            kind: "discovery";
+            discovery: components["schemas"]["DiscoveryRef"];
+        };
+        ProjectEntry: {
+            /** @enum {string} */
+            kind: "project";
+            project: components["schemas"]["ProjectRef"];
+            /**
+             * @description own は企画そのものの会話、triggered は企画をきっかけにした会話
+             * @enum {string}
+             */
+            relation: "own" | "triggered";
+        };
+        /** @description 企画への参照。押すと企画のページ（S15） */
+        ProjectRef: {
+            id: components["schemas"]["PublicId"];
+            title: string;
+        };
+        /**
+         * @description 会話の場所の役割のコード値（DB の place_adoption.role）。足せる形にするため閉じた列挙にしない。
+         *     画面は知っている値に表示名を当て、知らない値は役割の名前を出さずに出す
+         *
+         *     | 値 | 意味 |
+         *     |---|---|
+         *     | START | 始まり |
+         *     | VIA | 経由 |
+         *     | END | 終わり |
+         *     | TOPIC | 話の場所 |
+         */
+        ConversationPlaceRole: string;
+        /**
+         * @description 採用の状態。adopted は「採用」、reconsidering は「新しい情報が寄せられ、再検討中」（「確定」「解決済み」と言わない）
+         * @enum {string}
+         */
+        AdoptionStatus: "adopted" | "reconsidering";
+        /**
+         * @description 採用した主体。questionOwner は問いを立てた人（「投稿者が採用した回答」）、conversationStarter は会話を始めた人、
+         *     ruleOrOperator は ex-day の規則・運営（「現在の回答」）
+         * @enum {string}
+         */
+        AdoptionActor: "questionOwner" | "conversationStarter" | "ruleOrOperator";
+        ConversationPlaceItem: {
+            place: components["schemas"]["PlaceRef"];
+            role?: components["schemas"]["ConversationPlaceRole"];
+            /** @description 順番（散歩の道順など）。順番のない採用では返さない */
+            order?: number;
+            status: components["schemas"]["AdoptionStatus"];
+            /**
+             * @description conversation は会話の場所の採用、question は会話の問いの回答として採用した場所
+             * @enum {string}
+             */
+            source: "conversation" | "question";
+        };
+        /** @description 「これまでのやりとりを見る」のカーソル。画面は中身を解釈せず、そのまま `before` に渡す */
+        PostCursor: string;
+        /**
+         * @description 会話の Post（C26）。`visibility` で判別する。非公開の Post は、識別子・時点・返信先だけを返し、本文と書いた人を返さない
+         *     （画面は「この声は表示されていません」と出し、流れの位置を保つ）
+         */
+        PostItem: components["schemas"]["VisiblePost"] | components["schemas"]["HiddenPost"];
+        VisiblePost: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            visibility: "visible";
+            body: string;
+            /** @description 書いた人の今のニックネーム（表示のたびに引く。Issue */
+            authorName: string;
+            /** Format: date-time */
+            postedAt: string;
+            /** @description 返信先の Post（同じ会話の中）。返信先が非公開の Post でも識別子を返す */
+            replyTo: components["schemas"]["PublicId"][];
+            reactions: {
+                /** @description 共感 */
+                empathy: number;
+            };
+        };
+        HiddenPost: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            visibility: "hidden";
+            /** Format: date-time */
+            postedAt: string;
+            replyTo: components["schemas"]["PublicId"][];
+        };
+        /**
+         * @description 会話の Post。最初の Post（`first`）と、それに続く新しい Post（`recent`。最大 `postLimit` 件、古い順）。
+         *     `first` と `recent` の間に Post が残っていれば `olderCursor` を返す（getConversationPosts に渡す）。
+         *     並びは投稿の時点の古い順、同じ時点なら識別子の順。非公開の Post の枠も件数に数える
+         */
+        PostThread: {
+            first: components["schemas"]["PostItem"];
+            recent: components["schemas"]["PostItem"][];
+            olderCursor?: components["schemas"]["PostCursor"];
+        };
+        /** @description カーソルより前の Post（古い順。最初の Post は含めない）。さらに前が残っていれば `olderCursor` を返す */
+        OlderPostPage: {
+            items: components["schemas"]["PostItem"][];
+            olderCursor?: components["schemas"]["PostCursor"];
+        };
+        /**
+         * @description 場所の候補と採用（C33）。対象がこの会話、またはこの会話の問いの候補。検討中・不採用・失効の全部（画面が不採用・取り消しを折りたたむ）。
+         *     並びは候補の作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+         */
+        PlaceCandidatePage: {
+            items: components["schemas"]["PlaceCandidateItem"][];
+            totalCount: number;
+        };
+        PlaceCandidateItem: {
+            id: components["schemas"]["PublicId"];
+            target: components["schemas"]["CandidateTarget"];
+            place: components["schemas"]["CandidatePlace"];
+            /**
+             * @description 候補の状態（検討中・不採用・失効）。採用は候補の状態ではなく `adoption` で見る
+             *     （採用された候補も、不採用・失効にならない限り considering のまま）
+             * @enum {string}
+             */
+            status: "considering" | "rejected" | "expired";
+            adoption?: components["schemas"]["CandidateAdoption"];
+            /** @description 根拠の Post（作成の時点の古い順）。非公開の Post でも識別子を返す（PostItem の HiddenPost を指す） */
+            basisPostIds: components["schemas"]["PublicId"][];
+            voices: {
+                /** @description ここかも */
+                support: number;
+                /** @description 違うと思う */
+                oppose: number;
+            };
+        };
+        /** @description 候補の対象。`kind` で判別する */
+        CandidateTarget: components["schemas"]["ConversationCandidateTarget"] | components["schemas"]["QuestionCandidateTarget"];
+        /** @description この会話の話の場所の候補 */
+        ConversationCandidateTarget: {
+            /** @enum {string} */
+            kind: "conversation";
+        };
+        /** @description この会話の問い（場所を探す問い）の回答の候補 */
+        QuestionCandidateTarget: {
+            /** @enum {string} */
+            kind: "question";
+            questionId: components["schemas"]["PublicId"];
+        };
+        /** @description 候補の場所。`kind` で判別する（既存の場所か、新しい場所の案か） */
+        CandidatePlace: components["schemas"]["CandidateExistingPlace"] | components["schemas"]["CandidateProposedPlace"];
+        CandidateExistingPlace: {
+            /** @enum {string} */
+            kind: "place";
+            place: components["schemas"]["PlaceRef"];
+        };
+        /**
+         * @description 新しい場所の案（採用されるまで場所ではないので、場所のページを持たない）。形は、会話の中の地図に出すため返す
+         *     （案の名前・位置を場所の検索・場所の地図に混ぜないのは DB 設計 3.8節のとおり）
+         */
+        CandidateProposedPlace: {
+            /** @enum {string} */
+            kind: "proposal";
+            name: string;
+            spatialType?: components["schemas"]["SpatialType"];
+            /** @description 案の位置・形。名前だけの案では返さない */
+            geometry?: components["schemas"]["Geometry"];
+            /** @description 案の種類（店・駅 等） */
+            kinds: string[];
+            existedPeriod?: components["schemas"]["Period"];
+        };
+        /**
+         * @description 候補の今の採用の状態。`status` で判別する。今の採用（採用中・再検討中）があればその状態、なければ最後の採用の取り消し。
+         *     採用されたことのない候補では返さない。採用・取り消しの履歴の全部（判断の記録）は、一般のユーザー向けには返さない
+         */
+        CandidateAdoption: components["schemas"]["ActiveCandidateAdoption"] | components["schemas"]["ReconsideringCandidateAdoption"] | components["schemas"]["RevokedCandidateAdoption"];
+        ActiveCandidateAdoption: {
+            /** @enum {string} */
+            status: "adopted";
+            adoptedBy: components["schemas"]["AdoptionActor"];
+        };
+        ReconsideringCandidateAdoption: {
+            /** @enum {string} */
+            status: "reconsidering";
+            adoptedBy: components["schemas"]["AdoptionActor"];
+        };
+        RevokedCandidateAdoption: {
+            /** @enum {string} */
+            status: "revoked";
+            /**
+             * @description readopted は別の場所を採用し直した、withdrawn は採用を取り消した、merged は問いの統合で統合先へ移した
+             * @enum {string}
+             */
+            reason: "readopted" | "withdrawn" | "merged";
+        };
+        /**
+         * @description この会話の問い（C34）。有効な問いと失効した問い。統合された問いは出さず、統合先が別の会話なら `moved` で案内する
+         *     （統合先が同じ会話なら何も出さない）。並びは作成の時点の古い順、同じ時点なら識別子の順。最大20件（固定）。totalCount は全体の数
+         */
+        QuestionPage: {
+            items: components["schemas"]["QuestionItem"][];
+            totalCount: number;
+            moved: components["schemas"]["MovedItem"][];
+        };
+        QuestionItem: {
+            id: components["schemas"]["PublicId"];
+            content: string;
+            /**
+             * @description 問いの種類（どこ・なぜ・何・ほか）
+             * @enum {string}
+             */
+            kind: "where" | "why" | "what" | "other";
+            /**
+             * @description 有効か、失効したか
+             * @enum {string}
+             */
+            status: "active" | "expired";
+            /** @description 問いを立てた人がいるか（false なら、会話から読み取った問い。回答を採用するのは ex-day の規則・運営） */
+            askedByPerson: boolean;
+            /** @description 問いを立てた人が「引き続き募集する」にしているか。設定がなければ返さない */
+            keepOpen?: boolean;
+            answer?: components["schemas"]["QuestionAnswer"];
+            reactions: {
+                /** @description 自分も気になる */
+                curious: number;
+            };
+        };
+        /**
+         * @description 採用中・再検討中の回答。`kind` で判別する。回答がなければ返さない。
+         *     場所を探す問いは採用した場所、ほかの問いは回答の Post かわかってきたこと
+         */
+        QuestionAnswer: components["schemas"]["PlaceQuestionAnswer"] | components["schemas"]["PostQuestionAnswer"] | components["schemas"]["FindingQuestionAnswer"];
+        PlaceQuestionAnswer: {
+            /** @enum {string} */
+            kind: "place";
+            status: components["schemas"]["AdoptionStatus"];
+            adoptedBy: components["schemas"]["AdoptionActor"];
+            place: components["schemas"]["PlaceRef"];
+        };
+        PostQuestionAnswer: {
+            /** @enum {string} */
+            kind: "post";
+            status: components["schemas"]["AdoptionStatus"];
+            adoptedBy: components["schemas"]["AdoptionActor"];
+            /** @description 回答の Post。非公開の Post でも識別子を返す */
+            postId: components["schemas"]["PublicId"];
+        };
+        FindingQuestionAnswer: {
+            /** @enum {string} */
+            kind: "finding";
+            status: components["schemas"]["AdoptionStatus"];
+            adoptedBy: components["schemas"]["AdoptionActor"];
+            findingId: components["schemas"]["PublicId"];
+        };
+        /** @description 統合されて別の会話へ移ったもの（問い・わかってきたこと）。押すと統合先の会話のページ */
+        MovedItem: {
+            /** @description 統合された側の識別子 */
+            id: components["schemas"]["PublicId"];
+            /** @description 最後の統合先が属する会話（公開の会話だけ。見えないときは moved に入れない） */
+            conversationId: components["schemas"]["PublicId"];
+        };
+        /**
+         * @description この会話のわかってきたこと（C25）。有効なものの今の版。統合された側は出さず、統合先が別の会話なら `moved` で案内する。
+         *     並びは作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+         */
+        FindingPage: {
+            items: components["schemas"]["FindingItem"][];
+            totalCount: number;
+            moved: components["schemas"]["MovedItem"][];
+        };
+        /**
+         * @description Discovery のカード（C03）の一覧。公開で成立を取り消していない Discovery だけ。統合された側は出さず、最後の統合先を出す
+         *     （同じものは1件。件数は統合先を解決してから数える）。最大10件（固定）。totalCount は全体の数。並びは使う項目の説明に書く
+         */
+        DiscoverySummaryPage: {
+            items: components["schemas"]["DiscoverySummary"][];
+            totalCount: number;
+        };
+        /**
+         * @description この会話が届くところ。S13 の「このあたりで探している人がいます」と同じ当てはめで、この会話・この会話の問いのカードが出ている
+         *     場所のページ。対象が会話の候補は会話の場所が決まっていないときだけ、対象が問いの候補は問いが有効で回答が採用されていないとき
+         *     （会話の場所が採用済みでも出る）。既存の場所の候補はその場所、新しい場所の案は案の位置を含むエリアの場所（重なるものは全部）。
+         *     並びは既存の場所の候補を先に、次にエリアの小さい順（同じなら識別子の順）。同じ場所は1件。最大20件（固定）。totalCount は全体の数。
+         *     TOP の「探しています」・投稿した人の「自分の話」は画面が出す
+         */
+        ReachPage: {
+            items: components["schemas"]["ReachPlace"][];
+            totalCount: number;
+        };
+        ReachPlace: {
+            place: components["schemas"]["PlaceRef"];
+            /**
+             * @description candidate はこの場所が候補の場所、area は新しい場所の案の位置がこのエリアに入る
+             * @enum {string}
+             */
+            matchedBy: "candidate" | "area";
+        };
         /** @description RFC 9457 Problem Details */
         Problem: {
             /** Format: uri-reference */
@@ -858,6 +1244,8 @@ export interface components {
         SectionKey: components["schemas"]["SectionKey"];
         /** @description 場所の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         PlaceId: components["schemas"]["PublicId"];
+        /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+        ConversationId: components["schemas"]["PublicId"];
         /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         DiscoveryId: components["schemas"]["PublicId"];
     };
@@ -967,6 +1355,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaceDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getConversation: {
+        parameters: {
+            query?: {
+                /** @description 最初の Post に続けて返す、新しい Post の数（暫定の既定値20） */
+                postLimit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 会話の内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getConversationPosts: {
+        parameters: {
+            query: {
+                /** @description カーソル。これより前の Post を返す */
+                before: components["schemas"]["PostCursor"];
+                /** @description 返す Post の数（暫定の既定値20） */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description それより前の Post */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OlderPostPage"];
                 };
             };
             400: components["responses"]["BadRequest"];

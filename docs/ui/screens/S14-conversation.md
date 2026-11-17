@@ -100,12 +100,12 @@
 | 会話の見出し | `visible_conversation` | 識別子、始めた時点、公開の Post の数 | ― |
 | 入口 | `conversation` の入口の列 → `place`／`visible_discovery`／`visible_project` | 種類（場所・Discovery・企画）と参照、企画そのものの会話か。入口の Discovery・企画が非公開・成立の取り消しなら入口を返さない（会話は残す。DB 設計 2.5節）。入口の Discovery が統合されていれば、最後の統合先を返す（S03 と同じ決まり）。入口の場所は、統合済みでもその場所を返す（S13 が統合先へ案内する） | ― |
 | 場所の状態 | `conversation_place`（会話の採用と、会話の問いの採用） | 採用した場所、役割・順番、状態（採用中・再検討中）、会話の場所か問いの回答か。並びは順番、なければ採用の時点 | 上限なし（採用は少数） |
-| 会話の投稿と返信（C26） | `post`（会話は公開と確かめ済み）、`post_reference`、`user_profile`、`reaction`（EMPATHY） | 下の「Post の読み方」 | 最初の Post ＋ 新しい20件 |
-| 場所の候補と採用（C33） | `visible_place_candidate`（対象がこの会話・この会話の問い）、`place_candidate_basis`、`place_candidate_voice`、`place_adoption` | 候補ごとに：対象（会話か問いか）、既存の場所の参照か新しい場所の案（名前・形・種類）、状態（検討中・不採用・失効）、**今の採用の状態**（下）、根拠の Post の識別子、「ここかも」「違うと思う」の数。並びは候補の作成の時点の古い順。不採用・取り消しも返す（画面が折りたたむ） | OpenAPI で決める |
-| 問いと回答の採用（C34） | `visible_open_question`（この会話）、`open_question_setting`、`place_adoption`（対象が問い）、`question_answer`、`reaction`（CURIOUS） | 問いごとに：内容、種類、問いを立てた人がいるか、引き続き募集するか、回答の状態（なし／採用中／再検討中）と主体（問いを立てた人／ex-day の規則・運営）、回答（場所を探す問いは採用した場所、ほかは回答の Post またはわかってきたこと）、「自分も気になる」の数。並びは作成の時点の古い順。統合された問いは出さず、統合先が別の会話なら、その会話への案内を返す | OpenAPI で決める |
-| わかってきたこと（C25） | `visible_finding`（この会話、有効なもの）、`finding_version`（今の版）、`reaction` | S03 と同じ形。並びは作成の時点の古い順。統合された側は出さず、統合先が別の会話なら案内を返す | OpenAPI で決める |
+| 会話の投稿と返信（C26） | `post`（会話は公開と確かめ済み）、`post_reference`、`user_profile`、`reaction`（EMPATHY） | 下の「Post の読み方」 | 最初の Post ＋ 新しい20件（`postLimit` で1〜50） |
+| 場所の候補と採用（C33） | `visible_place_candidate`（対象がこの会話・この会話の問い）、`place_candidate_basis`、`place_candidate_voice`、`place_adoption` | 候補ごとに：対象（会話か問いか）、既存の場所の参照か新しい場所の案（名前・形・種類）、状態（検討中・不採用・失効）、**今の採用の状態**（下）、根拠の Post の識別子、「ここかも」「違うと思う」の数。並びは候補の作成の時点の古い順。不採用・取り消しも返す（画面が折りたたむ） | 最大50件と全体の数 |
+| 問いと回答の採用（C34） | `visible_open_question`（この会話）、`open_question_setting`、`place_adoption`（対象が問い）、`question_answer`、`reaction`（CURIOUS） | 問いごとに：内容、種類、問いを立てた人がいるか、引き続き募集するか、回答の状態（なし／採用中／再検討中）と主体（問いを立てた人／ex-day の規則・運営）、回答（場所を探す問いは採用した場所、ほかは回答の Post またはわかってきたこと）、「自分も気になる」の数。並びは作成の時点の古い順。統合された問いは出さず、統合先が別の会話なら、その会話への案内を返す | 最大20件と全体の数 |
+| わかってきたこと（C25） | `visible_finding`（この会話、有効なもの）、`finding_version`（今の版）、`reaction` | S03 と同じ形。並びは作成の時点の古い順。統合された側は出さず、統合先が別の会話なら案内を返す | 最大50件と全体の数 |
 | この会話から生まれた発見（C03） | `discovery_origin`（由来＝この会話）→ `visible_discovery` | Discovery Card。統合された側は出さず、最後の統合先を出す（公開の判定・循環の扱いは S03・S13 と同じ。同じものは1件にまとめる）。件数・上限は統合先を解決してから決める。並びは成立の新しい順 | 10件と全体の数 |
-| この会話が届くところ | `visible_place_candidate`、`place`（エリア） | 下の「届くところ」 | OpenAPI で決める |
+| この会話が届くところ | `visible_place_candidate`、`place`（エリア） | 下の「届くところ」 | 最大20件と全体の数 |
 
 **Post の読み方**
 

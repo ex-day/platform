@@ -7,9 +7,9 @@ info:
     画面が必要とする取得用の API の約束事。Issue #89 で S01・S03 の閲覧用として作り、
     Issue #135（根本整理）で、DB V2（docs/ex-day_db_design.md v0.2）に合わせて画面ごとに作り直している。
 
-    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）は v0.2 の形（DB V2・画面定義の書き直しに合わせた）。
+    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）は v0.2 の形（DB V2・画面定義の書き直しに合わせた）。
       S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す（それまで API の実装は動かない）。
-      S14・S15・S17 は、順に足す
+      S15・S17 は、順に足す
     - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
       制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
@@ -56,6 +56,8 @@ tags:
     description: Discovery のページ
   - name: S13
     description: 場所のページ
+  - name: S14
+    description: 会話のページ
 paths:
   /discovery-sections:
     get:
@@ -201,6 +203,84 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+  /conversations/{conversationId}:
+    get:
+      tags: [S14]
+      operationId: getConversation
+      summary: S14（会話のページ）の内容を取得する
+      description: |
+        1つの会話の内容を、S14 の区画ごとに返す（画面定義 docs/ui/screens/S14-conversation.md「取得用 API で返すもの」）。
+        Post は、最初の Post と新しい Post の一定数だけを返す。それより前の Post は `getConversationPosts` で段階的に読む。
+
+        - **見えるもの**：一般のユーザーには、公開の会話だけを返す（DB の visible_conversation）。非公開の会話は、直接の識別子でも 404。
+          運営の権限で見る形は、認証（#75）のあとに足す
+        - **公開状態は対象ごとに独立して扱う**（DB 設計 2.5節）：非公開の Post は、識別子・時点・返信先だけを返す（HiddenPost）。
+          その Post を根拠にしたわかってきたこと・問い・場所の候補は、それ自身の公開状態で返す（F02・F10 で扱いを決め、外部公開の前に確定する）
+        - **統合**：統合された問い・わかってきたこと・Discovery は出さない。問い・わかってきたことの統合先が別の会話なら、その会話への案内を返す
+          （`moved`）。Discovery は最後の統合先を出す（公開の判定・循環の扱いは S03・S13 と同じ。DiscoverySummaryPage）
+        - **区画の中身がないとき**：配列は空、件数は 0。出すかどうかは画面で決める（場所の候補が空で場所が決まっていれば C33 を出さない、等）
+        - **件数**：区画ごとに上限を決め、上限のある区画は全体の数（`totalCount`）も返す。場所の状態は上限なし（採用は少数）。
+          Post の数は `postLimit` で変えられる（暫定の値。実際の画面で調整する）
+        - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+        - **返さないもの**：解析の状態（運用の記録の表がまだない）、運営の操作・判断の記録（認証 #75 のあと）、自分の Reaction・自分の声
+          （認証のあと）、企画の変更の出来事（企画そのものの会話でも S14 には混ぜない。S15 で混ぜる）
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+        - name: postLimit
+          in: query
+          required: false
+          description: 最初の Post に続けて返す、新しい Post の数（暫定の既定値20）
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: 会話の内容
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationDetail' }
+              examples:
+                walk:
+                  $ref: '#/components/examples/ConversationWalk'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /conversations/{conversationId}/posts:
+    get:
+      tags: [S14]
+      operationId: getConversationPosts
+      summary: S14 の「これまでのやりとりを見る」で、それより前の Post を取得する
+      description: |
+        カーソル（`before`）より前の Post を、新しい側から `limit` 件だけ選び、古い順に並べて返す。最初の Post は含めない
+        （getConversation がいつも返すので重複させない）。
+
+        - **並び**：投稿の時点の古い順、同じ時点なら識別子の順（安定した並び）。カーソルはこの並びのキーで比べるので、
+          読んでいる間に新しい Post が足されても範囲がずれない
+        - **カーソル**：getConversation の `posts.olderCursor`、またはこの API の `olderCursor`。さらに前の Post（最初の Post を除く）が
+          残っているときだけ返す。カーソルの中身を解釈しない
+        - 非公開の Post も枠として返し、件数に数える（HiddenPost）
+        - 会話が非公開、またはカーソルがこの会話のものでなければ 404。カーソルの形が合わなければ 400
+      parameters:
+        - $ref: '#/components/parameters/ConversationId'
+        - name: before
+          in: query
+          required: true
+          description: カーソル。これより前の Post を返す
+          schema: { $ref: '#/components/schemas/PostCursor' }
+        - name: limit
+          in: query
+          required: false
+          description: 返す Post の数（暫定の既定値20）
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: それより前の Post
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OlderPostPage' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   parameters:
     SectionKey:
@@ -214,6 +294,12 @@ components:
       in: path
       required: true
       description: 場所の識別子（画面・URL に出すもの）。形が合わなければ 400
+      schema: { $ref: '#/components/schemas/PublicId' }
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      description: 会話の識別子（画面・URL に出すもの）。形が合わなければ 400
       schema: { $ref: '#/components/schemas/PublicId' }
     DiscoveryId:
       name: discoveryId
@@ -866,7 +952,7 @@ components:
     DiscoverySummary:
       type: object
       description: |
-        Discovery のカード（C03）に出す要約。S03 の関係する Discovery で使う。
+        Discovery のカード（C03）に出す要約。S03 の関係する Discovery、S13 のここでの発見、S14 のこの会話から生まれた発見で使う。
         S01 の DiscoveryCard（v0.1 の形）は、S01 の段でこの形にそろえる
       additionalProperties: false
       required: [id, title, summary, displayPlaces]
@@ -1175,6 +1261,467 @@ components:
           maxItems: 20
           items: { $ref: '#/components/schemas/NearbyPlace' }
         totalCount: { type: integer, minimum: 0 }
+    # ---- S14 会話のページ ----
+    ConversationDetail:
+      type: object
+      description: S14（会話のページ）の内容。区画ごとの読み方は画面定義の「取得用 API で返すもの」
+      additionalProperties: false
+      required: [id, startedAt, publicPostCount, places, posts, placeCandidates, questions, findings, discoveries, reach]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        startedAt:
+          type: string
+          format: date-time
+          description: 会話の開始の時点
+        publicPostCount:
+          type: integer
+          minimum: 0
+          description: 公開の Post の数（非公開の Post は数えない）。まだ読んでいない Post があるかは `posts.olderCursor` で分かる
+        entry:
+          $ref: '#/components/schemas/ConversationEntry'
+          description: 入口。入口のない会話と、入口の Discovery・企画が見えない（非公開・成立の取り消し）ときは返さない
+        places:
+          type: array
+          description: |
+            場所の状態。会話と場所の採用した紐付き（採用中・再検討中。会話の採用と、会話の問いの回答の採用）。
+            並びは順番、順番がなければ採用の時点の順（同じなら採用の識別子の順）。0件なら場所未定。上限なし
+          items: { $ref: '#/components/schemas/ConversationPlaceItem' }
+        posts: { $ref: '#/components/schemas/PostThread' }
+        placeCandidates: { $ref: '#/components/schemas/PlaceCandidatePage' }
+        questions: { $ref: '#/components/schemas/QuestionPage' }
+        findings: { $ref: '#/components/schemas/FindingPage' }
+        discoveries:
+          $ref: '#/components/schemas/DiscoverySummaryPage'
+          description: この会話から生まれた発見（由来＝この会話）。成立の新しい順
+        reach: { $ref: '#/components/schemas/ReachPage' }
+    ConversationEntry:
+      description: 会話の入口。`kind` で判別する。押すと入口のページ
+      oneOf:
+        - $ref: '#/components/schemas/PlaceEntry'
+        - $ref: '#/components/schemas/DiscoveryEntry'
+        - $ref: '#/components/schemas/ProjectEntry'
+    PlaceEntry:
+      type: object
+      description: 場所のページから始めた会話。入口の場所が統合済みでも、その場所を返す（S13 が統合先へ案内する）
+      additionalProperties: false
+      required: [kind, place]
+      properties:
+        kind: { type: string, enum: [place] }
+        place: { $ref: '#/components/schemas/PlaceRef' }
+    DiscoveryEntry:
+      type: object
+      description: Discovery のページから始めた会話。入口の Discovery が統合されていれば、最後の統合先を返す（S03 と同じ決まり）
+      additionalProperties: false
+      required: [kind, discovery]
+      properties:
+        kind: { type: string, enum: [discovery] }
+        discovery: { $ref: '#/components/schemas/DiscoveryRef' }
+    ProjectEntry:
+      type: object
+      additionalProperties: false
+      required: [kind, project, relation]
+      properties:
+        kind: { type: string, enum: [project] }
+        project: { $ref: '#/components/schemas/ProjectRef' }
+        relation:
+          type: string
+          enum: [own, triggered]
+          description: own は企画そのものの会話、triggered は企画をきっかけにした会話
+    ProjectRef:
+      type: object
+      description: 企画への参照。押すと企画のページ（S15）
+      additionalProperties: false
+      required: [id, title]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
+    ConversationPlaceRole:
+      type: string
+      description: |
+        会話の場所の役割のコード値（DB の place_adoption.role）。足せる形にするため閉じた列挙にしない。
+        画面は知っている値に表示名を当て、知らない値は役割の名前を出さずに出す
+
+        | 値 | 意味 |
+        |---|---|
+        | START | 始まり |
+        | VIA | 経由 |
+        | END | 終わり |
+        | TOPIC | 話の場所 |
+      pattern: '^[A-Z][A-Z0-9_]*$'
+      maxLength: 40
+    AdoptionStatus:
+      type: string
+      enum: [adopted, reconsidering]
+      description: 採用の状態。adopted は「採用」、reconsidering は「新しい情報が寄せられ、再検討中」（「確定」「解決済み」と言わない）
+    AdoptionActor:
+      type: string
+      enum: [questionOwner, conversationStarter, ruleOrOperator]
+      description: |
+        採用した主体。questionOwner は問いを立てた人（「投稿者が採用した回答」）、conversationStarter は会話を始めた人、
+        ruleOrOperator は ex-day の規則・運営（「現在の回答」）
+    ConversationPlaceItem:
+      type: object
+      additionalProperties: false
+      required: [place, status, source]
+      properties:
+        place: { $ref: '#/components/schemas/PlaceRef' }
+        role: { $ref: '#/components/schemas/ConversationPlaceRole' }
+        order: { type: integer, minimum: 1, description: 順番（散歩の道順など）。順番のない採用では返さない }
+        status: { $ref: '#/components/schemas/AdoptionStatus' }
+        source:
+          type: string
+          enum: [conversation, question]
+          description: conversation は会話の場所の採用、question は会話の問いの回答として採用した場所
+    # ---- Post ----
+    PostCursor:
+      type: string
+      description: 「これまでのやりとりを見る」のカーソル。画面は中身を解釈せず、そのまま `before` に渡す
+      pattern: '^[0-9A-Za-z]{12}$'
+      minLength: 12
+      maxLength: 12
+    PostItem:
+      description: |
+        会話の Post（C26）。`visibility` で判別する。非公開の Post は、識別子・時点・返信先だけを返し、本文と書いた人を返さない
+        （画面は「この声は表示されていません」と出し、流れの位置を保つ）
+      oneOf:
+        - $ref: '#/components/schemas/VisiblePost'
+        - $ref: '#/components/schemas/HiddenPost'
+    VisiblePost:
+      type: object
+      additionalProperties: false
+      required: [id, visibility, body, authorName, postedAt, replyTo, reactions]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        visibility: { type: string, enum: [visible] }
+        body: { type: string, minLength: 1 }
+        authorName:
+          type: string
+          minLength: 1
+          description: 書いた人の今のニックネーム（表示のたびに引く。Issue #74）
+        postedAt: { type: string, format: date-time }
+        replyTo:
+          type: array
+          description: 返信先の Post（同じ会話の中）。返信先が非公開の Post でも識別子を返す
+          items: { $ref: '#/components/schemas/PublicId' }
+        reactions:
+          type: object
+          additionalProperties: false
+          required: [empathy]
+          properties:
+            empathy: { type: integer, minimum: 0, description: 共感 }
+    HiddenPost:
+      type: object
+      additionalProperties: false
+      required: [id, visibility, postedAt, replyTo]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        visibility: { type: string, enum: [hidden] }
+        postedAt: { type: string, format: date-time }
+        replyTo:
+          type: array
+          items: { $ref: '#/components/schemas/PublicId' }
+    PostThread:
+      type: object
+      description: |
+        会話の Post。最初の Post（`first`）と、それに続く新しい Post（`recent`。最大 `postLimit` 件、古い順）。
+        `first` と `recent` の間に Post が残っていれば `olderCursor` を返す（getConversationPosts に渡す）。
+        並びは投稿の時点の古い順、同じ時点なら識別子の順。非公開の Post の枠も件数に数える
+      additionalProperties: false
+      required: [first, recent]
+      properties:
+        first: { $ref: '#/components/schemas/PostItem' }
+        recent:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/PostItem' }
+        olderCursor: { $ref: '#/components/schemas/PostCursor' }
+    OlderPostPage:
+      type: object
+      description: カーソルより前の Post（古い順。最初の Post は含めない）。さらに前が残っていれば `olderCursor` を返す
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/PostItem' }
+        olderCursor: { $ref: '#/components/schemas/PostCursor' }
+    # ---- 場所の候補と採用（C33） ----
+    PlaceCandidatePage:
+      type: object
+      description: |
+        場所の候補と採用（C33）。対象がこの会話、またはこの会話の問いの候補。検討中・不採用・失効の全部（画面が不採用・取り消しを折りたたむ）。
+        並びは候補の作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+      additionalProperties: false
+      required: [items, totalCount]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/PlaceCandidateItem' }
+        totalCount: { type: integer, minimum: 0 }
+    PlaceCandidateItem:
+      type: object
+      additionalProperties: false
+      required: [id, target, place, status, basisPostIds, voices]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        target: { $ref: '#/components/schemas/CandidateTarget' }
+        place: { $ref: '#/components/schemas/CandidatePlace' }
+        status:
+          type: string
+          enum: [considering, rejected, expired]
+          description: |
+            候補の状態（検討中・不採用・失効）。採用は候補の状態ではなく `adoption` で見る
+            （採用された候補も、不採用・失効にならない限り considering のまま）
+        adoption: { $ref: '#/components/schemas/CandidateAdoption' }
+        basisPostIds:
+          type: array
+          description: 根拠の Post（作成の時点の古い順）。非公開の Post でも識別子を返す（PostItem の HiddenPost を指す）
+          items: { $ref: '#/components/schemas/PublicId' }
+        voices:
+          type: object
+          additionalProperties: false
+          required: [support, oppose]
+          properties:
+            support: { type: integer, minimum: 0, description: ここかも }
+            oppose: { type: integer, minimum: 0, description: 違うと思う }
+    CandidateTarget:
+      description: 候補の対象。`kind` で判別する
+      oneOf:
+        - $ref: '#/components/schemas/ConversationCandidateTarget'
+        - $ref: '#/components/schemas/QuestionCandidateTarget'
+    ConversationCandidateTarget:
+      type: object
+      description: この会話の話の場所の候補
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [conversation] }
+    QuestionCandidateTarget:
+      type: object
+      description: この会話の問い（場所を探す問い）の回答の候補
+      additionalProperties: false
+      required: [kind, questionId]
+      properties:
+        kind: { type: string, enum: [question] }
+        questionId: { $ref: '#/components/schemas/PublicId' }
+    CandidatePlace:
+      description: 候補の場所。`kind` で判別する（既存の場所か、新しい場所の案か）
+      oneOf:
+        - $ref: '#/components/schemas/CandidateExistingPlace'
+        - $ref: '#/components/schemas/CandidateProposedPlace'
+    CandidateExistingPlace:
+      type: object
+      additionalProperties: false
+      required: [kind, place]
+      properties:
+        kind: { type: string, enum: [place] }
+        place: { $ref: '#/components/schemas/PlaceRef' }
+    CandidateProposedPlace:
+      type: object
+      description: |
+        新しい場所の案（採用されるまで場所ではないので、場所のページを持たない）。形は、会話の中の地図に出すため返す
+        （案の名前・位置を場所の検索・場所の地図に混ぜないのは DB 設計 3.8節のとおり）
+      additionalProperties: false
+      required: [kind, name, kinds]
+      properties:
+        kind: { type: string, enum: [proposal] }
+        name: { type: string, minLength: 1 }
+        spatialType: { $ref: '#/components/schemas/SpatialType' }
+        geometry:
+          $ref: '#/components/schemas/Geometry'
+          description: 案の位置・形。名前だけの案では返さない
+        kinds:
+          type: array
+          description: 案の種類（店・駅 等）
+          items: { type: string, minLength: 1 }
+        existedPeriod: { $ref: '#/components/schemas/Period' }
+    CandidateAdoption:
+      description: |
+        候補の今の採用の状態。`status` で判別する。今の採用（採用中・再検討中）があればその状態、なければ最後の採用の取り消し。
+        採用されたことのない候補では返さない。採用・取り消しの履歴の全部（判断の記録）は、一般のユーザー向けには返さない
+      oneOf:
+        - $ref: '#/components/schemas/ActiveCandidateAdoption'
+        - $ref: '#/components/schemas/ReconsideringCandidateAdoption'
+        - $ref: '#/components/schemas/RevokedCandidateAdoption'
+    ActiveCandidateAdoption:
+      type: object
+      additionalProperties: false
+      required: [status, adoptedBy]
+      properties:
+        status: { type: string, enum: [adopted] }
+        adoptedBy: { $ref: '#/components/schemas/AdoptionActor' }
+    ReconsideringCandidateAdoption:
+      type: object
+      additionalProperties: false
+      required: [status, adoptedBy]
+      properties:
+        status: { type: string, enum: [reconsidering] }
+        adoptedBy: { $ref: '#/components/schemas/AdoptionActor' }
+    RevokedCandidateAdoption:
+      type: object
+      additionalProperties: false
+      required: [status, reason]
+      properties:
+        status: { type: string, enum: [revoked] }
+        reason:
+          type: string
+          enum: [readopted, withdrawn, merged]
+          description: readopted は別の場所を採用し直した、withdrawn は採用を取り消した、merged は問いの統合で統合先へ移した
+    # ---- 問いと回答の採用（C34） ----
+    QuestionPage:
+      type: object
+      description: |
+        この会話の問い（C34）。有効な問いと失効した問い。統合された問いは出さず、統合先が別の会話なら `moved` で案内する
+        （統合先が同じ会話なら何も出さない）。並びは作成の時点の古い順、同じ時点なら識別子の順。最大20件（固定）。totalCount は全体の数
+      additionalProperties: false
+      required: [items, totalCount, moved]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/QuestionItem' }
+        totalCount: { type: integer, minimum: 0 }
+        moved:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/MovedItem' }
+    QuestionItem:
+      type: object
+      additionalProperties: false
+      required: [id, content, kind, status, askedByPerson, reactions]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        content: { type: string, minLength: 1 }
+        kind:
+          type: string
+          enum: [where, why, what, other]
+          description: 問いの種類（どこ・なぜ・何・ほか）
+        status:
+          type: string
+          enum: [active, expired]
+          description: 有効か、失効したか
+        askedByPerson:
+          type: boolean
+          description: 問いを立てた人がいるか（false なら、会話から読み取った問い。回答を採用するのは ex-day の規則・運営）
+        keepOpen:
+          type: boolean
+          description: 問いを立てた人が「引き続き募集する」にしているか。設定がなければ返さない
+        answer: { $ref: '#/components/schemas/QuestionAnswer' }
+        reactions:
+          type: object
+          additionalProperties: false
+          required: [curious]
+          properties:
+            curious: { type: integer, minimum: 0, description: 自分も気になる }
+    QuestionAnswer:
+      description: |
+        採用中・再検討中の回答。`kind` で判別する。回答がなければ返さない。
+        場所を探す問いは採用した場所、ほかの問いは回答の Post かわかってきたこと
+      oneOf:
+        - $ref: '#/components/schemas/PlaceQuestionAnswer'
+        - $ref: '#/components/schemas/PostQuestionAnswer'
+        - $ref: '#/components/schemas/FindingQuestionAnswer'
+    PlaceQuestionAnswer:
+      type: object
+      additionalProperties: false
+      required: [kind, status, adoptedBy, place]
+      properties:
+        kind: { type: string, enum: [place] }
+        status: { $ref: '#/components/schemas/AdoptionStatus' }
+        adoptedBy: { $ref: '#/components/schemas/AdoptionActor' }
+        place: { $ref: '#/components/schemas/PlaceRef' }
+    PostQuestionAnswer:
+      type: object
+      additionalProperties: false
+      required: [kind, status, adoptedBy, postId]
+      properties:
+        kind: { type: string, enum: [post] }
+        status: { $ref: '#/components/schemas/AdoptionStatus' }
+        adoptedBy: { $ref: '#/components/schemas/AdoptionActor' }
+        postId:
+          $ref: '#/components/schemas/PublicId'
+          description: 回答の Post。非公開の Post でも識別子を返す
+    FindingQuestionAnswer:
+      type: object
+      additionalProperties: false
+      required: [kind, status, adoptedBy, findingId]
+      properties:
+        kind: { type: string, enum: [finding] }
+        status: { $ref: '#/components/schemas/AdoptionStatus' }
+        adoptedBy: { $ref: '#/components/schemas/AdoptionActor' }
+        findingId: { $ref: '#/components/schemas/PublicId' }
+    MovedItem:
+      type: object
+      description: 統合されて別の会話へ移ったもの（問い・わかってきたこと）。押すと統合先の会話のページ
+      additionalProperties: false
+      required: [id, conversationId]
+      properties:
+        id:
+          $ref: '#/components/schemas/PublicId'
+          description: 統合された側の識別子
+        conversationId:
+          $ref: '#/components/schemas/PublicId'
+          description: 最後の統合先が属する会話（公開の会話だけ。見えないときは moved に入れない）
+    # ---- わかってきたこと（C25） ----
+    FindingPage:
+      type: object
+      description: |
+        この会話のわかってきたこと（C25）。有効なものの今の版。統合された側は出さず、統合先が別の会話なら `moved` で案内する。
+        並びは作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+      additionalProperties: false
+      required: [items, totalCount, moved]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/FindingItem' }
+        totalCount: { type: integer, minimum: 0 }
+        moved:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/MovedItem' }
+    # ---- この会話から生まれた発見（C03）・届くところ ----
+    DiscoverySummaryPage:
+      type: object
+      description: |
+        Discovery のカード（C03）の一覧。公開で成立を取り消していない Discovery だけ。統合された側は出さず、最後の統合先を出す
+        （同じものは1件。件数は統合先を解決してから数える）。最大10件（固定）。totalCount は全体の数。並びは使う項目の説明に書く
+      additionalProperties: false
+      required: [items, totalCount]
+      properties:
+        items:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/DiscoverySummary' }
+        totalCount: { type: integer, minimum: 0 }
+    ReachPage:
+      type: object
+      description: |
+        この会話が届くところ。S13 の「このあたりで探している人がいます」と同じ当てはめで、この会話・この会話の問いのカードが出ている
+        場所のページ。対象が会話の候補は会話の場所が決まっていないときだけ、対象が問いの候補は問いが有効で回答が採用されていないとき
+        （会話の場所が採用済みでも出る）。既存の場所の候補はその場所、新しい場所の案は案の位置を含むエリアの場所（重なるものは全部）。
+        並びは既存の場所の候補を先に、次にエリアの小さい順（同じなら識別子の順）。同じ場所は1件。最大20件（固定）。totalCount は全体の数。
+        TOP の「探しています」・投稿した人の「自分の話」は画面が出す
+      additionalProperties: false
+      required: [items, totalCount]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ReachPlace' }
+        totalCount: { type: integer, minimum: 0 }
+    ReachPlace:
+      type: object
+      additionalProperties: false
+      required: [place, matchedBy]
+      properties:
+        place: { $ref: '#/components/schemas/PlaceRef' }
+        matchedBy:
+          type: string
+          enum: [candidate, area]
+          description: candidate はこの場所が候補の場所、area は新しい場所の案の位置がこのエリアに入る
     Problem:
       type: object
       description: RFC 9457 Problem Details
@@ -1360,3 +1907,83 @@ components:
               position: 1
           totalCount: 1
         nearbyPlaces: { items: [], totalCount: 0 }
+    ConversationWalk:
+      summary: 桜木町からの散歩の会話（サンプルデータ。返信の1つが非公開）
+      value:
+        id: 9eae53a6f40b
+        startedAt: '2026-04-05T10:00:00+09:00'
+        publicPostCount: 3
+        places:
+          - { place: { id: 160663e75a0b, name: 桜木町駅 }, role: START, order: 1, status: adopted, source: conversation }
+          - { place: { id: 743e09f2520a, name: 汽車道 }, role: VIA, order: 2, status: adopted, source: conversation }
+          - { place: { id: 74a63aeb68dd, name: 山下公園 }, role: END, order: 3, status: adopted, source: conversation }
+        posts:
+          first:
+            id: 6f4a5fcb7e0b
+            visibility: visible
+            body: 桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった
+            authorName: 港の散歩人
+            postedAt: '2026-04-05T10:00:00+09:00'
+            replyTo: []
+            reactions: { empathy: 1 }
+          recent:
+            - id: e4381ab9c3d6
+              visibility: visible
+              body: いいですね。汽車道経由ですか？
+              authorName: はまっこ
+              postedAt: '2026-04-05T12:10:00+09:00'
+              replyTo: [6f4a5fcb7e0b]
+              reactions: { empathy: 0 }
+            - id: 41f8904b78b4
+              visibility: visible
+              body: そう、汽車道を通りました。線路の跡を歩けるのが楽しい
+              authorName: 港の散歩人
+              postedAt: '2026-04-05T12:30:00+09:00'
+              replyTo: [e4381ab9c3d6]
+              reactions: { empathy: 1 }
+            - id: 3c2c6aa3152a
+              visibility: hidden
+              postedAt: '2026-04-05T13:00:00+09:00'
+              replyTo: []
+        placeCandidates:
+          items:
+            - id: 1a1c14196c15
+              target: { kind: conversation }
+              place: { kind: place, place: { id: 160663e75a0b, name: 桜木町駅 } }
+              status: considering
+              adoption: { status: adopted, adoptedBy: conversationStarter }
+              basisPostIds: [6f4a5fcb7e0b]
+              voices: { support: 0, oppose: 0 }
+            - id: 5578074b4cfc
+              target: { kind: conversation }
+              place: { kind: place, place: { id: 74a63aeb68dd, name: 山下公園 } }
+              status: considering
+              adoption: { status: adopted, adoptedBy: conversationStarter }
+              basisPostIds: [6f4a5fcb7e0b]
+              voices: { support: 0, oppose: 0 }
+            - id: e366b4f89e96
+              target: { kind: conversation }
+              place: { kind: place, place: { id: 743e09f2520a, name: 汽車道 } }
+              status: considering
+              adoption: { status: adopted, adoptedBy: conversationStarter }
+              basisPostIds: [e4381ab9c3d6, 41f8904b78b4]
+              voices: { support: 1, oppose: 0 }
+          totalCount: 3
+        questions: { items: [], totalCount: 0, moved: [] }
+        findings:
+          items:
+            - id: 5c1c7654c027
+              kind: value
+              text: 桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる
+              unconfirmed: false
+              reactions: { agree: 1, wantToGo: 0 }
+          totalCount: 1
+          moved: []
+        discoveries:
+          items:
+            - id: b0919799718c
+              title: 汽車道を通って、桜木町から山下公園へ海沿いの散歩
+              summary: 桜木町駅から汽車道を渡り、海を見ながら山下公園まで歩ける。線路の跡を歩けるのも楽しい。
+              displayPlaces: [{ id: 160663e75a0b, name: 桜木町駅 }]
+          totalCount: 1
+        reach: { items: [], totalCount: 0 }
