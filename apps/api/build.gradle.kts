@@ -90,4 +90,8 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // CI のログで、どのテストが通った・止めたかを分かるようにする（DB V2 の確認、#135）
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }
