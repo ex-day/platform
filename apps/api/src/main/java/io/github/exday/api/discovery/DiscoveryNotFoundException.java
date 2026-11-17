@@ -1,6 +1,6 @@
 package io.github.exday.api.discovery;
 
-/** 指定した Discovery がない、または公開状態が HIDDEN のとき投げる。 */
+/** 指定した Discovery がない、または一般のユーザーに見えない（非公開・成立の取り消し）とき投げる。 */
 public class DiscoveryNotFoundException extends RuntimeException {
 
     public DiscoveryNotFoundException(String discoveryId) {

@@ -69,38 +69,30 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * S03 の Discovery の内容を取得する（みんなの声を除く）
-         * @description タイトル、Hero（C19）、わかってきたこと（C25）、本文、タグ、その他の魅力（C12）、関係する Discovery（C03 の3つの枠）を返す。
-         *     みんなの声（C26）は件数が増えるため、別の API（/discoveries/{discoveryId}/posts）で取る。
+         * S03（Discovery のページ）の内容を取得する
+         * @description 1つの Discovery の内容を、S03 の区画ごとに返す（画面定義 docs/ui/screens/S03-discovery-detail.md）。
+         *     会話は Discovery の中に持たないので（DEC-0020 決定4）、このページは会話の Post を返さない。
+         *     由来の会話とこの発見から始まった会話はカード（C40）で返し、会話の中身は会話のページ（S14）の API で取る。
          *
-         *     Value の振り分けは API が行い、画面では評価しない（S03「評価ロジックはC19に持たせず」）。
-         *     - 推薦する Value（季節が一致、または通年・条件なし）→ `recommendations`（Hero）。推薦順（推薦度の高い順）
-         *     - 推薦しない Value（季節違い）→ `otherValues`（その他の魅力）
+         *     - **見えるもの**：一般のユーザーには、公開で、成立を取り消していない Discovery だけを返す（DB の visible_discovery）。
+         *       非公開・成立を取り消した Discovery は、直接の識別子でも 404 にする。運営の権限で見る形は、認証（#75）のあとに足す
+         *     - **統合された Discovery**：200 で返し、`merge.status` を merged にする。案内する統合先は `merge.target`
+         *       （たどった最後の統合先。見えないときは返さない。MergeState）。`capabilities` で新しい会話・リアクションを受け付けないことを返す
+         *       （S03「初期表示」）
+         *     - **Value の振り分け**：API が行い、画面では評価しない。評価に要る情報が足りないとき、成立・不成立を推測しない（論理設計 4.5.4節）。
+         *       推薦する Value（季節が一致、または通年・季節の条件なし）は `recommendations`（Hero、C19）に推薦順で、
+         *       推薦しない Value（季節違い）は `otherValues`（その他の魅力、C12）に入れる（冒頭の「季節と推薦の考え方」）
+         *     - **区画の中身がないとき**：配列は空、件数は 0 で返す。出すかどうか（中身のない区画は出さない）は画面で決める
+         *     - **件数の多い区画**（この発見から始まった会話、関わる企画、関係する Discovery）は、決まった順に**最大10件（固定）**を返す。
+         *       会話と企画は公開のものの全体の件数（`totalCount`）も返す。順と重ね方は ConversationCardPage・ProjectCardPage を参照。
+         *       続きを見る API は、必要になったときに足す
+         *     - **公開の境界**：ほかの対象を指して返すもの（統合先、会話カードの最初の Post、企画、関係する Discovery、わかってきたこと）も、
+         *       一般のユーザーに見えるものだけを返す（DB 設計 2.5節）
+         *     - 自分のリアクション、運営の操作（C38）・判断の記録は、認証（#75）のあとに足す
+         *     - Discovery の現在状態（「今シーズンの情報あり」）は、判定（論理設計 4.5節の要検討）が決まってから足す
+         *     - 「ここから行ける」（C35）の到達圏は、寄り道（F06）の API で取る。このページは起点の場所（`detourFrom`）だけを返す
          */
         get: operations["getDiscovery"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/discoveries/{discoveryId}/posts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * S03 のみんなの声（C26）を取得する
-         * @description この Discovery を投稿先（器）とする声（Post）を、時系列（古い→新しい）で返す。ツリーにはしない。
-         *     あわせて、派生の目印と、派生して生まれた Discovery の場合の元の会話を返す。
-         *
-         *     直近の表示件数・展開・ページ送りは未定（Issue #53）。今回はすべて返し、件数が増えたらページ送りの項目を足す。
-         */
-        get: operations["getDiscoveryPosts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -199,164 +191,388 @@ export interface components {
             url: string;
             alt: string;
         };
-        /** @description 別の Discovery への参照（派生の誘導の表示用） */
+        /**
+         * @description 画面・URL に出す識別子（英数字12文字。DB 設計 2.1節）。中身を解釈しない文字列として扱う。
+         *     内部の連番は出さない
+         */
+        PublicId: string;
+        /** @description 別の Discovery への参照（統合先への案内など） */
         DiscoveryRef: {
-            id: string;
+            id: components["schemas"]["PublicId"];
             title: string;
         };
+        /** @description 場所への参照。押すと場所のページ（S13）。座標は持たない（地図に出す形は DiscoveryPlaceItem の geometry） */
+        PlaceRef: {
+            id: components["schemas"]["PublicId"];
+            /** @description 例：小机城址 */
+            name: string;
+        };
+        /** @description 位置（経度, 緯度）。WGS84。高さは持たない */
+        Position: [
+            number,
+            number
+        ];
+        /** @description 経路の位置の並び（2つ以上） */
+        LineStringCoordinates: components["schemas"]["Position"][];
+        /** @description 閉じた輪（4つ以上で、最初と最後が同じ位置） */
+        LinearRingCoordinates: components["schemas"]["Position"][];
+        /** @description 外側の輪と、穴の輪（0個以上） */
+        PolygonCoordinates: components["schemas"]["LinearRingCoordinates"][];
+        PointGeometry: {
+            /** @enum {string} */
+            type: "Point";
+            coordinates: components["schemas"]["Position"];
+        };
+        LineStringGeometry: {
+            /** @enum {string} */
+            type: "LineString";
+            coordinates: components["schemas"]["LineStringCoordinates"];
+        };
+        MultiLineStringGeometry: {
+            /** @enum {string} */
+            type: "MultiLineString";
+            coordinates: components["schemas"]["LineStringCoordinates"][];
+        };
+        PolygonGeometry: {
+            /** @enum {string} */
+            type: "Polygon";
+            coordinates: components["schemas"]["PolygonCoordinates"];
+        };
+        MultiPolygonGeometry: {
+            /** @enum {string} */
+            type: "MultiPolygon";
+            coordinates: components["schemas"]["PolygonCoordinates"][];
+        };
+        /**
+         * @description 場所の形（GeoJSON の Geometry。RFC 7946）。`type` で判別する。地点は Point、経路は LineString・MultiLineString、
+         *     エリアは Polygon・MultiPolygon。座標は API の本文でだけ返し、URL には出さない（DEC-0022）
+         */
+        Geometry: components["schemas"]["PointGeometry"] | components["schemas"]["LineStringGeometry"] | components["schemas"]["MultiLineStringGeometry"] | components["schemas"]["PolygonGeometry"] | components["schemas"]["MultiPolygonGeometry"];
         DiscoveryDetail: {
-            id: string;
+            id: components["schemas"]["PublicId"];
             title: string;
-            /** @description 本文（現在の要約） */
-            body: string;
-            place: components["schemas"]["PlaceSummary"];
+            /** @description 現在の要約（空のこともある） */
+            summary: string;
+            merge: components["schemas"]["MergeState"];
+            capabilities: components["schemas"]["DiscoveryCapabilities"];
             context: components["schemas"]["EvaluationContext"];
-            /** @description Hero（C19）に渡す、推薦する Value。推薦順（推薦度の高い順）。0件でも Hero は標準 Hero で表示する（Issue */
-            recommendations: components["schemas"]["Recommendation"][];
+            /**
+             * @description 場所の見出し（「小机城址」「生麦 ほか」）。出す位置の場所（Discovery と場所の関係の役割が EXPERIENCE・START）。
+             *     順番のあるものは順番の順。出す位置の役割の場所がない Discovery では、関わる場所の最初のもの
+             */
+            displayPlaces: components["schemas"]["PlaceRef"][];
+            /** @description 観点（Subject の観点）の代表表記。押すとその言葉で S02 */
+            aspects: string[];
+            /**
+             * @description Hero（C19）に渡す、推薦する Value。推薦順（推薦度の高い順）。0件でも Hero は標準 Hero で表示する（Issue #50）。
+             *     評価に要る情報が足りないとき、成立・不成立を推測しない（論理設計 4.5.4節）。今は季節だけで振り分けるので評価不能は起きない。
+             *     評価不能を返す形と表示は、Recommendation の後続の設計で決める
+             */
+            recommendations: components["schemas"]["ValueItem"][];
             /** @description その他の魅力（C12）。季節違いで、今は推薦しない Value */
             otherValues: components["schemas"]["ValueItem"][];
-            /** @description わかってきたこと（C25）。説と価値 */
-            findings: components["schemas"]["Finding"][];
-            /** @description Discovery のタグ。属する声のタグと、運営が付けたタグを集めたもの */
-            tags: string[];
+            /** @description 出所の表示（「みんなの会話から ex-day が取り出した発見です」「ex-day の発見（見本）」）に使う由来。1件以上 */
+            origins: components["schemas"]["DiscoveryOrigin"][];
             reactions: components["schemas"]["DiscoveryReactions"];
+            /** @description 関わる場所（地図 C41 と一覧 C28）。Discovery と場所の関係（有効なもの）をすべて。順番のあるものは順番の順。1件以上 */
+            places: components["schemas"]["DiscoveryPlaceItem"][];
+            /** @description 「ここから行ける」（C35）の起点にする場所（displayPlaces の最初のもの）。到達圏は寄り道（F06）の API で取る */
+            detourFrom?: components["schemas"]["PlaceRef"];
+            /**
+             * @description わかってきたこと（C25）。この発見のもとになった会話と、この発見から始まった会話の Finding（有効なものの今の版）。
+             *     公開の会話のものだけ。取得の範囲（件数が増えたとき）は後続で決める
+             */
+            findings: components["schemas"]["FindingItem"][];
+            /** @description この発見のもとになった会話（由来＝会話。C40）。公開の会話だけ。会話の開始の時点の古い順 */
+            originConversations: components["schemas"]["ConversationCard"][];
+            startedConversations: components["schemas"]["ConversationCardPage"];
+            projects: components["schemas"]["ProjectCardPage"];
             relations: components["schemas"]["DiscoveryRelations"];
         };
-        /** @description C19（Discovery詳細 Hero）の1件分 */
-        Recommendation: {
-            valueId: string;
-            /**
-             * @description 今伝えたい価値のメッセージ（例：今、桜が見頃です）。
-             *     価値の組み合わせと会話の文脈を AI で解析した結果として作る文言を想定する。
-             *     今回のサンプルでは、解析の結果の代わりに、用意した文言をデータとして持つ
-             */
-            message: string;
-            /** @description 参加を促すメッセージ（例：一緒に考えませんか？） */
-            participationMessage?: string;
-            media?: components["schemas"]["Image"];
+        /**
+         * @description 統合の状態。`status` で判別する。統合された Discovery を開いたときは、統合先への案内（C15）を出す（自動では移らない）。
+         *     統合されたかどうか（status）と、案内する統合先（target）を分ける。
+         *     - 統合先がさらに統合されているときは、たどった最後の統合先を target にする（循環は統合の処理（F12）で作らない）
+         *     - 最後の統合先が一般のユーザーに見えない（非公開・成立の取り消し）ときは、target を返さない（ID・表題を出さない）。
+         *       status は merged のまま返す
+         */
+        MergeState: components["schemas"]["NotMerged"] | components["schemas"]["Merged"];
+        /** @description 統合されていない */
+        NotMerged: {
+            /** @enum {string} */
+            status: "none";
         };
-        /** @description C12（discovery-value）の1件分 */
+        /** @description 統合された側 */
+        Merged: {
+            /** @enum {string} */
+            status: "merged";
+            /** @description 案内する統合先（たどった最後の統合先）。一般のユーザーに見えるときだけ */
+            target?: components["schemas"]["DiscoveryRef"];
+        };
+        /**
+         * @description この Discovery に対して始められる操作（ログインの有無とは別に、対象として受け付けるか）。
+         *     統合された側では、新しい会話（この発見について話す）とリアクションを受け付けない（S03「初期表示」）。
+         *     統合される前からある会話は S14 で続けられる
+         */
+        DiscoveryCapabilities: {
+            canStartConversation: boolean;
+            canReact: boolean;
+        };
+        /** @description Value の1件分（Hero の推薦 C19・その他の魅力 C12） */
         ValueItem: {
-            id: string;
-            /** @description 何についての価値か */
-            subject: string;
-            value: string;
-            body: string;
-            picture?: components["schemas"]["Image"];
-            /** @description 楽しめる条件の説明。内部の Condition の構造をそのまま出さず、表示用の説明にする */
+            id: components["schemas"]["PublicId"];
+            /** @description 価値の説明 */
+            description: string;
+            /** @description 楽しめる条件の説明。内部の Condition の構造をそのまま出さず、表示用の説明にする。条件のない Value は空 */
             conditions: components["schemas"]["ConditionDescription"][];
         };
         ConditionDescription: {
+            /**
+             * @description 条件の軸。軸が増えたら値を足す
+             * @enum {string}
+             */
+            axis: "season";
             /** @description 例：季節 */
             label: string;
             /** @description 例：春（3〜5月） */
             text: string;
-            /** @description 季節の条件の場合の値（画面で表示を変えたいとき用） */
+            /** @description 季節の条件の値（axis が season のとき） */
             seasons?: components["schemas"]["Season"][];
         };
-        /**
-         * @description C25（わかってきたこと）の1件分。まだ見立てであり、断定の書き方にしない。
-         *     リアクションの有無は種類と裏付けで決まる（DEC-0009 決定9）。
-         *
-         *     | 種類 | backedBy | reactions |
-         *     |---|---|---|
-         *     | 価値（value） | なし | あり（understand・wantToGo） |
-         *     | 裏付けのない説（theory） | なし | あり（maybe） |
-         *     | 裏付けのある説（theory） | あり | なし（項目自体を返さない） |
-         */
-        Finding: {
-            id: string;
+        /** @description Discovery の由来の1件分 */
+        DiscoveryOrigin: {
             /**
-             * @description value は価値、theory は説
+             * @description conversation は会話から、post は1つの投稿から、project は企画の登録から、derived は派生、operator は運営の登録（見本）
              * @enum {string}
              */
-            kind: "value" | "theory";
-            text: string;
-            /** @description 資料（出典）の裏付けがある説の出典名。説（theory）だけが持つ。ある場合は reactions を返さない */
-            backedBy?: string;
+            kind: "conversation" | "post" | "project" | "derived" | "operator";
             /**
-             * @description 種類ごとのリアクション数。価値は understand（わかる）・wantToGo（行ってみたい）、裏付けのない説は maybe（そうかも）。
-             *     裏付けのある説（backedBy がある）では返さない
+             * @description 成立の判断の方式。auto は ex-day が自動で成立させた、human は人（運営）が判断した
+             * @enum {string}
              */
-            reactions?: {
-                understand?: number;
-                wantToGo?: number;
-                maybe?: number;
+            establishedBy: "auto" | "human";
+        };
+        /** @description Discovery へのリアクションの数（C10。「わかる」「行ってみたい」） */
+        DiscoveryReactions: {
+            /** @description わかる */
+            agree: number;
+            /** @description 行ってみたい */
+            wantToGo: number;
+        };
+        /**
+         * @description Discovery と場所の関係の役割のコード値（DB の discovery_place.role）。役割は例が出るたびに足せる形にするため、
+         *     閉じた列挙にしない（論理設計 4.5.1節）。画面は、知っている値に表示名を当て、**知らない値は役割の名前を出さずに**
+         *     「関わる場所」として出す（画面が壊れないようにする）。
+         *
+         *     | 値 | 意味 | 出す位置の場所か |
+         *     |---|---|---|
+         *     | EXPERIENCE | 体験できる場所 | ○ |
+         *     | START | 始まり | ○ |
+         *     | VIA | 経由 | ― |
+         *     | END | 終わり | ― |
+         *     | MEMORY | 記憶の場所 | ― |
+         *     | FORMER_SITE | 今の跡地 | ― |
+         *     | AREA_EATEN | 食べられていた地域 | ― |
+         */
+        DiscoveryPlaceRole: string;
+        /** @description 関わる場所の1件分（Discovery と場所の関係） */
+        DiscoveryPlaceItem: {
+            place: components["schemas"]["PlaceRef"];
+            /**
+             * @description 場所の形（地点・エリア・経路）。geometry の type と対応する（point は Point、route は LineString・MultiLineString、area は Polygon・MultiPolygon）
+             * @enum {string}
+             */
+            spatialType: "point" | "area" | "route";
+            /** @description 場所の種類（城跡・公園・駅・坂 等）。値は足せる形にするため列挙しない */
+            kinds: string[];
+            role: components["schemas"]["DiscoveryPlaceRole"];
+            /** @description 順番のある組み合わせ（コースの Discovery）のときの順番 */
+            order?: number;
+            /** @description この関係の期間（過去の運行区間など）。分からなければ持たない */
+            period?: components["schemas"]["Period"];
+            /** @description この場所での説明 */
+            description?: string;
+            /** @description 出す位置の場所か（displayPlaces に入っているか） */
+            isDisplayPlace: boolean;
+            geometry: components["schemas"]["Geometry"];
+        };
+        /** @description 期間。片方だけのこともある */
+        Period: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+        };
+        /**
+         * @description わかってきたこと（C25）の1件分。ex-day の見立てであり、事実の認定ではない。断定の書き方にしない。
+         *     リアクションは種類と裏付けで決まる（論理設計 4.7節）。`reactions` の形で判別できるよう、3つに分ける。
+         *
+         *     | 種類 | backed | reactions |
+         *     |---|---|---|
+         *     | 価値（value） | false | agree・wantToGo |
+         *     | 裏付けのない説（theory） | false | maybe |
+         *     | 裏付けのある説（theory） | true | 返さない |
+         */
+        FindingItem: components["schemas"]["ValueFinding"] | components["schemas"]["UnbackedTheoryFinding"] | components["schemas"]["BackedTheoryFinding"];
+        ValueFinding: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            kind: "value";
+            /** @description 今の版の内容 */
+            text: string;
+            /** @constant */
+            backed: false;
+            /** @description 未確認の見立てか */
+            unconfirmed: boolean;
+            reactions: {
+                /** @description わかる */
+                agree: number;
+                /** @description 行ってみたい */
+                wantToGo: number;
             };
         };
-        /** @description Discovery へのリアクション数（C10。👍／😮／♥） */
-        DiscoveryReactions: {
-            like: number;
-            surprised: number;
-            love: number;
+        UnbackedTheoryFinding: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            kind: "theory";
+            /** @description 今の版の内容 */
+            text: string;
+            /** @constant */
+            backed: false;
+            /** @description 未確認の見立てか */
+            unconfirmed: boolean;
+            reactions: {
+                /** @description そうかも */
+                maybe: number;
+            };
         };
-        /** @description 関係する Discovery の3つの枠。該当がない枠は空の配列 */
-        DiscoveryRelations: {
-            /** @description 派生元（この発見のもとになった Discovery） */
-            derivedFrom: components["schemas"]["DiscoveryCard"][];
-            /** @description 派生した Discovery（この発見から広がった Discovery） */
-            derivedTo: components["schemas"]["DiscoveryCard"][];
-            /** @description 関連する Discovery。今回はベクトル検索を使わず、サンプルデータに書いた関係をそのまま返す */
-            related: components["schemas"]["DiscoveryCard"][];
+        /** @description 資料・出典の裏付けがある説。リアクションを付けない（確からしさは資料・出典で決まる） */
+        BackedTheoryFinding: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            kind: "theory";
+            /** @description 今の版の内容 */
+            text: string;
+            /** @constant */
+            backed: true;
+            /** @description 未確認の見立てか */
+            unconfirmed: boolean;
         };
-        DiscoveryPosts: {
-            /** @description 時系列（古い→新しい） */
-            posts: components["schemas"]["Post"][];
-            /** @description 派生の目印。afterPostId の声の直後に挟む */
-            derivationMarkers: components["schemas"]["DerivationMarker"][];
-            /** @description 派生して生まれた Discovery の場合の元の会話（一覧の冒頭に示す） */
-            derivedOrigin?: components["schemas"]["DiscoveryRef"];
-        };
-        /** @description 声（Post）。C26（みんなの声）の1件分 */
-        Post: {
-            id: string;
-            /** @description 投稿者の今のニックネーム（声に名前は保存せず、表示のたびに引く。Issue */
-            authorName: string;
+        /**
+         * @description 会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPostVisible` で判別する。
+         *     **最初の Post が非公開のとき**は、本文の冒頭と始めた人を返さない（非公開の Post の本文と書いた人を出さない）。
+         *     その場合のカードの見せ方、退会・削除された人の表示は、C40・F10 の設計に合わせる
+         */
+        ConversationCard: components["schemas"]["ConversationCardWithFirstPost"] | components["schemas"]["ConversationCardWithoutFirstPost"];
+        /** @description 最初の Post が一般のユーザーに見える会話 */
+        ConversationCardWithFirstPost: {
+            id: components["schemas"]["PublicId"];
+            /** @constant */
+            firstPostVisible: true;
+            /** @description 最初の Post の本文の冒頭 */
+            excerpt: string;
+            /** @description 会話を始めた人の今のニックネーム（表示のたびに引く。Issue */
+            starterName: string;
+            /** @description 公開の返信の数（公開の Post の数から、最初の Post を除いたもの） */
+            replyCount: number;
             /**
              * Format: date-time
-             * @description 投稿日時。相対表現（n日前 等）は画面で作る
+             * @description 会話の開始の時点（最初の Post の時点）
              */
-            postedAt: string;
-            /** @description 本文。#タグを含め、ユーザーが書いたまま */
-            body: string;
-            replyTo?: components["schemas"]["ReplyQuote"];
-            /** @description この声とともに Discovery へ提供された資料 */
-            media: components["schemas"]["MediaItem"][];
-            /** @description 声への共感の数 */
-            reactionCount: number;
-            /** @description 派生した話の続きと見立てられた場合の派生先（「『〇〇』で続いています」） */
-            continuedIn?: components["schemas"]["DiscoveryRef"];
-        };
-        /** @description 返信先の引用（Post 間の参照。PostReference） */
-        ReplyQuote: {
-            postId: string;
-            authorName: string;
-            /** @description 返信先の本文の冒頭 */
-            excerpt: string;
-        };
-        MediaItem: {
-            id: string;
-            /** @enum {string} */
-            kind: "image" | "video" | "pdf" | "other";
-            name: string;
-            /** @description kind が image の場合の画像 */
-            image?: components["schemas"]["Image"];
-            source: components["schemas"]["MediaSource"];
-        };
-        /** @description 資料の出典（C23（資料出典登録ダイアログ）で登録するもの） */
-        MediaSource: {
+            startedAt: string;
             /**
-             * @description unset は未設定、self は自分で撮影・作成、registered は出典を登録済み、unknown は不明
+             * Format: date-time
+             * @description 最後の公開の Post の時点
+             */
+            lastPostedAt?: string;
+            /** @description 会話と場所の採用した紐付き（採用中・再検討中）。0件なら場所未定 */
+            places: components["schemas"]["PlaceRef"][];
+        };
+        /** @description 最初の Post が非公開の会話（本文の冒頭と始めた人を返さない） */
+        ConversationCardWithoutFirstPost: {
+            id: components["schemas"]["PublicId"];
+            /** @constant */
+            firstPostVisible: false;
+            /** @description 公開の返信の数（公開の Post の数。最初の Post は非公開なので数に入っていない） */
+            replyCount: number;
+            /**
+             * Format: date-time
+             * @description 会話の開始の時点（最初の Post の時点）
+             */
+            startedAt: string;
+            /**
+             * Format: date-time
+             * @description 最後の公開の Post の時点。公開の Post がなければ返さない
+             */
+            lastPostedAt?: string;
+            /** @description 会話と場所の採用した紐付き（採用中・再検討中）。0件なら場所未定 */
+            places: components["schemas"]["PlaceRef"][];
+        };
+        /**
+         * @description この発見から始まった会話（入口＝この Discovery。C40）。公開の会話だけ。
+         *     **会話の開始の時点（startedAt）の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。
+         *     totalCount は公開の会話の全体の数。続きを取る API は、必要になったときに足す
+         */
+        ConversationCardPage: {
+            items: components["schemas"]["ConversationCard"][];
+            totalCount: number;
+        };
+        /** @description 企画カード（C29）。押すと企画のページ（S15） */
+        ProjectCard: {
+            id: components["schemas"]["PublicId"];
+            title: string;
+            /**
+             * @description コース・番付・まとめ・記憶
              * @enum {string}
              */
-            status: "unset" | "self" | "registered" | "unknown";
-            /** @enum {string} */
-            type?: "website" | "book" | "document" | "provided" | "other";
-            name?: string;
+            type: "course" | "ranking" | "collection" | "memory";
+            /**
+             * @description 運営の企画か、ユーザーの企画か（ユーザーの企画は「ex-day の認定ではありません」を添える）
+             * @enum {string}
+             */
+            creatorKind: "operator" | "user";
+            /** @description 作った人の今のニックネーム */
+            creatorName: string;
+            /**
+             * @description どの項目でこの Discovery に関わるか。この Discovery を指す項目があれば discovery（場所を指す項目もあっても discovery）、
+             *     なければ、この Discovery の関わる場所（places）を指す項目があるので place
+             * @enum {string}
+             */
+            matchedBy: "discovery" | "place";
+            /** @description matchedBy の種類の項目のうち、いちばん前の項目の順番・順位。コース・番付のときだけ返す（まとめ・記憶は順番を出さない） */
+            position?: number;
         };
-        DerivationMarker: {
-            afterPostId: string;
-            discovery: components["schemas"]["DiscoveryRef"];
+        /**
+         * @description 関わる企画（C29）。この Discovery、またはこの Discovery の関わる場所を項目に持つ、公開の企画（DB の visible_project_item で
+         *     見える項目だけで判定する）。**企画ごとに1件**（複数の項目が当てはまっても重ねない）。
+         *     **企画の作成の時点の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。totalCount は公開の企画の全体の数
+         */
+        ProjectCardPage: {
+            items: components["schemas"]["ProjectCard"][];
+            totalCount: number;
+        };
+        /**
+         * @description 関係する Discovery の3つの枠。該当がない枠は空の配列。公開で成立を取り消していない Discovery だけ（統合された側は出さない）。
+         *     MVP では派生・関連は運営が手で決めるので、多くの Discovery では空になる。Subject を介した意味の関連は、後で足す。
+         *     各枠は表題の順に最大10件（固定）
+         */
+        DiscoveryRelations: {
+            /** @description 派生元（この発見のもとになった Discovery） */
+            derivedFrom: components["schemas"]["DiscoverySummary"][];
+            /** @description 派生した Discovery（この発見から広がった Discovery） */
+            derivedTo: components["schemas"]["DiscoverySummary"][];
+            /** @description 明示的に関連付けた Discovery */
+            related: components["schemas"]["DiscoverySummary"][];
+        };
+        /**
+         * @description Discovery のカード（C03）に出す要約。S03 の関係する Discovery で使う。
+         *     S01 の DiscoveryCard（v0.1 の形）は、S01 の段でこの形にそろえる
+         */
+        DiscoverySummary: {
+            id: components["schemas"]["PublicId"];
+            title: string;
+            summary: string;
+            displayPlaces: components["schemas"]["PlaceRef"][];
         };
         /** @description RFC 9457 Problem Details */
         Problem: {
@@ -379,7 +595,7 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description Discovery がない、または公開状態が HIDDEN */
+        /** @description 対象がない、または一般のユーザーには見えない（非公開、成立を取り消した Discovery など） */
         NotFound: {
             headers: {
                 [name: string]: unknown;
@@ -392,8 +608,8 @@ export interface components {
     parameters: {
         /** @description セクションの key（/discovery-sections で返したもの） */
         SectionKey: components["schemas"]["SectionKey"];
-        /** @description Discovery の識別子。形式は約束しない（中身を解釈しない文字列として扱う） */
-        DiscoveryId: string;
+        /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+        DiscoveryId: components["schemas"]["PublicId"];
     };
     requestBodies: never;
     headers: never;
@@ -462,7 +678,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Discovery の識別子。形式は約束しない（中身を解釈しない文字列として扱う） */
+                /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
                 discoveryId: components["parameters"]["DiscoveryId"];
             };
             cookie?: never;
@@ -476,31 +692,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryDetail"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getDiscoveryPosts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Discovery の識別子。形式は約束しない（中身を解釈しない文字列として扱う） */
-                discoveryId: components["parameters"]["DiscoveryId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description みんなの声 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscoveryPosts"];
                 };
             };
             400: components["responses"]["BadRequest"];

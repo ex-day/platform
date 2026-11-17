@@ -12,7 +12,10 @@ info:
       S13・S14・S15・S17 は、順に足す
     - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
       制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
-      形の違うものは `oneOf` と判別の項目（`discriminator`）で分ける（GeoJSON の Geometry、わかってきたこと、統合の状態、会話カード）。
+      形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
+      わかってきたこと、統合の状態、会話カード）。TypeScript では判別できる union 型になる。
+      OpenAPI の `discriminator` は書かない（API の Java の生成器（openapi-generator 7.10）が、判別の項目を列挙にしたときに
+      正しいコードを作れないため。PR #152）。真偽の判別の項目は `const` で書く（同じ理由で、真偽の列挙を作れないため）
       足せる形にする値（場所の役割・種類）は列挙にせず、形だけを制約し、知らない値でも画面が壊れないようにする
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
@@ -390,14 +393,6 @@ components:
         - $ref: '#/components/schemas/MultiLineStringGeometry'
         - $ref: '#/components/schemas/PolygonGeometry'
         - $ref: '#/components/schemas/MultiPolygonGeometry'
-      discriminator:
-        propertyName: type
-        mapping:
-          Point: '#/components/schemas/PointGeometry'
-          LineString: '#/components/schemas/LineStringGeometry'
-          MultiLineString: '#/components/schemas/MultiLineStringGeometry'
-          Polygon: '#/components/schemas/PolygonGeometry'
-          MultiPolygon: '#/components/schemas/MultiPolygonGeometry'
     # ---- S03 ----
     DiscoveryDetail:
       type: object
@@ -472,11 +467,6 @@ components:
       oneOf:
         - $ref: '#/components/schemas/NotMerged'
         - $ref: '#/components/schemas/Merged'
-      discriminator:
-        propertyName: status
-        mapping:
-          none: '#/components/schemas/NotMerged'
-          merged: '#/components/schemas/Merged'
     NotMerged:
       type: object
       description: 統合されていない
@@ -641,7 +631,7 @@ components:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [value] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, enum: [false] }
+        backed: { type: boolean, const: false }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
         reactions:
           type: object
@@ -658,7 +648,7 @@ components:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [theory] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, enum: [false] }
+        backed: { type: boolean, const: false }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
         reactions:
           type: object
@@ -675,7 +665,7 @@ components:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [theory] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, enum: [true] }
+        backed: { type: boolean, const: true }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
     ConversationCard:
       description: |
@@ -692,7 +682,7 @@ components:
       required: [id, firstPostVisible, excerpt, starterName, replyCount, startedAt, places]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
-        firstPostVisible: { type: boolean, enum: [true] }
+        firstPostVisible: { type: boolean, const: true }
         excerpt:
           type: string
           minLength: 1
@@ -724,7 +714,7 @@ components:
       required: [id, firstPostVisible, replyCount, startedAt, places]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
-        firstPostVisible: { type: boolean, enum: [false] }
+        firstPostVisible: { type: boolean, const: false }
         replyCount:
           type: integer
           minimum: 0

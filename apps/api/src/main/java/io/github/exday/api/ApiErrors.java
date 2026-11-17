@@ -18,7 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * すべてのエンドポイントのエラーを RFC 9457（problem+json）で返す。
  *
- * <p>MVC の入力エラーは 400。未知のセクションと、ない・非公開の Discovery は仕様に合わせて 404。
+ * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery は仕様に合わせて 404。
  */
 @RestControllerAdvice
 public class ApiErrors extends ResponseEntityExceptionHandler {
@@ -32,7 +32,7 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DiscoveryNotFoundException.class)
     public ProblemDetail discoveryNotFound(DiscoveryNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
-            "Discovery がない、または公開状態が HIDDEN です。");
+            "Discovery がない、または見られない（非公開・成立の取り消し）。");
     }
 
     @Override
