@@ -95,5 +95,7 @@ tasks.withType<Test> {
     // CI のログで、どのテストが通った・止めたかを分かるようにする（DB V2 の確認、#135）
     testLogging {
         events("passed", "skipped", "failed")
+        // 失敗したときに原因（DB のエラーの中身など）がログで分かるようにする
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
