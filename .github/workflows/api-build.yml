@@ -44,3 +44,15 @@ jobs:
       - name: gradlew build
         working-directory: apps/api
         run: ./gradlew --no-daemon build
+
+      # TEMP（PR #152 の作業中だけ。マージ前に消す）：生成したコードを見るため
+      - name: TEMP generate only
+        if: always()
+        working-directory: apps/api
+        run: ./gradlew --no-daemon openApiGenerate
+      - name: TEMP upload generated
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-openapi
+          path: apps/api/build/generated/openapi/src/main/java

@@ -46,6 +46,8 @@ openApiGenerate {
             "documentationProvider" to "none",
             "annotationLibrary" to "none",
             "skipDefaultInterface" to "false",
+            // oneOf（GeoJSON の Geometry 等）を、分岐ごとのクラスが実装する interface として作る（#135、PR #152）
+            "useOneOfInterfaces" to "true",
         )
     )
     // モデル・API 以外のドキュメントやサポートファイルは要らない。
