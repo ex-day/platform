@@ -15,7 +15,7 @@ info:
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
       わかってきたこと、統合の状態、会話カード）。TypeScript では判別できる union 型になる。
       OpenAPI の `discriminator` は書かない（API の Java の生成器（openapi-generator 7.10）が、判別の項目を列挙にしたときに
-      正しいコードを作れないため。PR #152）。真偽の判別の項目は `const` で書く（同じ理由で、真偽の列挙を作れないため）
+      正しいコードを作れないため。PR #152）。判別の項目は文字列にし、真偽にしない（同じ生成器が、真偽を1つの値に制限した型を作れないため）
       足せる形にする値（場所の役割・種類）は列挙にせず、形だけを制約し、知らない値でも画面が壊れないようにする
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
@@ -612,13 +612,13 @@ components:
       type: object
       description: |
         わかってきたこと（C25）の1件分。ex-day の見立てであり、事実の認定ではない。断定の書き方にしない。
-        リアクションは種類と裏付けで決まる（論理設計 4.7節）。`reactions` の形で判別できるよう、3つに分ける。
+        リアクションは種類と裏付けで決まる（論理設計 4.7節）。`kind` と `backing` で判別できるよう、3つに分ける。
 
-        | 種類 | backed | reactions |
-        |---|---|---|
-        | 価値（value） | false | agree・wantToGo |
-        | 裏付けのない説（theory） | false | maybe |
-        | 裏付けのある説（theory） | true | 返さない |
+        | 種類 | kind | backing | reactions |
+        |---|---|---|---|
+        | 価値 | value | （持たない） | agree・wantToGo |
+        | 裏付けのない説 | theory | unbacked | maybe |
+        | 裏付けのある説 | theory | backed | 返さない |
       oneOf:
         - $ref: '#/components/schemas/ValueFinding'
         - $ref: '#/components/schemas/UnbackedTheoryFinding'
@@ -626,12 +626,11 @@ components:
     ValueFinding:
       type: object
       additionalProperties: false
-      required: [id, kind, text, backed, unconfirmed, reactions]
+      required: [id, kind, text, unconfirmed, reactions]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [value] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, const: false }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
         reactions:
           type: object
@@ -643,12 +642,12 @@ components:
     UnbackedTheoryFinding:
       type: object
       additionalProperties: false
-      required: [id, kind, text, backed, unconfirmed, reactions]
+      required: [id, kind, text, backing, unconfirmed, reactions]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [theory] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, const: false }
+        backing: { type: string, enum: [unbacked], description: 資料・出典の裏付けがない }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
         reactions:
           type: object
@@ -660,16 +659,16 @@ components:
       type: object
       description: 資料・出典の裏付けがある説。リアクションを付けない（確からしさは資料・出典で決まる）
       additionalProperties: false
-      required: [id, kind, text, backed, unconfirmed]
+      required: [id, kind, text, backing, unconfirmed]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
         kind: { type: string, enum: [theory] }
         text: { type: string, minLength: 1, description: 今の版の内容 }
-        backed: { type: boolean, const: true }
+        backing: { type: string, enum: [backed], description: 資料・出典の裏付けがある }
         unconfirmed: { type: boolean, description: 未確認の見立てか }
     ConversationCard:
       description: |
-        会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPostVisible` で判別する。
+        会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPost`（最初の Post が見えるか）で判別する。
         **最初の Post が非公開のとき**は、本文の冒頭と始めた人を返さない（非公開の Post の本文と書いた人を出さない）。
         その場合のカードの見せ方、退会・削除された人の表示は、C40・F10 の設計に合わせる
       oneOf:
@@ -679,10 +678,10 @@ components:
       type: object
       description: 最初の Post が一般のユーザーに見える会話
       additionalProperties: false
-      required: [id, firstPostVisible, excerpt, starterName, replyCount, startedAt, places]
+      required: [id, firstPost, excerpt, starterName, replyCount, startedAt, places]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
-        firstPostVisible: { type: boolean, const: true }
+        firstPost: { type: string, enum: [visible], description: 最初の Post が一般のユーザーに見える }
         excerpt:
           type: string
           minLength: 1
@@ -711,10 +710,10 @@ components:
       type: object
       description: 最初の Post が非公開の会話（本文の冒頭と始めた人を返さない）
       additionalProperties: false
-      required: [id, firstPostVisible, replyCount, startedAt, places]
+      required: [id, firstPost, replyCount, startedAt, places]
       properties:
         id: { $ref: '#/components/schemas/PublicId' }
-        firstPostVisible: { type: boolean, const: false }
+        firstPost: { type: string, enum: [hidden], description: 最初の Post が非公開 }
         replyCount:
           type: integer
           minimum: 0
@@ -923,12 +922,11 @@ components:
           - id: 5c1c7654c027
             kind: value
             text: 桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる
-            backed: false
             unconfirmed: false
             reactions: { agree: 1, wantToGo: 0 }
         originConversations:
           - id: 9eae53a6f40b
-            firstPostVisible: true
+            firstPost: visible
             excerpt: 桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった
             starterName: 港の散歩人
             replyCount: 2

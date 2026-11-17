@@ -245,7 +245,6 @@ public class DiscoveryDetailAssembler {
                 .id(row.publicId())
                 .kind(ValueFinding.KindEnum.VALUE)
                 .text(row.content())
-                .backed(false)
                 .unconfirmed(row.unconfirmed())
                 .reactions(new ValueFindingReactions().agree(row.agree()).wantToGo(row.wantToGo()));
         }
@@ -254,14 +253,14 @@ public class DiscoveryDetailAssembler {
                 .id(row.publicId())
                 .kind(BackedTheoryFinding.KindEnum.THEORY)
                 .text(row.content())
-                .backed(true)
+                .backing(BackedTheoryFinding.BackingEnum.BACKED)
                 .unconfirmed(row.unconfirmed());
         }
         return new UnbackedTheoryFinding()
             .id(row.publicId())
             .kind(UnbackedTheoryFinding.KindEnum.THEORY)
             .text(row.content())
-            .backed(false)
+            .backing(UnbackedTheoryFinding.BackingEnum.UNBACKED)
             .unconfirmed(row.unconfirmed())
             .reactions(new UnbackedTheoryFindingReactions().maybe(row.maybe()));
     }
@@ -283,7 +282,7 @@ public class DiscoveryDetailAssembler {
         if (row.firstPostVisible()) {
             var card = new ConversationCardWithFirstPost()
                 .id(row.publicId())
-                .firstPostVisible(true)
+                .firstPost(ConversationCardWithFirstPost.FirstPostEnum.VISIBLE)
                 .excerpt(excerpt(row.firstPostBody()))
                 .starterName(row.starterName())
                 .replyCount(Math.max(0, row.publicPostCount() - 1))
@@ -294,7 +293,7 @@ public class DiscoveryDetailAssembler {
         }
         var card = new ConversationCardWithoutFirstPost()
             .id(row.publicId())
-            .firstPostVisible(false)
+            .firstPost(ConversationCardWithoutFirstPost.FirstPostEnum.HIDDEN)
             .replyCount(Math.max(0, row.publicPostCount()))
             .startedAt(row.createdAt())
             .places(places);

@@ -38,7 +38,7 @@ export function toFinding(finding: Schemas["FindingItem"]): DiscoveryFinding {
       reactions: { understand: finding.reactions.agree, wantToGo: finding.reactions.wantToGo },
     };
   }
-  if (finding.backed) {
+  if (finding.backing === "backed") {
     return { id: finding.id, kind: "theory", text: finding.text, backedBy: "資料・出典の裏付けあり", reactions: {} };
   }
   return { id: finding.id, kind: "theory", text: finding.text, reactions: { maybe: finding.reactions.maybe } };

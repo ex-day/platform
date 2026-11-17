@@ -56,7 +56,7 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
 
         var findings = (List<Map<String, Object>>) body.get("findings");
         assertThat(findings).hasSize(1);
-        assertThat(findings.get(0)).containsEntry("kind", "value").containsEntry("backed", false)
+        assertThat(findings.get(0)).containsEntry("kind", "value").doesNotContainKey("backing")
             .containsEntry("unconfirmed", false)
             .containsEntry("reactions", Map.of("agree", 1, "wantToGo", 0));
 
@@ -64,7 +64,7 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
         var origin = (List<Map<String, Object>>) body.get("originConversations");
         assertThat(origin).hasSize(1);
         assertThat(origin.get(0)).containsEntry("id", sid("conv:walk"))
-            .containsEntry("firstPostVisible", true)
+            .containsEntry("firstPost", "visible")
             .containsEntry("excerpt", "桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった")
             .containsEntry("starterName", "港の散歩人")
             .containsEntry("replyCount", 2);
@@ -145,7 +145,7 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
 
         var findings = (List<Map<String, Object>>) body.get("findings");
         assertThat(findings).hasSize(2);
-        assertThat(findings.get(1)).containsEntry("kind", "theory").containsEntry("backed", false)
+        assertThat(findings.get(1)).containsEntry("kind", "theory").containsEntry("backing", "unbacked")
             .containsEntry("text", "昔は汽車道を貨物列車が走っていた")
             .containsEntry("reactions", Map.of("maybe", 0));
     }
@@ -158,7 +158,7 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
             .param("id", sid("conv:walk")).update();
 
         var card = ((List<Map<String, Object>>) body(sid("disc:walk")).get("originConversations")).get(0);
-        assertThat(card).containsEntry("firstPostVisible", false).containsEntry("replyCount", 2)
+        assertThat(card).containsEntry("firstPost", "hidden").containsEntry("replyCount", 2)
             .doesNotContainKeys("excerpt", "starterName");
     }
 

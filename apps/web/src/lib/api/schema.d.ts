@@ -405,13 +405,13 @@ export interface components {
         };
         /**
          * @description わかってきたこと（C25）の1件分。ex-day の見立てであり、事実の認定ではない。断定の書き方にしない。
-         *     リアクションは種類と裏付けで決まる（論理設計 4.7節）。`reactions` の形で判別できるよう、3つに分ける。
+         *     リアクションは種類と裏付けで決まる（論理設計 4.7節）。`kind` と `backing` で判別できるよう、3つに分ける。
          *
-         *     | 種類 | backed | reactions |
-         *     |---|---|---|
-         *     | 価値（value） | false | agree・wantToGo |
-         *     | 裏付けのない説（theory） | false | maybe |
-         *     | 裏付けのある説（theory） | true | 返さない |
+         *     | 種類 | kind | backing | reactions |
+         *     |---|---|---|---|
+         *     | 価値 | value | （持たない） | agree・wantToGo |
+         *     | 裏付けのない説 | theory | unbacked | maybe |
+         *     | 裏付けのある説 | theory | backed | 返さない |
          */
         FindingItem: components["schemas"]["ValueFinding"] | components["schemas"]["UnbackedTheoryFinding"] | components["schemas"]["BackedTheoryFinding"];
         ValueFinding: {
@@ -420,8 +420,6 @@ export interface components {
             kind: "value";
             /** @description 今の版の内容 */
             text: string;
-            /** @constant */
-            backed: false;
             /** @description 未確認の見立てか */
             unconfirmed: boolean;
             reactions: {
@@ -437,8 +435,11 @@ export interface components {
             kind: "theory";
             /** @description 今の版の内容 */
             text: string;
-            /** @constant */
-            backed: false;
+            /**
+             * @description 資料・出典の裏付けがない
+             * @enum {string}
+             */
+            backing: "unbacked";
             /** @description 未確認の見立てか */
             unconfirmed: boolean;
             reactions: {
@@ -453,13 +454,16 @@ export interface components {
             kind: "theory";
             /** @description 今の版の内容 */
             text: string;
-            /** @constant */
-            backed: true;
+            /**
+             * @description 資料・出典の裏付けがある
+             * @enum {string}
+             */
+            backing: "backed";
             /** @description 未確認の見立てか */
             unconfirmed: boolean;
         };
         /**
-         * @description 会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPostVisible` で判別する。
+         * @description 会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPost`（最初の Post が見えるか）で判別する。
          *     **最初の Post が非公開のとき**は、本文の冒頭と始めた人を返さない（非公開の Post の本文と書いた人を出さない）。
          *     その場合のカードの見せ方、退会・削除された人の表示は、C40・F10 の設計に合わせる
          */
@@ -467,8 +471,11 @@ export interface components {
         /** @description 最初の Post が一般のユーザーに見える会話 */
         ConversationCardWithFirstPost: {
             id: components["schemas"]["PublicId"];
-            /** @constant */
-            firstPostVisible: true;
+            /**
+             * @description 最初の Post が一般のユーザーに見える
+             * @enum {string}
+             */
+            firstPost: "visible";
             /** @description 最初の Post の本文の冒頭 */
             excerpt: string;
             /** @description 会話を始めた人の今のニックネーム（表示のたびに引く。Issue */
@@ -491,8 +498,11 @@ export interface components {
         /** @description 最初の Post が非公開の会話（本文の冒頭と始めた人を返さない） */
         ConversationCardWithoutFirstPost: {
             id: components["schemas"]["PublicId"];
-            /** @constant */
-            firstPostVisible: false;
+            /**
+             * @description 最初の Post が非公開
+             * @enum {string}
+             */
+            firstPost: "hidden";
             /** @description 公開の返信の数（公開の Post の数。最初の Post は非公開なので数に入っていない） */
             replyCount: number;
             /**
