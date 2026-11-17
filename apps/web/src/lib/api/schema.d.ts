@@ -158,7 +158,8 @@ export interface paths {
          *       （`moved`）。Discovery は最後の統合先を出す（公開の判定・循環の扱いは S03・S13 と同じ。DiscoverySummaryPage）
          *     - **区画の中身がないとき**：配列は空、件数は 0。出すかどうかは画面で決める（場所の候補が空で場所が決まっていれば C33 を出さない、等）
          *     - **件数**：区画ごとに上限を決め、上限のある区画は全体の数（`totalCount`）も返す。場所の状態は上限なし（採用は少数）。
-         *       Post の数は `postLimit` で変えられる（暫定の値。実際の画面で調整する）
+         *       Post・わかってきたことの数は `postLimit`・`findingLimit` で変えられる（暫定の値。実際の画面で調整する）。
+         *       場所の候補・問いは、採用中の候補・回答のある問いを上限によらず全部返し、ほかのものを上限まで返す
          *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
          *     - **返さないもの**：解析の状態（運用の記録の表がまだない）、運営の操作・判断の記録（認証 #75 のあと）、自分の Reaction・自分の声
          *       （認証のあと）、企画の変更の出来事（企画そのものの会話でも S14 には混ぜない。S15 で混ぜる）
@@ -192,6 +193,28 @@ export interface paths {
          *     - 会話が非公開、またはカーソルがこの会話のものでなければ 404。カーソルの形が合わなければ 400
          */
         get: operations["getConversationPosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{conversationId}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S14 のわかってきたことの続きを取得する
+         * @description カーソル（`after`）より後のわかってきたことを、並び（FindingPage）の順に `limit` 件返す。
+         *     会話が非公開、またはカーソルがこの会話のものでなければ 404。カーソルの形が合わなければ 400。
+         *     カーソルのわかってきたことが、読んでいる間に統合・失効しても、並びのキーで比べるので続きを読める
+         */
+        get: operations["getConversationFindings"];
         put?: never;
         post?: never;
         delete?: never;
@@ -520,6 +543,18 @@ export interface components {
             kind: "value";
             /** @description 今の版の内容 */
             text: string;
+            /** @description 今の版の番号（1から。言い換え等で新しい版になると増える） */
+            version: number;
+            /**
+             * Format: date-time
+             * @description わかってきたことができた時点
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 今の版になった時点（版が1なら createdAt と同じ）。新しいものと更新されたものを見分けるのに使う
+             */
+            updatedAt: string;
             /** @description 未確認の見立てか */
             unconfirmed: boolean;
             reactions: {
@@ -535,6 +570,18 @@ export interface components {
             kind: "theory";
             /** @description 今の版の内容 */
             text: string;
+            /** @description 今の版の番号（1から。言い換え等で新しい版になると増える） */
+            version: number;
+            /**
+             * Format: date-time
+             * @description わかってきたことができた時点
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 今の版になった時点（版が1なら createdAt と同じ）。新しいものと更新されたものを見分けるのに使う
+             */
+            updatedAt: string;
             /**
              * @description 資料・出典の裏付けがない
              * @enum {string}
@@ -554,6 +601,18 @@ export interface components {
             kind: "theory";
             /** @description 今の版の内容 */
             text: string;
+            /** @description 今の版の番号（1から。言い換え等で新しい版になると増える） */
+            version: number;
+            /**
+             * Format: date-time
+             * @description わかってきたことができた時点
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description 今の版になった時点（版が1なら createdAt と同じ）。新しいものと更新されたものを見分けるのに使う
+             */
+            updatedAt: string;
             /**
              * @description 資料・出典の裏付けがある
              * @enum {string}
@@ -902,8 +961,8 @@ export interface components {
              */
             places: components["schemas"]["ConversationPlaceItem"][];
             posts: components["schemas"]["PostThread"];
-            placeCandidates: components["schemas"]["PlaceCandidatePage"];
-            questions: components["schemas"]["QuestionPage"];
+            placeCandidates: components["schemas"]["PlaceCandidateSection"];
+            questions: components["schemas"]["QuestionSection"];
             findings: components["schemas"]["FindingPage"];
             /** @description この会話から生まれた発見（由来＝この会話）。成立の新しい順 */
             discoveries: components["schemas"]["DiscoverySummaryPage"];
@@ -1020,12 +1079,20 @@ export interface components {
             olderCursor?: components["schemas"]["PostCursor"];
         };
         /**
-         * @description 場所の候補と採用（C33）。対象がこの会話、またはこの会話の問いの候補。検討中・不採用・失効の全部（画面が不採用・取り消しを折りたたむ）。
-         *     並びは候補の作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+         * @description 場所の候補と採用（C33）。対象がこの会話、またはこの会話の問いの候補。
+         *     **今の採用（採用中・再検討中）がある候補を `adopted` に全部**入れ（件数の上限で欠けない）、ほかの候補を `others` に入れる。
+         *     採用は真実の確定ではなく、再検討になりうる（再検討中も adopted に入れ、状態で見分ける）。
+         *     候補は消さずに蓄積し、件数を制限しない（`others` は見せる数の上限で、蓄積の上限ではない）
+         *
+         *     - `adopted` の並び：採用の順番（順番のない採用は後）、次に候補の作成の時点、同じなら識別子の順
+         *     - `others` の並び：検討中を先に、次に不採用・失効・取り消しのもの。それぞれ候補の作成の時点の古い順、同じなら識別子の順。
+         *       最大50件（暫定。データが育ってから見直す）。`othersTotalCount` はほかの候補の全体の数。
+         *       50件を超えたときの見方は、データが増えた段階で決める
          */
-        PlaceCandidatePage: {
-            items: components["schemas"]["PlaceCandidateItem"][];
-            totalCount: number;
+        PlaceCandidateSection: {
+            adopted: components["schemas"]["PlaceCandidateItem"][];
+            others: components["schemas"]["PlaceCandidateItem"][];
+            othersTotalCount: number;
         };
         PlaceCandidateItem: {
             id: components["schemas"]["PublicId"];
@@ -1107,12 +1174,18 @@ export interface components {
             reason: "readopted" | "withdrawn" | "merged";
         };
         /**
-         * @description この会話の問い（C34）。有効な問いと失効した問い。統合された問いは出さず、統合先が別の会話なら `moved` で案内する
-         *     （統合先が同じ会話なら何も出さない）。並びは作成の時点の古い順、同じ時点なら識別子の順。最大20件（固定）。totalCount は全体の数
+         * @description この会話の問い（C34）。**採用中・再検討中の回答がある問いを `answered` に全部**入れ（件数の上限で欠けない）、ほかの問い
+         *     （回答のない有効な問いと、失効した問い）を `others` に入れる。問いは消さずに蓄積し、件数を制限しない。
+         *     統合された問いは出さず、統合先が別の会話なら `moved` で案内する（統合先が同じ会話なら何も出さない）
+         *
+         *     - `answered` の並び：作成の時点の古い順、同じなら識別子の順
+         *     - `others` の並び：有効な問いを先に、次に失効した問い。それぞれ作成の時点の古い順、同じなら識別子の順。
+         *       最大20件（暫定）。`othersTotalCount` はほかの問いの全体の数。20件を超えたときの見方は、データが増えた段階で決める
          */
-        QuestionPage: {
-            items: components["schemas"]["QuestionItem"][];
-            totalCount: number;
+        QuestionSection: {
+            answered: components["schemas"]["QuestionItem"][];
+            others: components["schemas"]["QuestionItem"][];
+            othersTotalCount: number;
             moved: components["schemas"]["MovedItem"][];
         };
         QuestionItem: {
@@ -1155,15 +1228,51 @@ export interface components {
             kind: "post";
             status: components["schemas"]["AdoptionStatus"];
             adoptedBy: components["schemas"]["AdoptionActor"];
-            /** @description 回答の Post。非公開の Post でも識別子を返す */
-            postId: components["schemas"]["PublicId"];
+            post: components["schemas"]["AnswerPostRef"];
+        };
+        /**
+         * @description 回答の Post への参照。`state` で判別する。回答の採用と、参照先の公開状態は独立している（採用は取り消されていない）。
+         *     Post が非公開でも、属する会話が公開なら識別子を返す（会話の Post の HiddenPost を指す。本文は返さない）。
+         *     属する会話が非公開なら、参照できないことだけを返す
+         */
+        AnswerPostRef: components["schemas"]["AvailableAnswerPostRef"] | components["schemas"]["UnavailableAnswerRef"];
+        AvailableAnswerPostRef: {
+            /** @enum {string} */
+            state: "available";
+            id: components["schemas"]["PublicId"];
+            /** @description Post が属する会話（ふつうはこの会話） */
+            conversationId: components["schemas"]["PublicId"];
         };
         FindingQuestionAnswer: {
             /** @enum {string} */
             kind: "finding";
             status: components["schemas"]["AdoptionStatus"];
             adoptedBy: components["schemas"]["AdoptionActor"];
-            findingId: components["schemas"]["PublicId"];
+            finding: components["schemas"]["AnswerFindingRef"];
+        };
+        /**
+         * @description 回答のわかってきたことへの参照。`state` で判別する。回答の採用と、参照先の状態は独立している
+         *     （参照先が統合・失効・非公開になっても、採用の取り消しとは扱わない）。
+         *
+         *     - `available`：`text` は**採用した版の内容**（今の版ではない）。`id` は案内する先で、統合されていれば最後の統合先
+         *       （循環・深さの上限で決められないときは、統合された側そのもの）。失効していても参照できる
+         *     - `unavailable`：属する会話（統合先をたどったときは、統合先の会話）が非公開で、一般のユーザーに見せられない。
+         *       理由や内容は返さない
+         */
+        AnswerFindingRef: components["schemas"]["AvailableAnswerFindingRef"] | components["schemas"]["UnavailableAnswerRef"];
+        AvailableAnswerFindingRef: {
+            /** @enum {string} */
+            state: "available";
+            id: components["schemas"]["PublicId"];
+            /** @description 案内する先のわかってきたことが属する会話 */
+            conversationId: components["schemas"]["PublicId"];
+            /** @description 採用した版の内容 */
+            text: string;
+        };
+        /** @description 回答の参照先を一般のユーザーに見せられない（採用は取り消されていない） */
+        UnavailableAnswerRef: {
+            /** @enum {string} */
+            state: "unavailable";
         };
         /** @description 統合されて別の会話へ移ったもの（問い・わかってきたこと）。押すと統合先の会話のページ */
         MovedItem: {
@@ -1172,13 +1281,24 @@ export interface components {
             /** @description 最後の統合先が属する会話（公開の会話だけ。見えないときは moved に入れない） */
             conversationId: components["schemas"]["PublicId"];
         };
+        /** @description わかってきたことの続きを読むカーソル。画面は中身を解釈せず、そのまま `after` に渡す */
+        FindingCursor: string;
         /**
-         * @description この会話のわかってきたこと（C25）。有効なものの今の版。統合された側は出さず、統合先が別の会話なら `moved` で案内する。
-         *     並びは作成の時点の古い順、同じ時点なら識別子の順。最大50件（固定）。totalCount は全体の数
+         * @description この会話のわかってきたこと（C25）。有効なものの今の版。わかってきたことは発見の成立のあとも消さずに蓄積し、件数を制限しない。
+         *     統合された側は出さず、統合先が別の会話なら `moved` で案内する。
+         *
+         *     - **並び**：できた時点（createdAt）の古い順、同じなら識別子の順（安定した並び）。版が新しくなっても並びの位置は変わらない。
+         *       新しいものと更新されたものは `createdAt`・`updatedAt`・`version` で見分ける
+         *     - **件数**：getConversation では `findingLimit` 件（暫定の既定値20）、getConversationFindings では `limit` 件。
+         *       続きがあれば `nextCursor` を返す（getConversationFindings の `after` に渡す）。カーソルは並びのキーで比べるので、
+         *       読んでいる間に新しいわかってきたことができても、範囲がずれない（新しいものは並びの最後に足される）
+         *     - `totalCount` は有効なわかってきたことの全体の数。`moved` は getConversation だけで返す（続きの読み込みでは空）
+         *     - 初回の件数・並び・更新の見せ方は、データが育ってから見直す（S14 の判断待ち）
          */
         FindingPage: {
             items: components["schemas"]["FindingItem"][];
             totalCount: number;
+            nextCursor?: components["schemas"]["FindingCursor"];
             moved: components["schemas"]["MovedItem"][];
         };
         /**
@@ -1366,6 +1486,8 @@ export interface operations {
             query?: {
                 /** @description 最初の Post に続けて返す、新しい Post の数（暫定の既定値20） */
                 postLimit?: number;
+                /** @description 返すわかってきたことの数（暫定の既定値20）。続きは getConversationFindings で読む */
+                findingLimit?: number;
             };
             header?: never;
             path: {
@@ -1413,6 +1535,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OlderPostPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getConversationFindings: {
+        parameters: {
+            query: {
+                /** @description カーソル。これより後のわかってきたことを返す */
+                after: components["schemas"]["FindingCursor"];
+                /** @description 返す数（暫定の既定値20） */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                conversationId: components["parameters"]["ConversationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description わかってきたことの続き */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingPage"];
                 };
             };
             400: components["responses"]["BadRequest"];
