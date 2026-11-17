@@ -10,6 +10,10 @@ info:
     - **作り直しの状況**：S03（Discovery のページ）は v0.2 の形（DB V2・画面定義の書き直しに合わせた）。
       S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す（それまで API の実装は動かない）。
       S13・S14・S15・S17 は、順に足す
+    - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
+      制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
+      形の違うものは `oneOf` と判別の項目（`discriminator`）で分ける（GeoJSON の Geometry、わかってきたこと、統合の状態、会話カード）。
+      足せる形にする値（場所の役割・種類）は列挙にせず、形だけを制約し、知らない値でも画面が壊れないようにする
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
     - 用語は論理 Entity の設計（docs/ex-day_logical_entity_design.md）に合わせる。
@@ -123,14 +127,18 @@ paths:
 
         - **見えるもの**：一般のユーザーには、公開で、成立を取り消していない Discovery だけを返す（DB の visible_discovery）。
           非公開・成立を取り消した Discovery は、直接の識別子でも 404 にする。運営の権限で見る形は、認証（#75）のあとに足す
-        - **統合された Discovery**：200 で返し、`mergedInto` に統合先を入れる。画面は統合先への案内を出し、
-          「この発見について話す」とリアクションの操作を出さない（S03「初期表示」）
-        - **Value の振り分け**：API が行い、画面では評価しない。
+        - **統合された Discovery**：200 で返し、`merge.status` を merged にする。案内する統合先は `merge.target`
+          （たどった最後の統合先。見えないときは返さない。MergeState）。`capabilities` で新しい会話・リアクションを受け付けないことを返す
+          （S03「初期表示」）
+        - **Value の振り分け**：API が行い、画面では評価しない。評価に要る情報が足りないとき、成立・不成立を推測しない（論理設計 4.5.4節）。
           推薦する Value（季節が一致、または通年・季節の条件なし）は `recommendations`（Hero、C19）に推薦順で、
           推薦しない Value（季節違い）は `otherValues`（その他の魅力、C12）に入れる（冒頭の「季節と推薦の考え方」）
         - **区画の中身がないとき**：配列は空、件数は 0 で返す。出すかどうか（中身のない区画は出さない）は画面で決める
-        - **件数の多い区画**（この発見から始まった会話、関わる企画）は、新しい順に `limit` 件までと、全体の件数（`totalCount`）を返す。
+        - **件数の多い区画**（この発見から始まった会話、関わる企画、関係する Discovery）は、決まった順に**最大10件（固定）**を返す。
+          会話と企画は公開のものの全体の件数（`totalCount`）も返す。順と重ね方は ConversationCardPage・ProjectCardPage を参照。
           続きを見る API は、必要になったときに足す
+        - **公開の境界**：ほかの対象を指して返すもの（統合先、会話カードの最初の Post、企画、関係する Discovery、わかってきたこと）も、
+          一般のユーザーに見えるものだけを返す（DB 設計 2.5節）
         - 自分のリアクション、運営の操作（C38）・判断の記録は、認証（#75）のあとに足す
         - Discovery の現在状態（「今シーズンの情報あり」）は、判定（論理設計 4.5節の要検討）が決まってから足す
         - 「ここから行ける」（C35）の到達圏は、寄り道（F06）の API で取る。このページは起点の場所（`detourFrom`）だけを返す
@@ -161,8 +169,8 @@ components:
       name: discoveryId
       in: path
       required: true
-      description: Discovery の識別子。形式は約束しない（中身を解釈しない文字列として扱う）
-      schema: { type: string, minLength: 1, maxLength: 64 }
+      description: Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400
+      schema: { $ref: '#/components/schemas/PublicId' }
   responses:
     BadRequest:
       description: 指定が正しくない（例：limit が範囲外、discoveryId が長すぎる）
@@ -282,62 +290,146 @@ components:
       properties:
         url: { type: string, format: uri-reference }
         alt: { type: string }
+    PublicId:
+      type: string
+      description: |
+        画面・URL に出す識別子（英数字12文字。DB 設計 2.1節）。中身を解釈しない文字列として扱う。
+        内部の連番は出さない
+      pattern: '^[0-9A-Za-z]{12}$'
+      minLength: 12
+      maxLength: 12
     DiscoveryRef:
       type: object
       description: 別の Discovery への参照（統合先への案内など）
+      additionalProperties: false
       required: [id, title]
       properties:
-        id: { type: string }
-        title: { type: string }
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
     PlaceRef:
       type: object
-      description: 場所への参照。押すと場所のページ（S13）。座標は持たない（地図に出す場所は DiscoveryPlaceItem の geometry）
+      description: 場所への参照。押すと場所のページ（S13）。座標は持たない（地図に出す形は DiscoveryPlaceItem の geometry）
+      additionalProperties: false
       required: [id, name]
       properties:
-        id:
-          type: string
-          description: 場所の識別子（画面・URL に出すもの）
-        name: { type: string, description: 例：小机城址 }
-    Geometry:
+        id: { $ref: '#/components/schemas/PublicId' }
+        name: { type: string, minLength: 1, description: 例：小机城址 }
+    # ---- GeoJSON の Geometry（RFC 7946）。S03・S13・S15 で共用する ----
+    Position:
+      type: array
+      description: 位置（経度, 緯度）。WGS84。高さは持たない
+      prefixItems:
+        - { type: number, format: double, minimum: -180, maximum: 180, description: 経度 }
+        - { type: number, format: double, minimum: -90, maximum: 90, description: 緯度 }
+      items: false
+      minItems: 2
+      maxItems: 2
+    LineStringCoordinates:
+      type: array
+      description: 経路の位置の並び（2つ以上）
+      items: { $ref: '#/components/schemas/Position' }
+      minItems: 2
+    LinearRingCoordinates:
+      type: array
+      description: 閉じた輪（4つ以上で、最初と最後が同じ位置）
+      items: { $ref: '#/components/schemas/Position' }
+      minItems: 4
+    PolygonCoordinates:
+      type: array
+      description: 外側の輪と、穴の輪（0個以上）
+      items: { $ref: '#/components/schemas/LinearRingCoordinates' }
+      minItems: 1
+    PointGeometry:
       type: object
-      description: |
-        場所の形（GeoJSON の Geometry。座標は経度・緯度の順、WGS84）。地点は Point、経路は LineString・MultiLineString、
-        エリアは Polygon・MultiPolygon。座標は API の本文でだけ返し、URL には出さない（DEC-0022）
+      additionalProperties: false
       required: [type, coordinates]
       properties:
-        type:
-          type: string
-          enum: [Point, LineString, MultiLineString, Polygon, MultiPolygon]
+        type: { type: string, enum: [Point] }
+        coordinates: { $ref: '#/components/schemas/Position' }
+    LineStringGeometry:
+      type: object
+      additionalProperties: false
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [LineString] }
+        coordinates: { $ref: '#/components/schemas/LineStringCoordinates' }
+    MultiLineStringGeometry:
+      type: object
+      additionalProperties: false
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [MultiLineString] }
         coordinates:
-          description: GeoJSON の coordinates（type ごとに入れ子の深さが違う）
+          type: array
+          items: { $ref: '#/components/schemas/LineStringCoordinates' }
+          minItems: 1
+    PolygonGeometry:
+      type: object
+      additionalProperties: false
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Polygon] }
+        coordinates: { $ref: '#/components/schemas/PolygonCoordinates' }
+    MultiPolygonGeometry:
+      type: object
+      additionalProperties: false
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [MultiPolygon] }
+        coordinates:
+          type: array
+          items: { $ref: '#/components/schemas/PolygonCoordinates' }
+          minItems: 1
+    Geometry:
+      description: |
+        場所の形（GeoJSON の Geometry。RFC 7946）。`type` で判別する。地点は Point、経路は LineString・MultiLineString、
+        エリアは Polygon・MultiPolygon。座標は API の本文でだけ返し、URL には出さない（DEC-0022）
+      oneOf:
+        - $ref: '#/components/schemas/PointGeometry'
+        - $ref: '#/components/schemas/LineStringGeometry'
+        - $ref: '#/components/schemas/MultiLineStringGeometry'
+        - $ref: '#/components/schemas/PolygonGeometry'
+        - $ref: '#/components/schemas/MultiPolygonGeometry'
+      discriminator:
+        propertyName: type
+        mapping:
+          Point: '#/components/schemas/PointGeometry'
+          LineString: '#/components/schemas/LineStringGeometry'
+          MultiLineString: '#/components/schemas/MultiLineStringGeometry'
+          Polygon: '#/components/schemas/PolygonGeometry'
+          MultiPolygon: '#/components/schemas/MultiPolygonGeometry'
+    # ---- S03 ----
     DiscoveryDetail:
       type: object
-      required: [id, title, summary, context, displayPlaces, aspects, recommendations, otherValues, origins, reactions,
-                 places, findings, originConversations, startedConversations, projects, relations]
+      additionalProperties: false
+      required: [id, title, summary, merge, capabilities, context, displayPlaces, aspects, recommendations, otherValues,
+                 origins, reactions, places, findings, originConversations, startedConversations, projects, relations]
       properties:
-        id: { type: string }
-        title: { type: string }
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
         summary:
           type: string
-          description: 現在の要約
-        mergedInto:
-          $ref: '#/components/schemas/DiscoveryRef'
-          description: 統合された Discovery のときだけ。統合先（S03 の「統合先への案内」、C15）
+          description: 現在の要約（空のこともある）
+        merge: { $ref: '#/components/schemas/MergeState' }
+        capabilities: { $ref: '#/components/schemas/DiscoveryCapabilities' }
         context: { $ref: '#/components/schemas/EvaluationContext' }
         displayPlaces:
           type: array
           description: |
-            場所の見出し（「小机城址」「生麦 ほか」）。出す位置の場所（Discovery と場所の関係の役割が、体験できる場所・始まり）。
-            順番のあるものは順番の順。1件以上
+            場所の見出し（「小机城址」「生麦 ほか」）。出す位置の場所（Discovery と場所の関係の役割が EXPERIENCE・START）。
+            順番のあるものは順番の順。出す位置の役割の場所がない Discovery では、関わる場所の最初のもの
           minItems: 1
           items: { $ref: '#/components/schemas/PlaceRef' }
         aspects:
           type: array
           description: 観点（Subject の観点）の代表表記。押すとその言葉で S02
-          items: { type: string }
+          items: { type: string, minLength: 1 }
         recommendations:
           type: array
-          description: Hero（C19）に渡す、推薦する Value。推薦順（推薦度の高い順）。0件でも Hero は標準 Hero で表示する（Issue #50）
+          description: |
+            Hero（C19）に渡す、推薦する Value。推薦順（推薦度の高い順）。0件でも Hero は標準 Hero で表示する（Issue #50）。
+            評価に要る情報が足りないとき、成立・不成立を推測しない（論理設計 4.5.4節）。今は季節だけで振り分けるので評価不能は起きない。
+            評価不能を返す形と表示は、Recommendation の後続の設計で決める
           items: { $ref: '#/components/schemas/ValueItem' }
         otherValues:
           type: array
@@ -351,37 +443,78 @@ components:
         reactions: { $ref: '#/components/schemas/DiscoveryReactions' }
         places:
           type: array
-          description: 関わる場所（地図 C41 と一覧 C28）。Discovery と場所の関係をすべて。順番のあるものは順番の順。1件以上
+          description: 関わる場所（地図 C41 と一覧 C28）。Discovery と場所の関係（有効なもの）をすべて。順番のあるものは順番の順。1件以上
           minItems: 1
           items: { $ref: '#/components/schemas/DiscoveryPlaceItem' }
         detourFrom:
           $ref: '#/components/schemas/PlaceRef'
-          description: 「ここから行ける」（C35）の起点にする場所（出す位置の場所の最初のもの）。到達圏は寄り道（F06）の API で取る
+          description: 「ここから行ける」（C35）の起点にする場所（displayPlaces の最初のもの）。到達圏は寄り道（F06）の API で取る
         findings:
           type: array
           description: |
             わかってきたこと（C25）。この発見のもとになった会話と、この発見から始まった会話の Finding（有効なものの今の版）。
-            公開の会話のものだけ
+            公開の会話のものだけ。取得の範囲（件数が増えたとき）は後続で決める
           items: { $ref: '#/components/schemas/FindingItem' }
         originConversations:
           type: array
-          description: この発見のもとになった会話（由来＝会話。C40）。公開の会話だけ
+          description: この発見のもとになった会話（由来＝会話。C40）。公開の会話だけ。会話の開始の時点の古い順
           items: { $ref: '#/components/schemas/ConversationCard' }
-        startedConversations:
-          $ref: '#/components/schemas/ConversationCardPage'
-          description: この発見から始まった会話（入口＝この Discovery。C40）。公開の会話だけ、新しい順
-        projects:
-          $ref: '#/components/schemas/ProjectCardPage'
-          description: 関わる企画（C29）。この Discovery、またはこの Discovery の場所を項目に持つ公開の企画
+        startedConversations: { $ref: '#/components/schemas/ConversationCardPage' }
+        projects: { $ref: '#/components/schemas/ProjectCardPage' }
         relations: { $ref: '#/components/schemas/DiscoveryRelations' }
+    MergeState:
+      description: |
+        統合の状態。`status` で判別する。統合された Discovery を開いたときは、統合先への案内（C15）を出す（自動では移らない）。
+        統合されたかどうか（status）と、案内する統合先（target）を分ける。
+        - 統合先がさらに統合されているときは、たどった最後の統合先を target にする（循環は統合の処理（F12）で作らない）
+        - 最後の統合先が一般のユーザーに見えない（非公開・成立の取り消し）ときは、target を返さない（ID・表題を出さない）。
+          status は merged のまま返す
+      oneOf:
+        - $ref: '#/components/schemas/NotMerged'
+        - $ref: '#/components/schemas/Merged'
+      discriminator:
+        propertyName: status
+        mapping:
+          none: '#/components/schemas/NotMerged'
+          merged: '#/components/schemas/Merged'
+    NotMerged:
+      type: object
+      description: 統合されていない
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [none] }
+    Merged:
+      type: object
+      description: 統合された側
+      additionalProperties: false
+      required: [status]
+      properties:
+        status: { type: string, enum: [merged] }
+        target:
+          $ref: '#/components/schemas/DiscoveryRef'
+          description: 案内する統合先（たどった最後の統合先）。一般のユーザーに見えるときだけ
+    DiscoveryCapabilities:
+      type: object
+      description: |
+        この Discovery に対して始められる操作（ログインの有無とは別に、対象として受け付けるか）。
+        統合された側では、新しい会話（この発見について話す）とリアクションを受け付けない（S03「初期表示」）。
+        統合される前からある会話は S14 で続けられる
+      additionalProperties: false
+      required: [canStartConversation, canReact]
+      properties:
+        canStartConversation: { type: boolean }
+        canReact: { type: boolean }
     ValueItem:
       type: object
       description: Value の1件分（Hero の推薦 C19・その他の魅力 C12）
+      additionalProperties: false
       required: [id, description, conditions]
       properties:
-        id: { type: string }
+        id: { $ref: '#/components/schemas/PublicId' }
         description:
           type: string
+          minLength: 1
           description: 価値の説明
         conditions:
           type: array
@@ -389,21 +522,30 @@ components:
           items: { $ref: '#/components/schemas/ConditionDescription' }
     ConditionDescription:
       type: object
-      required: [label, text]
+      additionalProperties: false
+      required: [axis, label, text]
       properties:
+        axis:
+          type: string
+          enum: [season]
+          description: 条件の軸。軸が増えたら値を足す
         label:
           type: string
+          minLength: 1
           description: 例：季節
         text:
           type: string
+          minLength: 1
           description: 例：春（3〜5月）
         seasons:
           type: array
-          description: 季節の条件の場合の値（画面で表示を変えたいとき用）
+          description: 季節の条件の値（axis が season のとき）
+          minItems: 1
           items: { $ref: '#/components/schemas/Season' }
     DiscoveryOrigin:
       type: object
       description: Discovery の由来の1件分
+      additionalProperties: false
       required: [kind, establishedBy]
       properties:
         kind:
@@ -417,29 +559,45 @@ components:
     DiscoveryReactions:
       type: object
       description: Discovery へのリアクションの数（C10。「わかる」「行ってみたい」）
+      additionalProperties: false
       required: [agree, wantToGo]
       properties:
         agree: { type: integer, minimum: 0, description: わかる }
         wantToGo: { type: integer, minimum: 0, description: 行ってみたい }
+    DiscoveryPlaceRole:
+      type: string
+      description: |
+        Discovery と場所の関係の役割のコード値（DB の discovery_place.role）。役割は例が出るたびに足せる形にするため、
+        閉じた列挙にしない（論理設計 4.5.1節）。画面は、知っている値に表示名を当て、**知らない値は役割の名前を出さずに**
+        「関わる場所」として出す（画面が壊れないようにする）。
+
+        | 値 | 意味 | 出す位置の場所か |
+        |---|---|---|
+        | EXPERIENCE | 体験できる場所 | ○ |
+        | START | 始まり | ○ |
+        | VIA | 経由 | ― |
+        | END | 終わり | ― |
+        | MEMORY | 記憶の場所 | ― |
+        | FORMER_SITE | 今の跡地 | ― |
+        | AREA_EATEN | 食べられていた地域 | ― |
+      pattern: '^[A-Z][A-Z0-9_]*$'
+      maxLength: 40
     DiscoveryPlaceItem:
       type: object
       description: 関わる場所の1件分（Discovery と場所の関係）
+      additionalProperties: false
       required: [place, spatialType, kinds, role, isDisplayPlace, geometry]
       properties:
         place: { $ref: '#/components/schemas/PlaceRef' }
         spatialType:
           type: string
           enum: [point, area, route]
-          description: 場所の形（地点・エリア・経路）
+          description: 場所の形（地点・エリア・経路）。geometry の type と対応する（point は Point、route は LineString・MultiLineString、area は Polygon・MultiPolygon）
         kinds:
           type: array
-          description: 場所の種類（城跡・公園・駅・坂 等）
-          items: { type: string }
-        role:
-          type: string
-          description: |
-            この Discovery での役割（記憶の場所、今の跡地、体験できる場所、始まり・経由・終わり 等）。
-            値は足せる形にするため列挙しない。表示名は画面で決める（例：START → 始まり）
+          description: 場所の種類（城跡・公園・駅・坂 等）。値は足せる形にするため列挙しない
+          items: { type: string, minLength: 1 }
+        role: { $ref: '#/components/schemas/DiscoveryPlaceRole' }
         order:
           type: integer
           minimum: 1
@@ -447,13 +605,16 @@ components:
         period:
           $ref: '#/components/schemas/Period'
           description: この関係の期間（過去の運行区間など）。分からなければ持たない
-        description: { type: string, description: この場所での説明 }
+        description: { type: string, minLength: 1, description: この場所での説明 }
         isDisplayPlace:
           type: boolean
-          description: 出す位置の場所か（場所の見出し・一覧で数えるときの場所）
+          description: 出す位置の場所か（displayPlaces に入っているか）
         geometry: { $ref: '#/components/schemas/Geometry' }
     Period:
       type: object
+      description: 期間。片方だけのこともある
+      additionalProperties: false
+      minProperties: 1
       properties:
         from: { type: string, format: date }
         to: { type: string, format: date }
@@ -461,55 +622,93 @@ components:
       type: object
       description: |
         わかってきたこと（C25）の1件分。ex-day の見立てであり、事実の認定ではない。断定の書き方にしない。
-        リアクションは種類と裏付けで決まる（論理設計 4.7節）。
+        リアクションは種類と裏付けで決まる（論理設計 4.7節）。`reactions` の形で判別できるよう、3つに分ける。
 
         | 種類 | backed | reactions |
         |---|---|---|
         | 価値（value） | false | agree・wantToGo |
         | 裏付けのない説（theory） | false | maybe |
         | 裏付けのある説（theory） | true | 返さない |
-      required: [id, kind, text, backed]
+      oneOf:
+        - $ref: '#/components/schemas/ValueFinding'
+        - $ref: '#/components/schemas/UnbackedTheoryFinding'
+        - $ref: '#/components/schemas/BackedTheoryFinding'
+    ValueFinding:
+      type: object
+      additionalProperties: false
+      required: [id, kind, text, backed, unconfirmed, reactions]
       properties:
-        id: { type: string }
-        kind:
-          type: string
-          enum: [value, theory]
-          description: value は価値、theory は説（観察を含む）
-        text:
-          type: string
-          description: 今の版の内容
-        backed:
-          type: boolean
-          description: 資料・出典の裏付けがある説か
-        unconfirmed:
-          type: boolean
-          description: 未確認の見立てか
+        id: { $ref: '#/components/schemas/PublicId' }
+        kind: { type: string, enum: [value] }
+        text: { type: string, minLength: 1, description: 今の版の内容 }
+        backed: { type: boolean, enum: [false] }
+        unconfirmed: { type: boolean, description: 未確認の見立てか }
         reactions:
           type: object
-          description: 種類ごとのリアクション数。裏付けのある説では返さない
+          additionalProperties: false
+          required: [agree, wantToGo]
           properties:
             agree: { type: integer, minimum: 0, description: わかる }
             wantToGo: { type: integer, minimum: 0, description: 行ってみたい }
-            maybe: { type: integer, minimum: 0, description: そうかも }
-    ConversationCard:
+    UnbackedTheoryFinding:
       type: object
-      description: 会話カード（C40）。押すと会話のページ（S14）
-      required: [id, excerpt, starterName, replyCount, startedAt, places]
+      additionalProperties: false
+      required: [id, kind, text, backed, unconfirmed, reactions]
       properties:
-        id:
-          type: string
-          description: 会話の識別子
+        id: { $ref: '#/components/schemas/PublicId' }
+        kind: { type: string, enum: [theory] }
+        text: { type: string, minLength: 1, description: 今の版の内容 }
+        backed: { type: boolean, enum: [false] }
+        unconfirmed: { type: boolean, description: 未確認の見立てか }
+        reactions:
+          type: object
+          additionalProperties: false
+          required: [maybe]
+          properties:
+            maybe: { type: integer, minimum: 0, description: そうかも }
+    BackedTheoryFinding:
+      type: object
+      description: 資料・出典の裏付けがある説。リアクションを付けない（確からしさは資料・出典で決まる）
+      additionalProperties: false
+      required: [id, kind, text, backed, unconfirmed]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        kind: { type: string, enum: [theory] }
+        text: { type: string, minLength: 1, description: 今の版の内容 }
+        backed: { type: boolean, enum: [true] }
+        unconfirmed: { type: boolean, description: 未確認の見立てか }
+    ConversationCard:
+      description: |
+        会話カード（C40）。押すと会話のページ（S14）。公開の会話だけを返す。`firstPostVisible` で判別する。
+        **最初の Post が非公開のとき**は、本文の冒頭と始めた人を返さない（非公開の Post の本文と書いた人を出さない）。
+        その場合のカードの見せ方、退会・削除された人の表示は、C40・F10 の設計に合わせる
+      oneOf:
+        - $ref: '#/components/schemas/ConversationCardWithFirstPost'
+        - $ref: '#/components/schemas/ConversationCardWithoutFirstPost'
+    ConversationCardWithFirstPost:
+      type: object
+      description: 最初の Post が一般のユーザーに見える会話
+      additionalProperties: false
+      required: [id, firstPostVisible, excerpt, starterName, replyCount, startedAt, places]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        firstPostVisible: { type: boolean, enum: [true] }
         excerpt:
           type: string
+          minLength: 1
           description: 最初の Post の本文の冒頭
         starterName:
           type: string
+          minLength: 1
           description: 会話を始めた人の今のニックネーム（表示のたびに引く。Issue #74）
         replyCount:
           type: integer
           minimum: 0
-          description: 返信の数（公開の Post の数から最初の Post を除いたもの）
-        startedAt: { type: string, format: date-time }
+          description: 公開の返信の数（公開の Post の数から、最初の Post を除いたもの）
+        startedAt:
+          type: string
+          format: date-time
+          description: 会話の開始の時点（最初の Post の時点）
         lastPostedAt:
           type: string
           format: date-time
@@ -518,22 +717,52 @@ components:
           type: array
           description: 会話と場所の採用した紐付き（採用中・再検討中）。0件なら場所未定
           items: { $ref: '#/components/schemas/PlaceRef' }
+    ConversationCardWithoutFirstPost:
+      type: object
+      description: 最初の Post が非公開の会話（本文の冒頭と始めた人を返さない）
+      additionalProperties: false
+      required: [id, firstPostVisible, replyCount, startedAt, places]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        firstPostVisible: { type: boolean, enum: [false] }
+        replyCount:
+          type: integer
+          minimum: 0
+          description: 公開の返信の数（公開の Post の数。最初の Post は非公開なので数に入っていない）
+        startedAt:
+          type: string
+          format: date-time
+          description: 会話の開始の時点（最初の Post の時点）
+        lastPostedAt:
+          type: string
+          format: date-time
+          description: 最後の公開の Post の時点。公開の Post がなければ返さない
+        places:
+          type: array
+          description: 会話と場所の採用した紐付き（採用中・再検討中）。0件なら場所未定
+          items: { $ref: '#/components/schemas/PlaceRef' }
     ConversationCardPage:
       type: object
+      description: |
+        この発見から始まった会話（入口＝この Discovery。C40）。公開の会話だけ。
+        **会話の開始の時点（startedAt）の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。
+        totalCount は公開の会話の全体の数。続きを取る API は、必要になったときに足す
+      additionalProperties: false
       required: [items, totalCount]
       properties:
         items:
           type: array
-          description: 新しい順に最大10件
+          maxItems: 10
           items: { $ref: '#/components/schemas/ConversationCard' }
         totalCount: { type: integer, minimum: 0 }
     ProjectCard:
       type: object
       description: 企画カード（C29）。押すと企画のページ（S15）
+      additionalProperties: false
       required: [id, title, type, creatorKind, creatorName, matchedBy]
       properties:
-        id: { type: string }
-        title: { type: string }
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
         type:
           type: string
           enum: [course, ranking, collection, memory]
@@ -544,55 +773,71 @@ components:
           description: 運営の企画か、ユーザーの企画か（ユーザーの企画は「ex-day の認定ではありません」を添える）
         creatorName:
           type: string
+          minLength: 1
           description: 作った人の今のニックネーム
         matchedBy:
           type: string
           enum: [discovery, place]
-          description: この Discovery を項目に持つか（discovery）、この Discovery の場所を項目に持つか（place）
+          description: |
+            どの項目でこの Discovery に関わるか。この Discovery を指す項目があれば discovery（場所を指す項目もあっても discovery）、
+            なければ、この Discovery の関わる場所（places）を指す項目があるので place
         position:
           type: integer
           minimum: 1
-          description: この企画の中の順番・順位（コース・番付のとき）。複数の項目が当てはまるときは最初のもの
+          description: |
+            matchedBy の種類の項目のうち、いちばん前の項目の順番・順位。コース・番付のときだけ返す（まとめ・記憶は順番を出さない）
     ProjectCardPage:
       type: object
+      description: |
+        関わる企画（C29）。この Discovery、またはこの Discovery の関わる場所を項目に持つ、公開の企画（DB の visible_project_item で
+        見える項目だけで判定する）。**企画ごとに1件**（複数の項目が当てはまっても重ねない）。
+        **企画の作成の時点の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。totalCount は公開の企画の全体の数
+      additionalProperties: false
       required: [items, totalCount]
       properties:
         items:
           type: array
-          description: 新しい順に最大10件
+          maxItems: 10
           items: { $ref: '#/components/schemas/ProjectCard' }
         totalCount: { type: integer, minimum: 0 }
     DiscoveryRelations:
       type: object
       description: |
-        関係する Discovery の3つの枠。該当がない枠は空の配列。公開で成立を取り消していない Discovery だけ。
-        MVP では派生・関連は運営が手で決めるので、多くの Discovery では空になる。Subject を介した意味の関連は、後で足す
+        関係する Discovery の3つの枠。該当がない枠は空の配列。公開で成立を取り消していない Discovery だけ（統合された側は出さない）。
+        MVP では派生・関連は運営が手で決めるので、多くの Discovery では空になる。Subject を介した意味の関連は、後で足す。
+        各枠は表題の順に最大10件（固定）
+      additionalProperties: false
       required: [derivedFrom, derivedTo, related]
       properties:
         derivedFrom:
           type: array
           description: 派生元（この発見のもとになった Discovery）
+          maxItems: 10
           items: { $ref: '#/components/schemas/DiscoverySummary' }
         derivedTo:
           type: array
           description: 派生した Discovery（この発見から広がった Discovery）
+          maxItems: 10
           items: { $ref: '#/components/schemas/DiscoverySummary' }
         related:
           type: array
           description: 明示的に関連付けた Discovery
+          maxItems: 10
           items: { $ref: '#/components/schemas/DiscoverySummary' }
     DiscoverySummary:
       type: object
       description: |
         Discovery のカード（C03）に出す要約。S03 の関係する Discovery で使う。
         S01 の DiscoveryCard（v0.1 の形）は、S01 の段でこの形にそろえる
+      additionalProperties: false
       required: [id, title, summary, displayPlaces]
       properties:
-        id: { type: string }
-        title: { type: string }
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
         summary: { type: string }
         displayPlaces:
           type: array
+          minItems: 1
           items: { $ref: '#/components/schemas/PlaceRef' }
     Problem:
       type: object
@@ -641,6 +886,8 @@ components:
         id: b0919799718c
         title: 汽車道を通って、桜木町から山下公園へ海沿いの散歩
         summary: 桜木町駅から汽車道を渡り、海を見ながら山下公園まで歩ける。線路の跡を歩けるのも楽しい。
+        merge: { status: none }
+        capabilities: { canStartConversation: true, canReact: true }
         context:
           now: '2026-04-02T15:00:00+09:00'
           season: spring
@@ -654,7 +901,7 @@ components:
           - id: 4c55b60ff100
             description: 海を見ながら歩ける、ちょうどいい長さの散歩道
             conditions:
-              - { label: 季節, text: 通年, seasons: [all_year] }
+              - { axis: season, label: 季節, text: 通年, seasons: [all_year] }
         otherValues: []
         origins:
           - { kind: conversation, establishedBy: auto }
@@ -691,6 +938,7 @@ components:
             reactions: { agree: 1, wantToGo: 0 }
         originConversations:
           - id: 9eae53a6f40b
+            firstPostVisible: true
             excerpt: 桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった
             starterName: 港の散歩人
             replyCount: 2
