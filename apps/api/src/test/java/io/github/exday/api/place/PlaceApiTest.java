@@ -167,7 +167,7 @@ class PlaceApiTest extends DbApiTestSupport {
         var seeking = (Map<String, Object>) place("place:yokohama-st").get("seeking");
         assertThat(seeking).containsEntry("totalCount", 12);
         var items = (List<Map<String, Object>>) seeking.get("items");
-        assertThat(items).extracting(card -> ((Map<?, ?>) card.get("conversation")).get("id"))
+        assertThat(items).extracting(card -> (Object) ((Map<?, ?>) card.get("conversation")).get("id"))
             .containsExactly("seekConv0003", "seekConv0004", "seekConv0012", "seekConv0011", "seekConv0010",
                 "seekConv0009", "seekConv0008", "seekConv0007", "seekConv0006", "seekConv0005");
     }
