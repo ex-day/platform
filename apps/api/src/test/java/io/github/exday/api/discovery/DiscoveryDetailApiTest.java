@@ -41,7 +41,7 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
 
         // 関わる場所：順番つき（始まり・経由・終わり）。地図に出す形は GeoJSON
         var places = (List<Map<String, Object>>) body.get("places");
-        assertThat(places).extracting(p -> ((Map<?, ?>) p.get("place")).get("name"))
+        assertThat(places).extracting(p -> (Object) ((Map<?, ?>) p.get("place")).get("name"))
             .containsExactly("桜木町駅", "汽車道", "山下公園");
         assertThat(places).extracting(p -> p.get("role")).containsExactly("START", "VIA", "END");
         assertThat(places).extracting(p -> p.get("order")).containsExactly(1, 2, 3);
