@@ -50,9 +50,12 @@ jobs:
         if: always()
         working-directory: apps/api
         run: ./gradlew --no-daemon openApiGenerate
-      - name: TEMP upload generated
+      - name: TEMP print generated
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: generated-openapi
-          path: apps/api/build/generated/openapi/src/main/java
+        working-directory: apps/api/build/generated/openapi/src/main/java/io/github/exday/api/generated
+        run: |
+          ls model
+          for f in Geometry PointGeometry Position MergeState Merged NotMerged FindingItem ValueFinding ValueFindingReactions BackedTheoryFinding ConversationCard ConversationCardWithFirstPost ConversationCardWithoutFirstPost DiscoveryDetail DiscoveryPlaceItem ConditionDescription Period ProjectCard ProjectCardPage; do
+            echo "=== $f"; grep -vE '^\s*(\*|/\*\*|\*/)|^import|^\s*$' model/$f.java || true
+          done
+          echo "=== S03Api"; grep -vE '^\s*(\*|/\*\*|\*/)|^import|^\s*$' api/S03Api.java
