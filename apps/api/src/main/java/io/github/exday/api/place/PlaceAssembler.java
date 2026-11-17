@@ -1,11 +1,9 @@
 package io.github.exday.api.place;
 
-import io.github.exday.api.discovery.DiscoveryDetailAssembler;
-import io.github.exday.api.discovery.DiscoveryDetailQueries;
+import io.github.exday.api.card.discovery.DiscoveryCards;
 import io.github.exday.api.generated.model.AbolishedPlaceState;
 import io.github.exday.api.generated.model.ActivePlaceState;
 import io.github.exday.api.generated.model.ConversationCardPage;
-import io.github.exday.api.generated.model.DiscoverySummary;
 import io.github.exday.api.generated.model.ExistingPlaceCandidate;
 import io.github.exday.api.generated.model.MergedPlaceState;
 import io.github.exday.api.generated.model.NearbyPlace;
@@ -30,11 +28,10 @@ import io.github.exday.api.generated.model.SeekingQuestionCard;
 import io.github.exday.api.generated.model.SpatialType;
 import io.github.exday.api.place.PlaceQueries.PlaceRow;
 import io.github.exday.api.place.PlaceQueries.SeekingCandidateRow;
-import io.github.exday.api.shared.ConversationCards;
-import io.github.exday.api.shared.GeoJsonGeometries;
-import io.github.exday.api.shared.ProjectCards;
+import io.github.exday.api.card.conversation.ConversationCards;
+import io.github.exday.api.geometry.GeoJsonGeometries;
+import io.github.exday.api.card.project.ProjectCards;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,13 +43,12 @@ import org.springframework.stereotype.Component;
 public class PlaceAssembler {
 
     private final PlaceQueries queries;
-    private final DiscoveryDetailQueries discoveryQueries;
+    private final DiscoveryCards discoveryCards;
     private final ConversationCards conversationCards;
 
-    public PlaceAssembler(PlaceQueries queries, DiscoveryDetailQueries discoveryQueries,
-            ConversationCards conversationCards) {
+    public PlaceAssembler(PlaceQueries queries, DiscoveryCards discoveryCards, ConversationCards conversationCards) {
         this.queries = queries;
-        this.discoveryQueries = discoveryQueries;
+        this.discoveryCards = discoveryCards;
         this.conversationCards = conversationCards;
     }
 
@@ -139,17 +135,17 @@ public class PlaceAssembler {
      */
     private PlaceDiscoveryGroups toDiscoveryGroups(long placeId) {
         var rows = queries.findDiscoveries(placeId);
-        var places = discoveryQueries.findPlaces(rows.stream().map(PlaceQueries.DiscoveryRow::id).toList());
+        var cards = discoveryCards.cards(rows.stream()
+            .map(row -> new DiscoveryCards.DiscoveryRow(row.id(), row.publicId(), row.title(), row.summary()))
+            .toList());
         var groups = new LinkedHashMap<String, List<PlaceDiscoveryCard>>();
         List<PlaceDiscoveryCard> withoutAspect = new ArrayList<>();
         for (var row : rows) {
-            var card = new PlaceDiscoveryCard()
-                .discovery(new DiscoverySummary()
-                    .id(row.publicId())
-                    .title(row.title())
-                    .summary(row.summary())
-                    .displayPlaces(DiscoveryDetailAssembler.displayPlaces(places.getOrDefault(row.id(), List.of()))))
-                .roles(row.roles().stream().sorted().toList());
+            var summary = cards.get(row.id());
+            if (summary == null) {
+                continue;
+            }
+            var card = new PlaceDiscoveryCard().discovery(summary).roles(row.roles().stream().sorted().toList());
             if (row.aspect() == null) {
                 withoutAspect.add(card);
             } else {
@@ -166,30 +162,19 @@ public class PlaceAssembler {
         return new PlaceDiscoveryGroups().groups(result).totalCount(total);
     }
 
-    /** 探している話を、会話・問いごとにまとめる。最も新しく作られた候補の時点の新しい順（同じなら対象の識別子の順）。 */
+    /** 探している話を、会話・問いごとにまとめる（並び・上限・全体の数は SQL で決めてある）。 */
     private SeekingCardPage toSeeking(List<SeekingCandidateRow> rows, PlaceRef self) {
         record Target(boolean question, long id) {}
         var byTarget = new LinkedHashMap<Target, List<SeekingCandidateRow>>();
         for (var row : rows) {
-            var target = row.questionId() != null
-                ? new Target(true, row.questionId())
-                : new Target(false, row.conversationId());
-            byTarget.computeIfAbsent(target, key -> new ArrayList<>()).add(row);
+            byTarget.computeIfAbsent(new Target(row.isQuestion(), row.targetId()), key -> new ArrayList<>()).add(row);
         }
-        var ordered = byTarget.values().stream()
-            .sorted(Comparator
-                .comparing((List<SeekingCandidateRow> list) -> list.get(list.size() - 1).createdAt()).reversed()
-                .thenComparing(list -> targetPublicId(list.get(0))))
-            .toList();
-        var selected = ordered.stream().limit(PlaceQueries.LIST_LIMIT).toList();
-        var cards = conversationCards.cardsById(selected.stream()
-            .map(list -> conversationIdOf(list.get(0)))
-            .toList());
-        List<SeekingCard> items = selected.stream()
-            .map(list -> toSeekingCard(list, cards.get(conversationIdOf(list.get(0))), self))
+        var cards = conversationCards.cardsById(rows.stream().map(SeekingCandidateRow::conversationId).toList());
+        List<SeekingCard> items = byTarget.values().stream()
+            .map(list -> toSeekingCard(list, cards.get(list.get(0).conversationId()), self))
             .filter(Objects::nonNull)
             .toList();
-        return new SeekingCardPage().items(items).totalCount(ordered.size());
+        return new SeekingCardPage().items(items).totalCount(rows.isEmpty() ? 0 : rows.get(0).total());
     }
 
     private static SeekingCard toSeekingCard(List<SeekingCandidateRow> candidates,
@@ -199,7 +184,7 @@ public class PlaceAssembler {
         }
         List<SeekingCandidate> list = candidates.stream().map(row -> toCandidate(row, self)).toList();
         var first = candidates.get(0);
-        if (first.questionId() != null) {
+        if (first.isQuestion()) {
             return new SeekingQuestionCard()
                 .kind(SeekingQuestionCard.KindEnum.QUESTION)
                 .conversation(conversation)
@@ -223,14 +208,6 @@ public class PlaceAssembler {
             .id(row.publicId())
             .kind(ExistingPlaceCandidate.KindEnum.PLACE)
             .place(self);
-    }
-
-    private static long conversationIdOf(SeekingCandidateRow row) {
-        return row.questionId() != null ? row.questionConversationId() : row.conversationId();
-    }
-
-    private static String targetPublicId(SeekingCandidateRow row) {
-        return row.questionId() != null ? row.questionPublicId() : row.conversationPublicId();
     }
 
     private static NearbyPlacePage toNearby(List<PlaceQueries.NearbyRow> rows) {

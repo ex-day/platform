@@ -1,4 +1,4 @@
-package io.github.exday.api.shared;
+package io.github.exday.api.geometry;
 
 import io.github.exday.api.generated.model.Geometry;
 import io.github.exday.api.generated.model.LineStringGeometry;

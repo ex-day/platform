@@ -101,6 +101,78 @@ class PlaceApiTest extends DbApiTestSupport {
     }
 
     @Test
+    void 発見も会話もない場所でも200と空の区画を返す() {
+        // 小机駅：発見・会話・企画・推定の値・階層・中に入る場所のどれもない（初期のリリースで多い場所）
+        assertThat(place("place:kozukue-st")).containsEntry("name", "小机駅")
+            .containsEntry("kinds", List.of("駅"))
+            .containsEntry("state", Map.of("status", "active"))
+            .containsEntry("capabilities", Map.of("canStartConversation", true))
+            .containsEntry("aliases", List.of())
+            .containsEntry("breadcrumb", List.of())
+            .containsEntry("estimates", List.of())
+            .containsEntry("discoveries", Map.of("groups", List.of(), "totalCount", 0))
+            .containsEntry("seeking", Map.of("items", List.of(), "totalCount", 0))
+            .containsEntry("conversations", Map.of("items", List.of(), "totalCount", 0))
+            .containsEntry("projects", Map.of("items", List.of(), "totalCount", 0))
+            .containsEntry("nearbyPlaces", Map.of("items", List.of(), "totalCount", 0))
+            .doesNotContainKeys("accessStation", "existedPeriod");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 非公開の発見と企画は一覧と件数に出さない() {
+        jdbc.sql("UPDATE discovery SET visibility = 'HIDDEN' WHERE public_id = :id").param("id", sid("disc:roses")).update();
+        jdbc.sql("UPDATE project SET visibility = 'HIDDEN' WHERE public_id = :id").param("id", sid("proj:harbor-course")).update();
+        var body = place("place:yamashita");
+        var discoveries = (Map<String, Object>) body.get("discoveries");
+        assertThat(discoveries).containsEntry("totalCount", 1);
+        assertThat((List<Map<String, Object>>) discoveries.get("groups")).singleElement()
+            .satisfies(g -> assertThat(g).containsEntry("aspect", "散歩"));
+        assertThat(body).containsEntry("projects", Map.of("items", List.of(), "totalCount", 0));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 統合された側の発見は一覧と件数に出さない() {
+        merge("disc:roses", "disc:walk");
+        var discoveries = (Map<String, Object>) place("place:yamashita").get("discoveries");
+        assertThat(discoveries).containsEntry("totalCount", 1);
+        assertThat((List<Map<String, Object>>) discoveries.get("groups")).singleElement()
+            .satisfies(g -> assertThat(g).containsEntry("aspect", "散歩"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 探している話は10件までで最も新しい候補の順に並び全体の数を返す() {
+        // 横浜駅を候補に持つ、場所の決まっていない会話を12件足す。
+        // 0003・0004 の候補がいちばん新しい（同じ時点なので会話の識別子の順）。ほかは番号の大きいものほど新しい
+        jdbc.sql("""
+                WITH c AS (
+                    INSERT INTO conversation (public_id, starter_user_id, created_at)
+                    SELECT 'seekConv' || lpad(i::text, 4, '0'), (SELECT user_id FROM user_profile WHERE nickname = 'はまっこ'),
+                           timestamptz '2026-05-01 10:00+09' + make_interval(hours => i)
+                      FROM generate_series(1, 12) AS i
+                    RETURNING id, public_id, created_at, starter_user_id
+                ), p AS (
+                    INSERT INTO post (conversation_id, user_id, body, posted_at)
+                    SELECT id, starter_user_id, '横浜駅のあたりの話 ' || public_id, created_at FROM c
+                )
+                INSERT INTO place_candidate (public_id, conversation_id, place_id, origin, created_at)
+                SELECT 'seekCand' || right(c.public_id, 4), c.id, pl.id, 'HUMAN',
+                       CASE WHEN right(c.public_id, 4) IN ('0003', '0004') THEN timestamptz '2026-06-01 00:00+09'
+                            ELSE c.created_at END
+                  FROM c, place pl WHERE pl.public_id = :place
+                """)
+            .param("place", sid("place:yokohama-st")).update();
+        var seeking = (Map<String, Object>) place("place:yokohama-st").get("seeking");
+        assertThat(seeking).containsEntry("totalCount", 12);
+        var items = (List<Map<String, Object>>) seeking.get("items");
+        assertThat(items).extracting(card -> ((Map<?, ?>) card.get("conversation")).get("id"))
+            .containsExactly("seekConv0003", "seekConv0004", "seekConv0012", "seekConv0011", "seekConv0010",
+                "seekConv0009", "seekConv0008", "seekConv0007", "seekConv0006", "seekConv0005");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void エリアの場所には範囲に入る新しい場所の案の問いを出す() {
         var body = place("place:nishi");
@@ -112,6 +184,19 @@ class PlaceApiTest extends DbApiTestSupport {
             .containsEntry("candidates", List.of(Map.of(
                 "id", sid("cand:soba-west"), "kind", "proposal", "name", "水車のあるそば屋（横浜駅西口のあたり）")));
         assertThat((Map<String, Object>) card.get("conversation")).containsEntry("id", sid("conv:soba"));
+
+        // 同じ問いの候補が複数あれば、作成の古い順に1枚のカードに並べる
+        jdbc.sql("""
+                INSERT INTO place_candidate (public_id, open_question_id, proposed_name, proposed_spatial_type, proposed_geom, origin, created_at)
+                SELECT 'sobaNorth001', q.id, '水車のあるそば屋（横浜駅北口のあたり）', 'POINT',
+                       ST_GeogFromText('SRID=4326;POINT(139.6230 35.4690)'), 'HUMAN', timestamptz '2026-04-16 09:00+09'
+                  FROM open_question q WHERE q.public_id = :q
+                """)
+            .param("q", sid("q:soba")).update();
+        var two = (Map<String, Object>) place("place:nishi").get("seeking");
+        assertThat(two).containsEntry("totalCount", 1);
+        assertThat((List<Map<String, Object>>) ((List<Map<String, Object>>) two.get("items")).get(0).get("candidates"))
+            .extracting(c -> c.get("id")).containsExactly(sid("cand:soba-west"), "sobaNorth001");
 
         // 地点の場所（横浜駅）には、範囲による当てはめをしない
         assertThat(place("place:yokohama-st")).containsEntry("seeking", Map.of("items", List.of(), "totalCount", 0));

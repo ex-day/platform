@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import io.github.exday.api.shared.ProjectCards;
+import io.github.exday.api.card.project.ProjectCards;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -23,9 +23,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class DiscoveryDetailQueries {
-
-    /** 出す位置の場所の役割（論理設計 4.5節、OpenAPI の DiscoveryPlaceRole）。 */
-    public static final List<String> DISPLAY_ROLES = List.of("EXPERIENCE", "START");
 
     private static final String FIND_DISCOVERY = """
         SELECT d.id, d.public_id, d.title, d.summary
@@ -195,7 +192,7 @@ public class DiscoveryDetailQueries {
      */
     record MergeRow(int depth, String targetPublicId, String targetTitle, boolean hasNext) {}
 
-    public record PlaceRow(long discoveryId, String publicId, String name, String spatialType, String role, Integer seq,
+    record PlaceRow(long discoveryId, String publicId, String name, String spatialType, String role, Integer seq,
             LocalDate validFrom, LocalDate validTo, String description, String geoJson, List<String> kinds) {}
 
     record ValueRow(String publicId, String description, List<String> seasons) {}
@@ -210,7 +207,7 @@ public class DiscoveryDetailQueries {
             String otherSummary) {}
 
     /** 一覧の区画の最大件数（OpenAPI の maxItems。固定）。 */
-    public static final int LIST_LIMIT = 10;
+    static final int LIST_LIMIT = 10;
 
     /** 統合をたどる深さの上限。 */
     private static final int MAX_MERGE_DEPTH = 20;
@@ -246,7 +243,7 @@ public class DiscoveryDetailQueries {
     }
 
     /** 関わる場所を Discovery ごとにまとめて返す（順番、識別子の順）。 */
-    public Map<Long, List<PlaceRow>> findPlaces(Collection<Long> discoveryIds) {
+    Map<Long, List<PlaceRow>> findPlaces(Collection<Long> discoveryIds) {
         if (discoveryIds.isEmpty()) {
             return Map.of();
         }

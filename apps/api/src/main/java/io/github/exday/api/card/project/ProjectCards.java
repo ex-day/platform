@@ -1,9 +1,9 @@
-package io.github.exday.api.shared;
+package io.github.exday.api.card.project;
 
 import io.github.exday.api.generated.model.ProjectCard;
 import java.util.Locale;
 
-/** 企画カード（C29。OpenAPI の ProjectCard）を作る。S03・S13 で共用する。 */
+/** 企画カード（C29。OpenAPI の ProjectCard）を作る。どの画面の一覧でも同じ見せ方にする（使う画面はコンポーネント一覧の C29）。 */
 public final class ProjectCards {
 
     private ProjectCards() {}

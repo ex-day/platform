@@ -24,9 +24,10 @@ import io.github.exday.api.generated.model.PlaceRef;
 import io.github.exday.api.generated.model.ProjectCardPage;
 import io.github.exday.api.generated.model.Season;
 import io.github.exday.api.generated.model.SpatialType;
-import io.github.exday.api.shared.ConversationCards;
-import io.github.exday.api.shared.GeoJsonGeometries;
-import io.github.exday.api.shared.ProjectCards;
+import io.github.exday.api.card.conversation.ConversationCards;
+import io.github.exday.api.card.discovery.DiscoveryCards;
+import io.github.exday.api.geometry.GeoJsonGeometries;
+import io.github.exday.api.card.project.ProjectCards;
 import io.github.exday.api.generated.model.UnbackedTheoryFinding;
 import io.github.exday.api.generated.model.UnbackedTheoryFindingReactions;
 import io.github.exday.api.generated.model.ValueFinding;
@@ -52,12 +53,14 @@ public class DiscoveryDetailAssembler {
 
     private final DiscoveryDetailQueries queries;
     private final ConversationCards conversationCards;
+    private final DiscoveryCards discoveryCards;
     private final EvaluationContextProvider contextProvider;
 
     public DiscoveryDetailAssembler(DiscoveryDetailQueries queries, ConversationCards conversationCards,
-            EvaluationContextProvider contextProvider) {
+            DiscoveryCards discoveryCards, EvaluationContextProvider contextProvider) {
         this.queries = queries;
         this.conversationCards = conversationCards;
+        this.discoveryCards = discoveryCards;
         this.contextProvider = contextProvider;
     }
 
@@ -69,7 +72,8 @@ public class DiscoveryDetailAssembler {
         boolean merged = merge instanceof Merged;
 
         List<PlaceRow> placeRows = queries.findPlaces(List.of(discovery.id())).getOrDefault(discovery.id(), List.of());
-        List<PlaceRef> displayPlaces = displayPlaces(placeRows);
+        List<PlaceRef> displayPlaces = DiscoveryCards.displayPlaces(placeRows.stream()
+            .map(row -> new DiscoveryCards.RolePlace(row.publicId(), row.name(), row.role())).toList());
         var displayIds = displayPlaces.stream().map(PlaceRef::getId).toList();
 
         List<ValueItem> recommendations = new ArrayList<>();
@@ -126,19 +130,6 @@ public class DiscoveryDetailAssembler {
             merged.setTarget(new DiscoveryRef().id(row.targetPublicId()).title(row.targetTitle()));
         }
         return merged;
-    }
-
-    /** 出す位置の場所（役割が体験できる場所・始まり）。なければ関わる場所の最初のもの。 */
-    public static List<PlaceRef> displayPlaces(List<PlaceRow> rows) {
-        var display = rows.stream()
-            .filter(row -> DiscoveryDetailQueries.DISPLAY_ROLES.contains(row.role()))
-            .map(DiscoveryDetailAssembler::toPlaceRef)
-            .distinct()
-            .toList();
-        if (!display.isEmpty() || rows.isEmpty()) {
-            return display;
-        }
-        return List.of(toPlaceRef(rows.get(0)));
     }
 
     private static PlaceRef toPlaceRef(PlaceRow row) {
@@ -263,20 +254,17 @@ public class DiscoveryDetailAssembler {
 
     private DiscoveryRelations toRelations(long discoveryId) {
         var rows = queries.findRelations(discoveryId);
-        var places = queries.findPlaces(rows.stream().map(DiscoveryDetailQueries.RelationRow::otherId).distinct().toList());
+        var cards = discoveryCards.cards(rows.stream()
+            .map(row -> new DiscoveryCards.DiscoveryRow(row.otherId(), row.otherPublicId(), row.otherTitle(), row.otherSummary()))
+            .toList());
         List<DiscoverySummary> derivedFrom = new ArrayList<>();
         List<DiscoverySummary> derivedTo = new ArrayList<>();
         List<DiscoverySummary> related = new ArrayList<>();
         for (var row : rows) {
-            var otherPlaces = displayPlaces(places.getOrDefault(row.otherId(), List.of()));
-            if (otherPlaces.isEmpty()) {
-                continue; // 場所のない Discovery は作らないが、念のため要約の約束（場所1件以上）を守る
+            var summary = cards.get(row.otherId());
+            if (summary == null) {
+                continue;
             }
-            var summary = new DiscoverySummary()
-                .id(row.otherPublicId())
-                .title(row.otherTitle())
-                .summary(row.otherSummary())
-                .displayPlaces(otherPlaces);
             List<DiscoverySummary> target;
             if ("DERIVED".equals(row.kind())) {
                 // 派生は from が派生元。この Discovery が to なら、相手は派生元

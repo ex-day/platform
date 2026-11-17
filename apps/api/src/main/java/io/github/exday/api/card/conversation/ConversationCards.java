@@ -1,4 +1,4 @@
-package io.github.exday.api.shared;
+package io.github.exday.api.card.conversation;
 
 import io.github.exday.api.generated.model.ConversationCard;
 import io.github.exday.api.generated.model.ConversationCardWithFirstPost;
@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
- * 会話カード（C40。OpenAPI の ConversationCard）を、会話の識別子の並びから作る。S03・S13 で共用する。
+ * 会話カード（C40。OpenAPI の ConversationCard）を、会話の識別子の並びから作る。どの画面の一覧でも同じ見せ方にする（使う画面はコンポーネント一覧の C40）。
  *
  * <p>どの会話を集めるか（公開の会話だけを選ぶこと）は呼び出し側が決め、ここでは選んだ会話の中身を2つの SQL でまとめて読む
  * （会話ごとに問い合わせない）。最初の Post が非公開なら、本文の冒頭と始めた人を返さない。

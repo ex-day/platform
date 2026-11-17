@@ -1,6 +1,6 @@
 package io.github.exday.api.place;
 
-import io.github.exday.api.shared.ProjectCards;
+import io.github.exday.api.card.project.ProjectCards;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -117,27 +117,44 @@ public class PlaceQueries {
         """;
 
     // このあたりで探している人がいます：この場所に当てはまる検討中の候補で、対象の会話に場所が決まっていない、
-    // または対象の問いに回答がないもの。エリアの場所なら、範囲に入る新しい場所の案も当てはめる。公開の会話のものだけ
-    private static final String FIND_SEEKING_CANDIDATES = """
-        SELECT pc.public_id, pc.created_at, pc.conversation_id, pc.open_question_id, pc.proposed_name,
-               q.public_id AS question_public_id, q.content AS question_content, q.conversation_id AS question_conversation_id,
-               coalesce(c.public_id, qc.public_id) AS conversation_public_id
-          FROM visible_place_candidate pc
-          LEFT JOIN conversation c ON c.id = pc.conversation_id
-          LEFT JOIN open_question q ON q.id = pc.open_question_id
-          LEFT JOIN conversation qc ON qc.id = q.conversation_id
-         WHERE pc.status = :considering
-           AND (pc.place_id = :placeId
-                OR (:isArea AND pc.place_id IS NULL AND pc.proposed_geom IS NOT NULL
-                    AND ST_Covers((SELECT geom FROM place WHERE id = :placeId), pc.proposed_geom)))
-           AND (
-                (pc.conversation_id IS NOT NULL
-                 AND NOT EXISTS (SELECT 1 FROM conversation_place cp WHERE cp.conversation_id = pc.conversation_id))
-             OR (pc.open_question_id IS NOT NULL AND q.status = :active
-                 AND NOT EXISTS (SELECT 1 FROM place_adoption a
-                                  WHERE a.open_question_id = pc.open_question_id AND a.status IN (:adoptedStatuses)))
-           )
-         ORDER BY pc.created_at, pc.public_id
+    // または対象の問いに回答がないもの。エリアの場所なら、範囲に入る新しい場所の案も当てはめる。公開の会話のものだけ。
+    // 会話・問い（対象）ごとにまとめ、並びと件数と上位の対象を SQL で決めてから、その対象の候補だけを返す
+    // （候補の行に LIMIT をかけると、対象の件数の約束を守れない）。total は対象の全体の数
+    private static final String FIND_SEEKING = """
+        WITH matched AS (
+            SELECT pc.public_id, pc.created_at, pc.proposed_name,
+                   pc.open_question_id IS NOT NULL AS is_question,
+                   coalesce(pc.open_question_id, pc.conversation_id) AS target_id,
+                   coalesce(q.public_id, c.public_id) AS target_public_id,
+                   coalesce(pc.conversation_id, q.conversation_id) AS conversation_id,
+                   q.public_id AS question_public_id, q.content AS question_content
+              FROM visible_place_candidate pc
+              LEFT JOIN conversation c ON c.id = pc.conversation_id
+              LEFT JOIN open_question q ON q.id = pc.open_question_id
+             WHERE pc.status = :considering
+               AND (pc.place_id = :placeId
+                    OR (:isArea AND pc.place_id IS NULL AND pc.proposed_geom IS NOT NULL
+                        AND ST_Covers((SELECT geom FROM place WHERE id = :placeId), pc.proposed_geom)))
+               AND (
+                    (pc.conversation_id IS NOT NULL
+                     AND NOT EXISTS (SELECT 1 FROM conversation_place cp WHERE cp.conversation_id = pc.conversation_id))
+                 OR (pc.open_question_id IS NOT NULL AND q.status = :active
+                     AND NOT EXISTS (SELECT 1 FROM place_adoption a
+                                      WHERE a.open_question_id = pc.open_question_id AND a.status IN (:adoptedStatuses)))
+               )
+        ), targets AS (
+            SELECT is_question, target_id, min(target_public_id) AS target_public_id,
+                   max(created_at) AS last_created_at, count(*) OVER () AS total
+              FROM matched
+             GROUP BY is_question, target_id
+             ORDER BY last_created_at DESC, target_public_id
+             LIMIT :limit
+        )
+        SELECT m.public_id, m.proposed_name, m.is_question, m.target_id, m.conversation_id,
+               m.question_public_id, m.question_content, t.total
+          FROM targets t
+          JOIN matched m ON m.is_question = t.is_question AND m.target_id = t.target_id
+         ORDER BY t.last_created_at DESC, t.target_public_id, m.created_at, m.public_id
         """;
 
     private static final String FIND_CONVERSATION_IDS = """
@@ -224,9 +241,12 @@ public class PlaceQueries {
     public record DiscoveryRow(long id, String publicId, String title, String summary, List<String> roles,
             String aspect, int total) {}
 
-    public record SeekingCandidateRow(String publicId, OffsetDateTime createdAt, Long conversationId,
-            Long questionId, String proposedName, String questionPublicId, String questionContent,
-            Long questionConversationId, String conversationPublicId) {}
+    /**
+     * 探している話の候補の1行。対象（isQuestion と targetId）ごとに、対象の並びの順・候補の作成の順に並ぶ。
+     * conversationId はカードに出す会話（問いなら問いが属する会話）。total は対象の全体の数。
+     */
+    public record SeekingCandidateRow(String publicId, String proposedName, boolean isQuestion, long targetId,
+            long conversationId, String questionPublicId, String questionContent, int total) {}
 
     public record NearbyRow(String publicId, String name, List<String> kinds, int total) {}
 
@@ -312,18 +332,19 @@ public class PlaceQueries {
             .list();
     }
 
+    /** 探している話の、上位 {@link #LIST_LIMIT} 件の対象の候補（並びは {@code FIND_SEEKING}）。 */
     public List<SeekingCandidateRow> findSeekingCandidates(long placeId, boolean isArea) {
-        return jdbcClient.sql(FIND_SEEKING_CANDIDATES)
+        return jdbcClient.sql(FIND_SEEKING)
             .param("placeId", placeId)
             .param("isArea", isArea)
             .param("considering", "CONSIDERING")
             .param("active", ACTIVE)
             .param("adoptedStatuses", List.of("ADOPTED", "RECONSIDERING"))
+            .param("limit", LIST_LIMIT)
             .query((rs, rowNum) -> new SeekingCandidateRow(
-                rs.getString("public_id"), rs.getObject("created_at", OffsetDateTime.class),
-                (Long) rs.getObject("conversation_id"), (Long) rs.getObject("open_question_id"),
-                rs.getString("proposed_name"), rs.getString("question_public_id"), rs.getString("question_content"),
-                (Long) rs.getObject("question_conversation_id"), rs.getString("conversation_public_id")))
+                rs.getString("public_id"), rs.getString("proposed_name"), rs.getBoolean("is_question"),
+                rs.getLong("target_id"), rs.getLong("conversation_id"), rs.getString("question_public_id"),
+                rs.getString("question_content"), rs.getInt("total")))
             .list();
     }
 

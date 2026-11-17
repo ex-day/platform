@@ -26,6 +26,10 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>公開状態や統合を書き換えるテストがあるため、
  * {@code SampleDataIntegrationTest} と違い、テストごとにサンプルデータを再投入して分離する。
+ *
+ * <p><b>並列に実行しない</b>：DB はテストのクラスをまたいで1つを共用し、テストごとにサンプルデータを入れ直す。
+ * 並列に実行すると、別のテストの入れ直し・書き換えが混ざる（JUnit の並列実行を有効にするときは、
+ * テストごとに DB を分ける仕組みを先に作る）。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate

@@ -48,7 +48,7 @@ class DiscoverySectionsApiTest {
 
     // DB を使う読み取りの部品（このテストは DB を使わない）
     @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.shared.ConversationCards conversationCards;
+    io.github.exday.api.card.conversation.ConversationCards conversationCards;
 
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     io.github.exday.api.place.PlaceQueries placeQueries;
