@@ -19,7 +19,7 @@
 -- Flyway の繰り返し実行のマイグレーション（R__）。内容を変えると、次の migrate で全部消して入れ直す。
 -- public_id は、キーから決まる値（md5 の先頭12文字）にする。本番では db/sample を読み込ませない。
 
-TRUNCATE app_user, place, subject, decision RESTART IDENTITY CASCADE;
+TRUNCATE app_user, place, subject, decision, discovery RESTART IDENTITY CASCADE;
 
 -- ---------------------------------------------------------
 -- 補助の関数（このスクリプトの中だけで使う）
