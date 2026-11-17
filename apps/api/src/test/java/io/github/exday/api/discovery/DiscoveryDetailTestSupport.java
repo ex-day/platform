@@ -24,9 +24,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * S03（Discovery 詳細）API のテスト基盤。
+ * S03（Discovery のページ）API のテスト基盤。
  *
- * <p>可視性（visibility）を書き換える 404 のテストがあるため、
+ * <p>公開状態や統合を書き換えるテストがあるため、
  * {@code SampleDataIntegrationTest} と違い、テストごとにサンプルデータを再投入して分離する。
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -83,14 +83,37 @@ abstract class DiscoveryDetailTestSupport {
         return response.getBody();
     }
 
-    ResponseEntity<Map<String, Object>> getPosts(String discoveryId) {
-        return rest.exchange("/discoveries/" + discoveryId + "/posts", HttpMethod.GET, null,
-            new ParameterizedTypeReference<Map<String, Object>>() {});
+    /** サンプルデータの public_id（db/sample/R__sample_data.sql の pg_temp.sid と同じ作り方）。 */
+    static String sid(String key) {
+        try {
+            var digest = java.security.MessageDigest.getInstance("MD5")
+                .digest(("ex-day-sample:" + key).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest).substring(0, 12);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
-    Map<String, Object> postsBody(String discoveryId) {
-        var response = getPosts(discoveryId);
-        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(200);
-        return response.getBody();
+    /** テストのデータを足すときの判断の記録（運営の SQL での補い）。 */
+    long operatorDecision(String kind) {
+        return jdbc.sql("""
+                INSERT INTO decision (kind, workflow, method, actor_kind, actor_user_id)
+                SELECT :kind, 'OPERATOR_SQL', 'HUMAN', 'OPERATOR', user_id FROM user_profile WHERE nickname = 'ex-day 運営'
+                RETURNING id
+                """)
+            .param("kind", kind)
+            .query(Long.class).single();
+    }
+
+    /** from の Discovery を to に統合する（統合の関係を足す）。 */
+    void merge(String fromKey, String toKey) {
+        long decision = operatorDecision("MERGE");
+        jdbc.sql("""
+                INSERT INTO discovery_relation (from_discovery_id, to_discovery_id, kind, created_decision_id)
+                SELECT f.id, t.id, 'MERGED', :decision FROM discovery f, discovery t
+                 WHERE f.public_id = :from AND t.public_id = :to
+                """)
+            .param("decision", decision).param("from", sid(fromKey)).param("to", sid(toKey))
+            .update();
     }
 }

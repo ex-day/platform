@@ -1,30 +1,20 @@
-// see docs/ui/screens/S03-discovery-detail.md, docs/api/openapi.yaml(getDiscovery・getDiscoveryPosts)
+// see docs/ui/screens/S03-discovery-detail.md, docs/api/openapi.yaml(getDiscovery)
 //
-// S03(Discovery詳細)。API のデータで表示する(Issue #112)。
+// S03(Discovery のページ)。API のデータで表示する(Issue #112)。
 // - SSR(Server Component)で、毎回 API から取る(キャッシュしない。#89)。
-// - 書き込みの操作(投稿・返信・リアクション・資料の提供)は、押すと「準備中」と出すだけにする(#89)。
-// - 表現案の比較用バー・探索段階の切り替えは付けない。モックのデータでの比較は /mock/discoveries/[id] に残した。
-// - 表現案は決定済みの既定値で表示する(Hero切替=サムネイル、リアクション=複数、場所=テキスト)。
-// - 行き先の画面がないリンクは外す(Issue #113)。関係するDiscoveryの「さらに見る」は出さず、
-//   タグ(Discoveryのタグ、声の本文の#タグ)はリンクにしない(モックの S02 へ移ってしまうため)。
+// - API は DB V2 の形(v0.2。#135)にした。画面はまだ作り直しておらず、今のコンポーネントに当てはめる最小の対応にしている。
+//   関わる場所の地図・由来の会話・関わる企画などの区画、リアクションは、S03 の画面を作り直すときに足す。
+// - 書き込みの操作は、押すと「準備中」と出すだけにする(#89)。
+// - 行き先の画面がないリンクは外す(Issue #113)。
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DiscoveryDetailHero } from "@/components/C19-discovery-detail-hero/DiscoveryDetailHero";
-import { ReactionButton } from "@/components/C10-reaction-button/ReactionButton";
 import { DiscoveryValue } from "@/components/C12-discovery-value/DiscoveryValue";
 import { DiscoveryEmergingTerms } from "@/components/C25-discovery-emerging-terms/DiscoveryEmergingTerms";
-import { PostThread } from "@/components/C26-post-thread/PostThread";
 import { RelatedDiscoveryRail } from "@/components/layout/RelatedDiscoveryRail";
 import { RAIL_CONTAINER_CLASS, RAIL_ITEM_CLASS } from "@/components/layout/rail";
-import { getDiscovery, getDiscoveryPosts } from "@/lib/api/discovery";
-import {
-  toDerivationMarker,
-  toFinding,
-  toPost,
-  toRecommendation,
-  toRelatedSummary,
-  toValueItem,
-} from "@/lib/api/discovery-view";
+import { getDiscovery } from "@/lib/api/discovery";
+import { toDiscoverySummary, toFinding, toRecommendation, toValueItem } from "@/lib/api/discovery-view";
 import { DISCOVERY_HREF_BASE } from "@/lib/discovery-href";
 import { NotReadyWriteActions } from "@/lib/write-actions";
 
@@ -44,8 +34,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const discovery = await getDiscovery(id);
   if (!discovery) return {};
 
-  const description = toDescription(discovery.body);
-  const image = discovery.recommendations.find((rec) => rec.media)?.media;
+  const description = toDescription(discovery.summary);
   return {
     title: `${discovery.title} | ex-day`,
     description,
@@ -54,43 +43,46 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       siteName: "ex-day",
       title: discovery.title,
       description,
-      images: image ? [{ url: image.url, alt: image.alt }] : undefined,
     },
   };
 }
 
 export default async function DiscoveryDetailPage({ params }: Props) {
   const { id } = await params;
-  const [discovery, thread] = await Promise.all([getDiscovery(id), getDiscoveryPosts(id)]);
-  if (!discovery || !thread) notFound();
+  const discovery = await getDiscovery(id);
+  if (!discovery) notFound();
 
   const recommendations = discovery.recommendations.map(toRecommendation);
   const otherValues = discovery.otherValues.map(toValueItem);
   const findings = discovery.findings.map(toFinding);
-  const posts = thread.posts.map((post) => toPost(post, discovery.context.now));
   const { derivedFrom, derivedTo, related } = discovery.relations;
 
   return (
     <NotReadyWriteActions>
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            {discovery.displayPlaces.map((place) => place.name).join("・")}
+          </p>
           <h1 className="text-2xl font-bold">{discovery.title}</h1>
+          {discovery.merge.status === "merged" ? (
+            <p className="rounded border px-3 py-2 text-sm">
+              この発見は統合されました。{discovery.merge.target ? `統合先：${discovery.merge.target.title}` : null}
+            </p>
+          ) : null}
           <DiscoveryDetailHero key={discovery.id} recommendations={recommendations} switchStyle="thumbnail" />
           <DiscoveryEmergingTerms key={discovery.id} findings={findings} />
-          {discovery.body ? (
-            <p className="whitespace-pre-line text-sm leading-relaxed">{discovery.body}</p>
+          {discovery.summary ? (
+            <p className="whitespace-pre-line text-sm leading-relaxed">{discovery.summary}</p>
           ) : null}
-          <ReactionButton key={discovery.id} variant="multiple" initialCount={0} initialCounts={discovery.reactions} />
-          {discovery.tags.length > 0 ? (
-            // Discoveryのタグ(属する声のタグと運営が付けたタグを集めたもの。DEC-0009 決定10)。リンクにしない(#113)
-            <ul aria-label="タグ" className="flex flex-wrap gap-2 text-xs">
-              {discovery.tags.map((tag) => (
-                <li key={tag}>
-                  <span className="rounded-full border px-2.5 py-1 text-muted-foreground">#{tag}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          <ul aria-label="関わる場所" className="flex flex-col gap-1 text-sm">
+            {discovery.places.map((item) => (
+              <li key={`${item.place.id}-${item.role}`}>
+                {item.order ? `${item.order}. ` : null}
+                {item.place.name}
+              </li>
+            ))}
+          </ul>
         </div>
 
         {otherValues.length > 0 ? (
@@ -106,30 +98,21 @@ export default async function DiscoveryDetailPage({ params }: Props) {
           </div>
         ) : null}
 
-        <PostThread
-          key={discovery.id}
-          initialPosts={posts}
-          derivationMarkers={thread.derivationMarkers.map(toDerivationMarker)}
-          derivedOriginNotice={thread.derivedOrigin}
-          hrefBase={DISCOVERY_HREF_BASE}
-          tagLinks={false}
-        />
-
         <RelatedDiscoveryRail
           heading="この発見のもとになったDiscovery"
-          items={derivedFrom.map(toRelatedSummary)}
+          items={derivedFrom.map(toDiscoverySummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
         />
         <RelatedDiscoveryRail
           heading="この発見から広がったDiscovery"
-          items={derivedTo.map(toRelatedSummary)}
+          items={derivedTo.map(toDiscoverySummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
         />
         <RelatedDiscoveryRail
           heading="関連するDiscovery"
-          items={related.map(toRelatedSummary)}
+          items={related.map(toDiscoverySummary)}
           placeVariant="text"
           hrefBase={DISCOVERY_HREF_BASE}
         />

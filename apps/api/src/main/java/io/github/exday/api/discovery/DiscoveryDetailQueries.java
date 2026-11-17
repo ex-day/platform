@@ -1,104 +1,256 @@
 package io.github.exday.api.discovery;
 
 import java.sql.Array;
+import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * S03（Discovery 詳細）が読む SQL。値は {@code JdbcClient} の {@code .param(...)} で全てバインドする
+ * S03（Discovery のページ）が読む SQL。値は {@code JdbcClient} の {@code .param(...)} で全てバインドする
  * （apps/api/AGENTS.md）。
+ *
+ * <p>一般のユーザー向けの読み取りなので、公開の判定は DB の公開のビュー（{@code visible_*}）に任せる
+ * （DB 設計 2.5節）。表を直接読むのは、公開のビューで見えると確かめた対象の中身（関わる場所・Value 等）だけにする。
  */
 @Repository
 public class DiscoveryDetailQueries {
 
-    private static final String FIND_SUMMARY = """
-        SELECT d.id, d.public_id, d.title, d.summary AS body, p.name AS place_name
-        FROM discovery d
-        JOIN discovery_place dp ON dp.discovery_id = d.id AND dp.is_primary
-        JOIN place p ON p.id = dp.place_id
-        WHERE d.public_id = :publicId AND d.visibility = :visibility
+    /** 出す位置の場所の役割（論理設計 4.5節、OpenAPI の DiscoveryPlaceRole）。 */
+    static final List<String> DISPLAY_ROLES = List.of("EXPERIENCE", "START");
+
+    private static final String FIND_DISCOVERY = """
+        SELECT d.id, d.public_id, d.title, d.summary
+          FROM visible_discovery d
+         WHERE d.public_id = :publicId
+        """;
+
+    // 統合先をたどる（循環は統合の処理で作らないが、念のため通った Discovery を2度通らない）。最後の統合先を返す。
+    // 最後の Discovery からさらに統合の関係が出ている（循環している、または深さの上限で止まった）ときは、
+    // 最後の統合先を決められないので has_next を true にし、統合先を返さない（F12 で循環を作らないようにする）。
+    private static final String FIND_FINAL_MERGE_TARGET = """
+        WITH RECURSIVE chain (id, depth, path) AS (
+            SELECT CAST(:discoveryId AS bigint), 0, ARRAY[CAST(:discoveryId AS bigint)]
+            UNION ALL
+            SELECT r.to_discovery_id, c.depth + 1, c.path || r.to_discovery_id
+              FROM chain c
+              JOIN discovery_relation r
+                ON r.from_discovery_id = c.id AND r.kind = :merged AND r.status = :active
+             WHERE NOT r.to_discovery_id = ANY (c.path)
+               AND c.depth < :maxDepth
+        )
+        SELECT c.depth, v.public_id, v.title,
+               EXISTS (SELECT 1 FROM discovery_relation n
+                        WHERE n.from_discovery_id = c.id AND n.kind = :merged AND n.status = :active) AS has_next
+          FROM chain c
+          LEFT JOIN visible_discovery v ON v.id = c.id
+         ORDER BY c.depth DESC
+         LIMIT 1
+        """;
+
+    private static final String FIND_PLACES = """
+        SELECT dp.discovery_id, p.public_id, p.name, p.spatial_type, dp.role, dp.seq,
+               dp.valid_from, dp.valid_to, dp.description,
+               ST_AsGeoJSON(p.geom::geometry, :decimals) AS geojson,
+               (SELECT array_agg(k.kind ORDER BY k.kind) FROM place_kind k WHERE k.place_id = p.id) AS kinds
+          FROM discovery_place dp
+          JOIN place p ON p.id = dp.place_id
+         WHERE dp.discovery_id IN (:discoveryIds) AND dp.status = :active
+         ORDER BY dp.discovery_id, dp.seq NULLS LAST, dp.id
+        """;
+
+    private static final String FIND_ASPECTS = """
+        SELECT s.label
+          FROM subject_assignment sa
+          JOIN subject s ON s.id = sa.subject_id
+         WHERE sa.discovery_id = :discoveryId AND s.kind = :aspect
+         ORDER BY s.label
         """;
 
     private static final String FIND_VALUES = """
-        SELECT v.id, v.public_id AS value_id, v.subject_label, v.summary, v.body,
-               m.url AS picture_url, m.alt AS picture_alt,
-               vp.message, vp.participation_message,
-               EXISTS (
-                   SELECT 1 FROM value_condition c
-                   WHERE c.value_id = v.id AND c.axis = :axis AND c.season = :season
-               ) AS seasonal,
-               EXISTS (
-                   SELECT 1 FROM value_condition c
-                   WHERE c.value_id = v.id AND c.axis = :axis AND c.season = :allYear
-               ) OR NOT EXISTS (
-                   SELECT 1 FROM value_condition c
-                   WHERE c.value_id = v.id AND c.axis = :axis
-               ) AS year_round,
-               (
-                   SELECT array_agg(c.season ORDER BY c.season)
-                   FROM value_condition c
-                   WHERE c.value_id = v.id AND c.axis = :axis AND c.season <> :allYear
-               ) AS seasons
-        FROM discovery_value v
-        LEFT JOIN media m ON m.id = v.picture_media_id
-        LEFT JOIN value_presentation vp ON vp.value_id = v.id
-        WHERE v.discovery_id = :discoveryId
-        ORDER BY seasonal DESC, year_round DESC, v.id ASC
+        SELECT v.public_id, v.description,
+               (SELECT array_agg(c.season ORDER BY c.season)
+                  FROM value_condition c
+                 WHERE c.value_id = v.id AND c.axis = :seasonAxis) AS seasons
+          FROM discovery_value v
+         WHERE v.discovery_id = :discoveryId AND v.status = :active
+         ORDER BY v.id
         """;
 
-    private static final String FIND_FINDINGS = """
-        SELECT f.public_id AS finding_id, f.kind, f.text, f.backed_by,
-               COALESCE(SUM(CASE WHEN r.reaction_type = 'UNDERSTAND' THEN 1 ELSE 0 END), 0) AS understand,
-               COALESCE(SUM(CASE WHEN r.reaction_type = 'WANT_TO_GO' THEN 1 ELSE 0 END), 0) AS want_to_go,
-               COALESCE(SUM(CASE WHEN r.reaction_type = 'MAYBE' THEN 1 ELSE 0 END), 0) AS maybe
-        FROM finding f
-        LEFT JOIN finding_reaction r ON r.finding_id = f.id
-        WHERE f.discovery_id = :discoveryId AND f.status = :status
-        GROUP BY f.id, f.public_id, f.kind, f.text, f.backed_by, f.display_order
-        ORDER BY f.display_order
-        """;
-
-    private static final String FIND_TAGS = """
-        SELECT DISTINCT label FROM (
-            SELECT pt.label
-            FROM post_tag pt
-            JOIN post p ON p.id = pt.post_id
-            WHERE p.discovery_id = :discoveryId
-            UNION
-            SELECT ot.label
-            FROM discovery_operator_tag ot
-            WHERE ot.discovery_id = :discoveryId
-        ) AS combined
-        ORDER BY label
+    private static final String FIND_ORIGINS = """
+        SELECT o.kind, o.conversation_id, d.method
+          FROM discovery_origin o
+          JOIN decision d ON d.id = o.decision_id
+         WHERE o.discovery_id = :discoveryId
+         ORDER BY o.id
         """;
 
     private static final String FIND_REACTIONS = """
-        SELECT reaction_type, COUNT(*) AS reaction_count
-        FROM discovery_reaction
-        WHERE discovery_id = :discoveryId
-        GROUP BY reaction_type
+        SELECT r.kind, count(*) AS n
+          FROM reaction r
+         WHERE r.discovery_id = :discoveryId
+         GROUP BY r.kind
         """;
 
-    private static final String FIND_RELATIONS = """
-        SELECT dr.relation_type = :derived AND dr.to_discovery_id = :discoveryId AS derived_from,
-               dr.relation_type = :derived AND dr.from_discovery_id = :discoveryId AS derived_to,
-               od.id AS other_id, od.public_id AS other_public_id, od.title AS other_title,
-               op.name AS other_place_name
-        FROM discovery_relation dr
-        JOIN discovery od
-            ON od.id = CASE WHEN dr.to_discovery_id = :discoveryId
-                            THEN dr.from_discovery_id ELSE dr.to_discovery_id END
-        JOIN discovery_place odp ON odp.discovery_id = od.id AND odp.is_primary
-        JOIN place op ON op.id = odp.place_id
-        WHERE (dr.from_discovery_id = :discoveryId OR dr.to_discovery_id = :discoveryId)
-          AND od.visibility = :visibility
-        ORDER BY dr.id
+    // わかってきたこと：もとになった会話と、この発見から始まった会話の、有効な Finding の今の版。公開の会話のものだけ
+    private static final String FIND_FINDINGS = """
+        SELECT f.public_id, f.kind, v.content, v.backed, v.unconfirmed,
+               count(r.id) FILTER (WHERE r.kind = :agree) AS agree,
+               count(r.id) FILTER (WHERE r.kind = :wantToGo) AS want_to_go,
+               count(r.id) FILTER (WHERE r.kind = :maybe) AS maybe
+          FROM visible_finding f
+          JOIN finding_version v ON v.finding_id = f.id AND v.version = f.current_version
+          LEFT JOIN reaction r ON r.finding_id = f.id
+         WHERE f.status = :active
+           AND (f.conversation_id IN (SELECT o.conversation_id FROM discovery_origin o
+                                       WHERE o.discovery_id = :discoveryId AND o.conversation_id IS NOT NULL)
+                OR f.conversation_id IN (SELECT c.id FROM conversation c WHERE c.entry_discovery_id = :discoveryId))
+         GROUP BY f.id, f.public_id, f.kind, v.content, v.backed, v.unconfirmed, f.created_at
+         ORDER BY f.created_at, f.id
         """;
+
+    private static final String FIND_ORIGIN_CONVERSATION_IDS = """
+        SELECT c.id
+          FROM visible_conversation c
+         WHERE c.id IN (SELECT o.conversation_id FROM discovery_origin o
+                         WHERE o.discovery_id = :discoveryId AND o.conversation_id IS NOT NULL)
+         ORDER BY c.created_at, c.public_id
+        """;
+
+    private static final String FIND_STARTED_CONVERSATION_IDS = """
+        SELECT c.id
+          FROM visible_conversation c
+         WHERE c.entry_discovery_id = :discoveryId
+         ORDER BY c.created_at DESC, c.public_id
+         LIMIT :limit
+        """;
+
+    private static final String COUNT_STARTED_CONVERSATIONS = """
+        SELECT count(*) FROM visible_conversation c WHERE c.entry_discovery_id = :discoveryId
+        """;
+
+    // 会話カード：最初の Post（時点、識別子の順で最初）と、それが公開かどうか
+    private static final String FIND_CONVERSATION_CARDS = """
+        SELECT c.id, c.public_id, c.created_at, c.public_post_count, c.last_public_posted_at,
+               fp.visibility AS first_post_visibility, fp.body AS first_post_body, up.nickname AS starter_name
+          FROM conversation c
+          JOIN LATERAL (
+              SELECT p.visibility, p.body, p.user_id
+                FROM post p
+               WHERE p.conversation_id = c.id
+               ORDER BY p.posted_at, p.id
+               LIMIT 1
+          ) fp ON true
+          JOIN user_profile up ON up.user_id = fp.user_id
+         WHERE c.id IN (:conversationIds)
+        """;
+
+    private static final String FIND_CONVERSATION_PLACES = """
+        SELECT cp.conversation_id, p.public_id, p.name
+          FROM conversation_place cp
+          JOIN place p ON p.id = cp.place_id
+         WHERE cp.conversation_id IN (:conversationIds)
+         GROUP BY cp.conversation_id, p.public_id, p.name
+         ORDER BY cp.conversation_id, min(coalesce(cp.seq, 2147483647)), p.name
+        """;
+
+    // 関わる企画：この Discovery を指す項目、またはこの Discovery の関わる場所を指す項目を持つ、公開の企画（企画ごとに1件）
+    private static final String FIND_PROJECTS = """
+        WITH discovery_places AS (
+            SELECT dp.place_id FROM discovery_place dp
+             WHERE dp.discovery_id = :discoveryId AND dp.status = :active
+        ),
+        matched AS (
+            SELECT pi.project_id,
+                   min(pi.position) FILTER (WHERE pi.discovery_id = :discoveryId) AS discovery_position,
+                   min(pi.position) FILTER (WHERE pi.place_id IN (SELECT place_id FROM discovery_places)) AS place_position
+              FROM visible_project_item pi
+             WHERE pi.discovery_id = :discoveryId
+                OR pi.place_id IN (SELECT place_id FROM discovery_places)
+             GROUP BY pi.project_id
+        )
+        SELECT pr.public_id, pr.title, pr.type, pr.creator_kind, up.nickname AS creator_name,
+               m.discovery_position, m.place_position
+          FROM matched m
+          JOIN visible_project pr ON pr.id = m.project_id
+          JOIN user_profile up ON up.user_id = pr.creator_user_id
+         ORDER BY pr.created_at DESC, pr.public_id
+         LIMIT :limit
+        """;
+
+    private static final String COUNT_PROJECTS = """
+        WITH discovery_places AS (
+            SELECT dp.place_id FROM discovery_place dp
+             WHERE dp.discovery_id = :discoveryId AND dp.status = :active
+        )
+        SELECT count(DISTINCT pi.project_id)
+          FROM visible_project_item pi
+         WHERE pi.discovery_id = :discoveryId
+            OR pi.place_id IN (SELECT place_id FROM discovery_places)
+        """;
+
+    // 関係する Discovery（派生・関連）。相手は公開で成立を取り消しておらず、統合された側でないもの
+    private static final String FIND_RELATIONS = """
+        SELECT r.kind, r.from_discovery_id = :discoveryId AS outgoing,
+               o.id AS other_id, o.public_id AS other_public_id, o.title AS other_title, o.summary AS other_summary
+          FROM discovery_relation r
+          JOIN visible_discovery o
+            ON o.id = CASE WHEN r.from_discovery_id = :discoveryId THEN r.to_discovery_id ELSE r.from_discovery_id END
+         WHERE (r.from_discovery_id = :discoveryId OR r.to_discovery_id = :discoveryId)
+           AND r.kind IN (:relationKinds) AND r.status = :active
+           AND NOT EXISTS (SELECT 1 FROM discovery_relation m
+                            WHERE m.from_discovery_id = o.id AND m.kind = :merged AND m.status = :active)
+         ORDER BY o.title, o.public_id
+        """;
+
+    /** 公開のビューで見えた Discovery。 */
+    record DiscoveryRow(long id, String publicId, String title, String summary) {}
+
+    /**
+     * 統合をたどった結果。depth が 0 なら統合されていない。統合先が見えないとき、
+     * または最後の統合先を決められないとき（hasNext）は、統合先を返さない。
+     */
+    record MergeRow(int depth, String targetPublicId, String targetTitle, boolean hasNext) {}
+
+    record PlaceRow(long discoveryId, String publicId, String name, String spatialType, String role, Integer seq,
+            LocalDate validFrom, LocalDate validTo, String description, String geoJson, List<String> kinds) {}
+
+    record ValueRow(String publicId, String description, List<String> seasons) {}
+
+    record OriginRow(String kind, Long conversationId, String method) {}
+
+    record FindingRow(String publicId, String kind, String content, boolean backed, boolean unconfirmed,
+            int agree, int wantToGo, int maybe) {}
+
+    record ConversationCardRow(long id, String publicId, OffsetDateTime createdAt, int publicPostCount,
+            OffsetDateTime lastPublicPostedAt, boolean firstPostVisible, String firstPostBody, String starterName) {}
+
+    record PlaceRefRow(String publicId, String name) {}
+
+    record ProjectRow(String publicId, String title, String type, String creatorKind, String creatorName,
+            Integer discoveryPosition, Integer placePosition) {}
+
+    record RelationRow(String kind, boolean outgoing, long otherId, String otherPublicId, String otherTitle,
+            String otherSummary) {}
+
+    /** 一覧の区画の最大件数（OpenAPI の maxItems。固定）。 */
+    static final int LIST_LIMIT = 10;
+
+    /** 統合をたどる深さの上限。 */
+    private static final int MAX_MERGE_DEPTH = 20;
+
+    /** GeoJSON の座標の小数の桁数（7桁でおよそ 1cm）。 */
+    private static final int GEOJSON_DECIMALS = 7;
+
+    private static final String ACTIVE = "ACTIVE";
 
     private final JdbcClient jdbcClient;
 
@@ -106,90 +258,187 @@ public class DiscoveryDetailQueries {
         this.jdbcClient = jdbcClient;
     }
 
-    public Optional<DiscoverySummary> findSummary(String publicId) {
-        return jdbcClient.sql(FIND_SUMMARY)
+    public Optional<DiscoveryRow> findDiscovery(String publicId) {
+        return jdbcClient.sql(FIND_DISCOVERY)
             .param("publicId", publicId)
-            .param("visibility", "PUBLIC")
-            .query((rs, rowNum) -> new DiscoverySummary(
-                rs.getLong("id"), rs.getString("public_id"), rs.getString("title"),
-                rs.getString("body"), rs.getString("place_name")))
+            .query((rs, rowNum) -> new DiscoveryRow(
+                rs.getLong("id"), rs.getString("public_id"), rs.getString("title"), rs.getString("summary")))
             .optional();
     }
 
-    public List<DiscoveryValueRow> findValues(long discoveryId, String season) {
-        return jdbcClient.sql(FIND_VALUES)
+    public MergeRow findFinalMergeTarget(long discoveryId) {
+        return jdbcClient.sql(FIND_FINAL_MERGE_TARGET)
             .param("discoveryId", discoveryId)
-            .param("axis", "SEASON")
-            .param("season", season)
-            .param("allYear", "ALL_YEAR")
-            .query((rs, rowNum) -> new DiscoveryValueRow(
-                rs.getString("value_id"), rs.getString("subject_label"), rs.getString("summary"),
-                rs.getString("body"), rs.getString("picture_url"), rs.getString("picture_alt"),
-                rs.getString("message"), rs.getString("participation_message"),
-                rs.getBoolean("seasonal"), rs.getBoolean("year_round"), toStringList(rs.getArray("seasons"))))
-            .list();
+            .param("merged", "MERGED")
+            .param("active", ACTIVE)
+            .param("maxDepth", MAX_MERGE_DEPTH)
+            .query((rs, rowNum) -> new MergeRow(
+                rs.getInt("depth"), rs.getString("public_id"), rs.getString("title"), rs.getBoolean("has_next")))
+            .single();
     }
 
-    public List<DiscoveryFindingRow> findFindings(long discoveryId) {
-        return jdbcClient.sql(FIND_FINDINGS)
-            .param("discoveryId", discoveryId)
-            .param("status", "ACTIVE")
-            .query((rs, rowNum) -> new DiscoveryFindingRow(
-                rs.getString("finding_id"), rs.getString("kind"), rs.getString("text"),
-                rs.getString("backed_by"), rs.getInt("understand"), rs.getInt("want_to_go"), rs.getInt("maybe")))
-            .list();
+    /** 関わる場所を Discovery ごとにまとめて返す（順番、識別子の順）。 */
+    public Map<Long, List<PlaceRow>> findPlaces(Collection<Long> discoveryIds) {
+        if (discoveryIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbcClient.sql(FIND_PLACES)
+            .param("discoveryIds", discoveryIds)
+            .param("active", ACTIVE)
+            .param("decimals", GEOJSON_DECIMALS)
+            .query((rs, rowNum) -> new PlaceRow(
+                rs.getLong("discovery_id"), rs.getString("public_id"), rs.getString("name"),
+                rs.getString("spatial_type"), rs.getString("role"), (Integer) rs.getObject("seq"),
+                rs.getObject("valid_from", LocalDate.class), rs.getObject("valid_to", LocalDate.class),
+                rs.getString("description"), rs.getString("geojson"), toStringList(rs.getArray("kinds"))))
+            .list().stream()
+            .collect(Collectors.groupingBy(PlaceRow::discoveryId, java.util.LinkedHashMap::new, Collectors.toList()));
     }
 
-    public List<String> findTags(long discoveryId) {
-        return jdbcClient.sql(FIND_TAGS)
+    public List<String> findAspects(long discoveryId) {
+        return jdbcClient.sql(FIND_ASPECTS)
             .param("discoveryId", discoveryId)
+            .param("aspect", "ASPECT")
             .query(String.class)
             .list();
     }
 
-    public DiscoveryReactionCounts findReactions(long discoveryId) {
-        var counts = jdbcClient.sql(FIND_REACTIONS)
+    public List<ValueRow> findValues(long discoveryId) {
+        return jdbcClient.sql(FIND_VALUES)
             .param("discoveryId", discoveryId)
-            .query((rs, rowNum) -> Map.entry(rs.getString("reaction_type"), rs.getInt("reaction_count")))
+            .param("seasonAxis", "SEASON")
+            .param("active", ACTIVE)
+            .query((rs, rowNum) -> new ValueRow(
+                rs.getString("public_id"), rs.getString("description"), toStringList(rs.getArray("seasons"))))
             .list();
-        int like = 0;
-        int surprised = 0;
-        int love = 0;
-        for (var entry : counts) {
-            switch (entry.getKey()) {
-                case "LIKE" -> like = entry.getValue();
-                case "SURPRISED" -> surprised = entry.getValue();
-                case "LOVE" -> love = entry.getValue();
-                default -> { }
-            }
-        }
-        return new DiscoveryReactionCounts(like, surprised, love);
     }
 
-    public List<DiscoveryRelationRow> findRelations(long discoveryId) {
+    public List<OriginRow> findOrigins(long discoveryId) {
+        return jdbcClient.sql(FIND_ORIGINS)
+            .param("discoveryId", discoveryId)
+            .query((rs, rowNum) -> new OriginRow(
+                rs.getString("kind"), (Long) rs.getObject("conversation_id"), rs.getString("method")))
+            .list();
+    }
+
+    /** Discovery へのリアクションの種類ごとの数。 */
+    public Map<String, Integer> findReactionCounts(long discoveryId) {
+        return jdbcClient.sql(FIND_REACTIONS)
+            .param("discoveryId", discoveryId)
+            .query((rs, rowNum) -> Map.entry(rs.getString("kind"), rs.getInt("n")))
+            .list().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    public List<FindingRow> findFindings(long discoveryId) {
+        return jdbcClient.sql(FIND_FINDINGS)
+            .param("discoveryId", discoveryId)
+            .param("active", ACTIVE)
+            .param("agree", "AGREE")
+            .param("wantToGo", "WANT_TO_GO")
+            .param("maybe", "MAYBE")
+            .query((rs, rowNum) -> new FindingRow(
+                rs.getString("public_id"), rs.getString("kind"), rs.getString("content"),
+                rs.getBoolean("backed"), rs.getBoolean("unconfirmed"),
+                rs.getInt("agree"), rs.getInt("want_to_go"), rs.getInt("maybe")))
+            .list();
+    }
+
+    public List<Long> findOriginConversationIds(long discoveryId) {
+        return jdbcClient.sql(FIND_ORIGIN_CONVERSATION_IDS)
+            .param("discoveryId", discoveryId)
+            .query(Long.class)
+            .list();
+    }
+
+    /** この発見から始まった会話の識別子（新しい順、最大 {@link #LIST_LIMIT} 件）。 */
+    public List<Long> findStartedConversationIds(long discoveryId) {
+        return jdbcClient.sql(FIND_STARTED_CONVERSATION_IDS)
+            .param("discoveryId", discoveryId)
+            .param("limit", LIST_LIMIT)
+            .query((rs, rowNum) -> rs.getLong("id"))
+            .list();
+    }
+
+    public int countStartedConversations(long discoveryId) {
+        return jdbcClient.sql(COUNT_STARTED_CONVERSATIONS)
+            .param("discoveryId", discoveryId)
+            .query(Integer.class)
+            .single();
+    }
+
+    /** 会話カードの材料を、会話の識別子ごとに返す。 */
+    public Map<Long, ConversationCardRow> findConversationCards(Collection<Long> conversationIds) {
+        if (conversationIds.isEmpty()) {
+            return Map.of();
+        }
+        return jdbcClient.sql(FIND_CONVERSATION_CARDS)
+            .param("conversationIds", conversationIds)
+            .query((rs, rowNum) -> new ConversationCardRow(
+                rs.getLong("id"), rs.getString("public_id"), rs.getObject("created_at", OffsetDateTime.class),
+                rs.getInt("public_post_count"), rs.getObject("last_public_posted_at", OffsetDateTime.class),
+                "PUBLIC".equals(rs.getString("first_post_visibility")),
+                rs.getString("first_post_body"), rs.getString("starter_name")))
+            .list().stream()
+            .collect(Collectors.toMap(ConversationCardRow::id, row -> row));
+    }
+
+    /** 会話と場所の採用した紐付き（採用中・再検討中）を、会話の識別子ごとに返す。 */
+    public Map<Long, List<PlaceRefRow>> findConversationPlaces(Collection<Long> conversationIds) {
+        if (conversationIds.isEmpty()) {
+            return Map.of();
+        }
+        var result = new java.util.HashMap<Long, List<PlaceRefRow>>();
+        jdbcClient.sql(FIND_CONVERSATION_PLACES)
+            .param("conversationIds", conversationIds)
+            .query((ResultSet rs) -> {
+                result.computeIfAbsent(rs.getLong("conversation_id"), key -> new ArrayList<>())
+                    .add(new PlaceRefRow(rs.getString("public_id"), rs.getString("name")));
+            });
+        return result;
+    }
+
+    /** 関わる企画（企画の作成の時点の新しい順、最大 {@link #LIST_LIMIT} 件）。 */
+    public List<ProjectRow> findProjects(long discoveryId) {
+        return jdbcClient.sql(FIND_PROJECTS)
+            .param("discoveryId", discoveryId)
+            .param("active", ACTIVE)
+            .param("limit", LIST_LIMIT)
+            .query((rs, rowNum) -> new ProjectRow(
+                rs.getString("public_id"), rs.getString("title"), rs.getString("type"),
+                rs.getString("creator_kind"), rs.getString("creator_name"),
+                (Integer) rs.getObject("discovery_position"), (Integer) rs.getObject("place_position")))
+            .list();
+    }
+
+    public int countProjects(long discoveryId) {
+        return jdbcClient.sql(COUNT_PROJECTS)
+            .param("discoveryId", discoveryId)
+            .param("active", ACTIVE)
+            .query(Integer.class)
+            .single();
+    }
+
+    public List<RelationRow> findRelations(long discoveryId) {
         return jdbcClient.sql(FIND_RELATIONS)
             .param("discoveryId", discoveryId)
-            .param("visibility", "PUBLIC")
-            .param("derived", "DERIVED")
-            .query((rs, rowNum) -> new DiscoveryRelationRow(
-                rs.getBoolean("derived_from"), rs.getBoolean("derived_to"),
-                rs.getLong("other_id"), rs.getString("other_public_id"), rs.getString("other_title"),
-                rs.getString("other_place_name")))
+            .param("relationKinds", List.of("DERIVED", "RELATED"))
+            .param("merged", "MERGED")
+            .param("active", ACTIVE)
+            .query((rs, rowNum) -> new RelationRow(
+                rs.getString("kind"), rs.getBoolean("outgoing"), rs.getLong("other_id"),
+                rs.getString("other_public_id"), rs.getString("other_title"), rs.getString("other_summary")))
             .list();
     }
 
-    private static List<String> toStringList(Array array) {
+    private static List<String> toStringList(Array array) throws SQLException {
         if (array == null) {
             return List.of();
         }
-        try {
-            var result = new ArrayList<String>();
-            for (Object value : (Object[]) array.getArray()) {
-                result.add((String) value);
-            }
-            return result;
-        } catch (SQLException e) {
-            throw new IllegalStateException("Failed to read season array.", e);
+        var result = new ArrayList<String>();
+        for (Object value : (Object[]) array.getArray()) {
+            result.add((String) value);
         }
+        return result;
     }
 }

@@ -7,30 +7,31 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.TestPropertySource;
 
-/** S03 の季節振り分けの秋バージョン。固定した「今」は 2026-11-02（秋）。 */
-@org.junit.jupiter.api.Disabled("DB V2（#135、db/migration/V2__*）で V1 の表を作り直したため、API を新しい表に合わせるまで止める")
+/** S03 の季節の振り分けの秋のもの。固定した「今」は 2026-11-02（秋）。 */
 @TestPropertySource(properties = "exday.dev.clock.now=2026-11-02T15:00:00+09:00")
 class AutumnDiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
 
     @Test
-    void 秋は季節違いのValueをotherValuesへ振り分ける() {
-        var body = body("FMI7GE306Hqw");
+    @SuppressWarnings("unchecked")
+    void 秋は季節違いのValueをその他の魅力に振り分ける() {
+        var kozukue = body(sid("disc:kozukue"));
+        assertThat((List<Map<String, Object>>) kozukue.get("recommendations")).extracting(v -> v.get("id"))
+            .containsExactly(sid("value:kozukue-moat"));
+        var other = (List<Map<String, Object>>) kozukue.get("otherValues");
+        assertThat(other).extracting(v -> v.get("id")).containsExactly(sid("value:kozukue-sakura"));
+        assertThat(other.get(0)).containsEntry("conditions", List.of(Map.of(
+            "axis", "season", "label", "季節", "text", "春（3〜5月）", "seasons", List.of("spring"))));
+        assertThat(((Map<?, ?>) kozukue.get("context")).get("season")).isEqualTo("autumn");
+    }
 
-        @SuppressWarnings("unchecked")
-        var recommendations = (List<Map<String, Object>>) body.get("recommendations");
-        assertThat(recommendations).extracting(r -> r.get("message"))
-            .containsExactly("大岡川の川沿いを歩いて、昔の風景との違いを探してみませんか");
-
-        @SuppressWarnings("unchecked")
-        var otherValues = (List<Map<String, Object>>) body.get("otherValues");
-        assertThat(otherValues).extracting(v -> v.get("subject")).containsExactlyInAnyOrder("桜並木", "夜桜");
-        var sakura = otherValues.stream().filter(v -> v.get("subject").equals("桜並木")).findFirst().orElseThrow();
-        @SuppressWarnings("unchecked")
-        var conditions = (List<Map<String, Object>>) sakura.get("conditions");
-        assertThat(conditions).hasSize(1);
-        assertThat(conditions.get(0)).containsEntry("label", "季節").containsEntry("seasons", List.of("spring"));
-
-        var context = (Map<?, ?>) body.get("context");
-        assertThat(context.get("season")).isEqualTo("autumn");
+    @Test
+    @SuppressWarnings("unchecked")
+    void 春と秋の条件を持つValueは秋に推薦する() {
+        var roses = body(sid("disc:roses"));
+        var recommendations = (List<Map<String, Object>>) roses.get("recommendations");
+        assertThat(recommendations).singleElement().satisfies(v -> assertThat(v).containsEntry("conditions",
+            List.of(Map.of("axis", "season", "label", "季節", "text", "春（3〜5月）・秋（9〜11月）",
+                "seasons", List.of("spring", "autumn")))));
+        assertThat(roses).containsEntry("otherValues", List.of());
     }
 }

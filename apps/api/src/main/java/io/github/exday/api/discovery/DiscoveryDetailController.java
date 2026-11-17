@@ -2,38 +2,23 @@ package io.github.exday.api.discovery;
 
 import io.github.exday.api.generated.api.S03Api;
 import io.github.exday.api.generated.model.DiscoveryDetail;
-import io.github.exday.api.generated.model.DiscoveryPosts;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 
-/** S03（Discovery 詳細）のエンドポイントの実装。 */
+/** S03（Discovery のページ）のエンドポイントの実装。 */
 @RestController
 public class DiscoveryDetailController implements S03Api {
 
-    private final DiscoveryDetailQueries queries;
-    private final DiscoveryDetailAssembler assembler;
-    private final DiscoveryPostsQueries postsQueries;
-    private final DiscoveryPostsAssembler postsAssembler;
+    private final DiscoveryDetailService service;
 
-    public DiscoveryDetailController(DiscoveryDetailQueries queries, DiscoveryDetailAssembler assembler,
-            DiscoveryPostsQueries postsQueries, DiscoveryPostsAssembler postsAssembler) {
-        this.queries = queries;
-        this.assembler = assembler;
-        this.postsQueries = postsQueries;
-        this.postsAssembler = postsAssembler;
+    public DiscoveryDetailController(DiscoveryDetailService service) {
+        this.service = service;
     }
 
+    /** 一般のユーザーに見えない（ない・非公開・成立を取り消した）Discovery は 404。 */
     @Override
     public ResponseEntity<DiscoveryDetail> getDiscovery(String discoveryId) {
-        var summary = queries.findSummary(discoveryId)
-            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId));
-        return ResponseEntity.ok(assembler.assemble(summary));
-    }
-
-    @Override
-    public ResponseEntity<DiscoveryPosts> getDiscoveryPosts(String discoveryId) {
-        long id = postsQueries.findDiscoveryId(discoveryId)
-            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId));
-        return ResponseEntity.ok(postsAssembler.assemble(id));
+        return ResponseEntity.ok(service.find(discoveryId)
+            .orElseThrow(() -> new DiscoveryNotFoundException(discoveryId)));
     }
 }

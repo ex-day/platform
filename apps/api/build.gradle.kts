@@ -46,6 +46,8 @@ openApiGenerate {
             "documentationProvider" to "none",
             "annotationLibrary" to "none",
             "skipDefaultInterface" to "false",
+            // oneOf（GeoJSON の Geometry 等）を、分岐ごとのクラスが実装する interface として作る（#135、PR #152）
+            "useOneOfInterfaces" to "true",
         )
     )
     // モデル・API 以外のドキュメントやサポートファイルは要らない。
@@ -93,5 +95,7 @@ tasks.withType<Test> {
     // CI のログで、どのテストが通った・止めたかを分かるようにする（DB V2 の確認、#135）
     testLogging {
         events("passed", "skipped", "failed")
+        // 失敗したときに原因（DB のエラーの中身など）がログで分かるようにする
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
