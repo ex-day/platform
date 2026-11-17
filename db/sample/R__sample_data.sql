@@ -1,21 +1,25 @@
--- ex-day：閲覧用のサンプルデータ（Issue #89）
+-- ex-day：サンプルデータ（DB 設計 v0.2、Issue #135）
 --
 -- ■ 注意
--- 会話や Discovery の内容は利用イメージであり、史実と異なる場合がある。
--- 場所・歴史の一部は実在の情報を参考にしているが、事実の確認をしていないものを含む。
--- 写真や地図は、権利の問題を避けるため仮の画像にしている。ニックネームは架空のもの。
+-- 会話・Discovery・企画の内容は利用イメージであり、史実と異なる場合がある。
+-- 場所の位置・形はおおよそで、オープンデータから取り込んだものではない（source_dataset = 'SAMPLE'）。
+-- 坂の勾配などの推定の値は仮の値。ニックネームは架空のもの。
 --
--- ■ 内容
--- - 桜木町〜山下公園のシナリオ（ex-day/poc#2）：海沿いの散歩（会話つき）、そこから派生した山下臨港線、
---   関係する氷川丸・赤い靴はいてた女の子像・汽車道
--- - 大岡川の桜（organization の README の漫画の流れ：疑問 → 経験が集まる → 写真・資料が集まる）
--- - 「今」を変えると S01 が変わるのを見るための、季節の違う Discovery（夏・秋・冬・通年）
+-- ■ 内容（論理設計 10節・MVP スコープ 16節のシナリオから、横浜の始める地域で）
+-- 1. 桜木町からの散歩：場所を決めずに話す → 場所の共有の誘いで桜木町を確かめる → 返信で汽車道・山下公園が
+--    採用される → Discovery が自動で成立する（由来＝会話）→ 運営が見直す（変更なし）。非公開にした返信と通報も入れる
+-- 2. 小机城址：場所のページから話す（入口から場所が決まる）。運営が登録した見本の Discovery
+-- 3. 鶴見の急坂番付（推定）：運営のお題の企画。推定の値の順の最初の並び → 企画そのものの会話の声
+--    →「この坂も入れて」で項目を足し、順番を変える（企画の変更の出来事）。企画をきっかけにした会話（場所未定）
+-- 4. 水車のあるそば屋：場所を探す問い（新しい場所の案の候補、「ここかも」の声）。TOP・場所のページの「探しています」
+-- 5. ユーザーの企画（コース）
+-- 6. 季節の違う Discovery（S01 の「いま、この時期」）と、成立を取り消した Discovery
 --
 -- ■ 仕組み
 -- Flyway の繰り返し実行のマイグレーション（R__）。内容を変えると、次の migrate で全部消して入れ直す。
--- Discovery の public_id は URL に出るため固定の値にする。それ以外の public_id は、キーから決まる値にする。
+-- public_id は、キーから決まる値（md5 の先頭12文字）にする。本番では db/sample を読み込ませない。
 
-TRUNCATE app_user, discovery, place RESTART IDENTITY CASCADE;
+TRUNCATE app_user, place, subject, decision RESTART IDENTITY CASCADE;
 
 -- ---------------------------------------------------------
 -- 補助の関数（このスクリプトの中だけで使う）
@@ -23,367 +27,483 @@ TRUNCATE app_user, discovery, place RESTART IDENTITY CASCADE;
 
 CREATE FUNCTION pg_temp.sid(k text) RETURNS text LANGUAGE sql IMMUTABLE
     AS $$ SELECT substr(md5('ex-day-sample:' || k), 1, 12) $$;
-CREATE FUNCTION pg_temp.uid(nick text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT user_id FROM user_profile WHERE nickname = nick $$;
-CREATE FUNCTION pg_temp.did(pid text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT id FROM discovery WHERE public_id = pid $$;
-CREATE FUNCTION pg_temp.pid(k text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT id FROM post WHERE public_id = pg_temp.sid('post:' || k) $$;
-CREATE FUNCTION pg_temp.vid(k text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT id FROM discovery_value WHERE public_id = pg_temp.sid('value:' || k) $$;
-CREATE FUNCTION pg_temp.fid(k text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT id FROM finding WHERE public_id = pg_temp.sid('finding:' || k) $$;
-CREATE FUNCTION pg_temp.mid(k text) RETURNS bigint LANGUAGE sql
-    AS $$ SELECT id FROM media WHERE public_id = pg_temp.sid('media:' || k) $$;
--- 経度・緯度の組から geography を作る（'POINT(139.6 35.4)' のような WKT）
 CREATE FUNCTION pg_temp.geo(wkt text) RETURNS geography LANGUAGE sql IMMUTABLE
     AS $$ SELECT ST_GeogFromText('SRID=4326;' || wkt) $$;
+-- 中心と半径（度）から四角いエリアを作る
+CREATE FUNCTION pg_temp.box(lon float8, lat float8, d float8) RETURNS geography LANGUAGE sql IMMUTABLE
+    AS $$ SELECT ST_MakeEnvelope(lon - d, lat - d * 0.8, lon + d, lat + d * 0.8, 4326)::geography $$;
+CREATE FUNCTION pg_temp.uid(nick text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT user_id FROM user_profile WHERE nickname = nick $$;
+CREATE FUNCTION pg_temp.plid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM place WHERE public_id = pg_temp.sid('place:' || k) $$;
+CREATE FUNCTION pg_temp.cid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM conversation WHERE public_id = pg_temp.sid('conv:' || k) $$;
+CREATE FUNCTION pg_temp.pid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM post WHERE public_id = pg_temp.sid('post:' || k) $$;
+CREATE FUNCTION pg_temp.did(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM discovery WHERE public_id = pg_temp.sid('disc:' || k) $$;
+CREATE FUNCTION pg_temp.prid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM project WHERE public_id = pg_temp.sid('proj:' || k) $$;
+CREATE FUNCTION pg_temp.pcid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM place_candidate WHERE public_id = pg_temp.sid('cand:' || k) $$;
+CREATE FUNCTION pg_temp.qid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM open_question WHERE public_id = pg_temp.sid('q:' || k) $$;
+CREATE FUNCTION pg_temp.decid(k text) RETURNS bigint LANGUAGE sql
+    AS $$ SELECT id FROM decision WHERE public_id = pg_temp.sid('dec:' || k) $$;
+
+-- 判断の記録を1行足す
+CREATE FUNCTION pg_temp.dec(k text, kind text, workflow text, actor_kind text, actor text, role text, at timestamptz)
+    RETURNS bigint LANGUAGE sql AS $$
+    INSERT INTO decision (public_id, kind, workflow, method, actor_kind, actor_user_id, actor_role,
+                          rule_version, analysis_version, decided_at)
+    VALUES (pg_temp.sid('dec:' || k), kind, workflow,
+            CASE actor_kind WHEN 'SYSTEM' THEN 'AUTO' ELSE 'HUMAN' END,
+            actor_kind, pg_temp.uid(actor), role,
+            CASE actor_kind WHEN 'SYSTEM' THEN 'sample-rule-1' END,
+            CASE workflow WHEN 'ANALYSIS' THEN 'sample-analysis-1' END,
+            at)
+    RETURNING id
+$$;
 
 -- ---------------------------------------------------------
--- User（ニックネームは架空）
+-- User
 -- ---------------------------------------------------------
 
-WITH nicknames(nickname) AS (
-    VALUES ('ななしさん'), ('大岡川の近所'), ('さくら通り'), ('資料室の人'),
-           ('夕景さんぽ'), ('はまっこ'), ('みなとの猫'), ('てつ子'), ('昭和の港'),
-           ('はじめて横浜'), ('通りすがり'), ('よこはま歩き'), ('川べりの人'), ('港のカメラ')
-), users AS (
-    INSERT INTO app_user (status)
-    SELECT 'ACTIVE' FROM nicknames
+INSERT INTO app_user (status) SELECT 'ACTIVE' FROM generate_series(1, 6);
+INSERT INTO user_profile (user_id, nickname) VALUES
+    (1, 'ex-day 運営'),       -- 運営のアカウント（運営かどうかは Cognito のグループで決まる）
+    (2, '港の散歩人'),
+    (3, 'はまっこ'),
+    (4, '坂好き'),
+    (5, '昔の鶴見っ子'),
+    (6, 'そば好き');
+INSERT INTO user_identity (user_id, issuer, subject, login_method)
+SELECT id, 'https://cognito-idp.example/sample', 'sample-sub-' || id, CASE WHEN id % 2 = 0 THEN 'GOOGLE' ELSE 'EMAIL' END
+  FROM app_user;
+
+-- ---------------------------------------------------------
+-- 場所（オープンデータの代わりのサンプル）
+-- ---------------------------------------------------------
+
+INSERT INTO place (public_id, name, spatial_type, geom, origin, source_dataset, source_record_id, source_license, imported_at) VALUES
+    (pg_temp.sid('place:kanagawa'),   '神奈川県',       'AREA',  pg_temp.box(139.45, 35.40, 0.30),  'OPEN_DATA', 'SAMPLE', 'kanagawa',   'sample', now()),
+    (pg_temp.sid('place:yokohama'),   '横浜市',         'AREA',  pg_temp.box(139.60, 35.45, 0.12),  'OPEN_DATA', 'SAMPLE', 'yokohama',   'sample', now()),
+    (pg_temp.sid('place:naka'),       '横浜市中区',     'AREA',  pg_temp.box(139.645, 35.440, 0.020), 'OPEN_DATA', 'SAMPLE', 'naka',     'sample', now()),
+    (pg_temp.sid('place:nishi'),      '横浜市西区',     'AREA',  pg_temp.box(139.620, 35.460, 0.015), 'OPEN_DATA', 'SAMPLE', 'nishi',    'sample', now()),
+    (pg_temp.sid('place:tsurumi'),    '横浜市鶴見区',   'AREA',  pg_temp.box(139.675, 35.505, 0.025), 'OPEN_DATA', 'SAMPLE', 'tsurumi',  'sample', now()),
+    (pg_temp.sid('place:kohoku'),     '横浜市港北区',   'AREA',  pg_temp.box(139.620, 35.520, 0.025), 'OPEN_DATA', 'SAMPLE', 'kohoku',   'sample', now()),
+    (pg_temp.sid('place:kozukue-cho'),'小机町',         'AREA',  pg_temp.box(139.597, 35.510, 0.005), 'OPEN_DATA', 'SAMPLE', 'kozukue-cho', 'sample', now()),
+    (pg_temp.sid('place:minatomirai'),'みなとみらい',   'AREA',  pg_temp.box(139.633, 35.457, 0.008), 'OPEN_DATA', 'SAMPLE', 'minatomirai', 'sample', now()),
+    (pg_temp.sid('place:sakuragicho'),'桜木町駅',       'POINT', pg_temp.geo('POINT(139.6308 35.4509)'), 'OPEN_DATA', 'SAMPLE', 'sakuragicho', 'sample', now()),
+    (pg_temp.sid('place:yokohama-st'),'横浜駅',         'POINT', pg_temp.geo('POINT(139.6221 35.4658)'), 'OPEN_DATA', 'SAMPLE', 'yokohama-st', 'sample', now()),
+    (pg_temp.sid('place:tsurumi-st'), '鶴見駅',         'POINT', pg_temp.geo('POINT(139.6760 35.5076)'), 'OPEN_DATA', 'SAMPLE', 'tsurumi-st',  'sample', now()),
+    (pg_temp.sid('place:kozukue-st'), '小机駅',         'POINT', pg_temp.geo('POINT(139.5987 35.5091)'), 'OPEN_DATA', 'SAMPLE', 'kozukue-st',  'sample', now()),
+    (pg_temp.sid('place:ishikawacho'),'石川町駅',       'POINT', pg_temp.geo('POINT(139.6430 35.4386)'), 'OPEN_DATA', 'SAMPLE', 'ishikawacho', 'sample', now()),
+    (pg_temp.sid('place:kishamichi'), '汽車道',         'ROUTE', pg_temp.geo('LINESTRING(139.6318 35.4518, 139.6345 35.4545, 139.6370 35.4552)'), 'OPEN_DATA', 'SAMPLE', 'kishamichi', 'sample', now()),
+    (pg_temp.sid('place:yamashita'),  '山下公園',       'POINT', pg_temp.geo('POINT(139.6505 35.4462)'), 'OPEN_DATA', 'SAMPLE', 'yamashita',   'sample', now()),
+    (pg_temp.sid('place:hikawamaru'), '氷川丸',         'POINT', pg_temp.geo('POINT(139.6527 35.4469)'), 'OPEN_DATA', 'SAMPLE', 'hikawamaru',  'sample', now()),
+    (pg_temp.sid('place:ooka'),       '大岡川',         'ROUTE', pg_temp.geo('LINESTRING(139.6200 35.4300, 139.6290 35.4410, 139.6340 35.4470)'), 'OPEN_DATA', 'SAMPLE', 'ooka', 'sample', now()),
+    (pg_temp.sid('place:kozukue-castle'), '小机城址',   'POINT', pg_temp.geo('POINT(139.5960 35.5130)'), 'OPEN_DATA', 'SAMPLE', 'kozukue-castle', 'sample', now()),
+    (pg_temp.sid('place:slope-a'),    '鶴見の坂A',      'ROUTE', pg_temp.geo('LINESTRING(139.6700 35.5030, 139.6712 35.5042)'), 'OPEN_DATA', 'SAMPLE', 'slope-a', 'sample', now()),
+    (pg_temp.sid('place:slope-b'),    '鶴見の坂B',      'ROUTE', pg_temp.geo('LINESTRING(139.6650 35.5100, 139.6661 35.5108)'), 'OPEN_DATA', 'SAMPLE', 'slope-b', 'sample', now()),
+    (pg_temp.sid('place:slope-c'),    '鶴見の坂C',      'ROUTE', pg_temp.geo('LINESTRING(139.6800 35.5000, 139.6815 35.5006)'), 'OPEN_DATA', 'SAMPLE', 'slope-c', 'sample', now()),
+    (pg_temp.sid('place:slope-d'),    '鶴見の坂D',      'ROUTE', pg_temp.geo('LINESTRING(139.6600 35.4980, 139.6608 35.4991)'), 'OPEN_DATA', 'SAMPLE', 'slope-d', 'sample', now());
+
+-- 行き方の代表の駅
+UPDATE place SET access_station_place_id = pg_temp.plid('sakuragicho') WHERE public_id IN (pg_temp.sid('place:kishamichi'), pg_temp.sid('place:minatomirai'));
+UPDATE place SET access_station_place_id = pg_temp.plid('ishikawacho') WHERE public_id IN (pg_temp.sid('place:yamashita'), pg_temp.sid('place:hikawamaru'));
+UPDATE place SET access_station_place_id = pg_temp.plid('kozukue-st') WHERE public_id = pg_temp.sid('place:kozukue-castle');
+UPDATE place SET access_station_place_id = pg_temp.plid('tsurumi-st') WHERE public_id LIKE ANY (ARRAY[pg_temp.sid('place:slope-a'), pg_temp.sid('place:slope-b'), pg_temp.sid('place:slope-c'), pg_temp.sid('place:slope-d')]);
+
+INSERT INTO place_name (place_id, name, kind) VALUES
+    (pg_temp.plid('kishamichi'), '汽車道（旧臨港線）', 'ALIAS'),
+    (pg_temp.plid('kozukue-castle'), '小机城', 'ALIAS');
+
+INSERT INTO place_kind (place_id, kind)
+SELECT pg_temp.plid(k), kind FROM (VALUES
+    ('kanagawa', '都道府県'), ('yokohama', '市区町村'), ('naka', '市区町村'), ('nishi', '市区町村'),
+    ('tsurumi', '市区町村'), ('kohoku', '市区町村'), ('kozukue-cho', '町丁・字'), ('minatomirai', '観光のエリア'),
+    ('sakuragicho', '駅'), ('yokohama-st', '駅'), ('tsurumi-st', '駅'), ('kozukue-st', '駅'), ('ishikawacho', '駅'),
+    ('kishamichi', '遊歩道'), ('yamashita', '公園'), ('hikawamaru', '船'), ('ooka', '川'),
+    ('kozukue-castle', '城跡'), ('kozukue-castle', '公園'),
+    ('slope-a', '坂'), ('slope-b', '坂'), ('slope-c', '坂'), ('slope-d', '坂')
+) AS v (k, kind);
+
+INSERT INTO place_estimate (place_id, metric, value, unit, method, method_version, computed_at)
+SELECT pg_temp.plid(k), 'SLOPE_GRADE', v, 'percent', 'elevation-x-road', 'sample-1', now()
+  FROM (VALUES ('slope-a', 14.2), ('slope-b', 12.8), ('slope-c', 10.5), ('slope-d', 13.1)) AS t (k, v);
+
+-- 行政の階層と、エリアの包含
+INSERT INTO place_relation (from_place_id, to_place_id, kind, origin)
+SELECT pg_temp.plid(f), pg_temp.plid(t), kind, 'OPEN_DATA' FROM (VALUES
+    ('kanagawa', 'yokohama', 'ADMINISTRATIVE'),
+    ('yokohama', 'naka', 'ADMINISTRATIVE'), ('yokohama', 'nishi', 'ADMINISTRATIVE'),
+    ('yokohama', 'tsurumi', 'ADMINISTRATIVE'), ('yokohama', 'kohoku', 'ADMINISTRATIVE'),
+    ('kohoku', 'kozukue-cho', 'ADMINISTRATIVE'),
+    ('minatomirai', 'kishamichi', 'AREA'), ('minatomirai', 'sakuragicho', 'AREA'),
+    ('naka', 'yamashita', 'CONTAINS'), ('naka', 'hikawamaru', 'CONTAINS'),
+    ('kozukue-cho', 'kozukue-castle', 'CONTAINS'), ('nishi', 'yokohama-st', 'CONTAINS'),
+    ('tsurumi', 'slope-a', 'CONTAINS'), ('tsurumi', 'slope-b', 'CONTAINS'),
+    ('tsurumi', 'slope-c', 'CONTAINS'), ('tsurumi', 'slope-d', 'CONTAINS')
+) AS v (f, t, kind);
+
+-- ---------------------------------------------------------
+-- Subject
+-- ---------------------------------------------------------
+
+INSERT INTO subject (label, kind, granularity, status) VALUES
+    ('散歩', 'ASPECT', NULL, 'ADOPTED'),
+    ('歴史', 'ASPECT', NULL, 'ADOPTED'),
+    ('季節の楽しみ', 'ASPECT', NULL, 'ADOPTED'),
+    ('汽車道', 'TARGET', 'SPECIFIC', 'ADOPTED'),
+    ('空堀', 'TARGET', 'GENERAL', 'ADOPTED'),
+    ('桜', 'TARGET', 'GENERAL', 'ADOPTED'),
+    ('バラ', 'TARGET', 'GENERAL', 'ADOPTED');
+
+INSERT INTO user_interest (user_id, place_id) VALUES
+    (pg_temp.uid('はまっこ'), pg_temp.plid('naka')),
+    (pg_temp.uid('坂好き'), pg_temp.plid('tsurumi'));
+
+-- ---------------------------------------------------------
+-- 1. 桜木町からの散歩（場所を決めずに話す）
+-- ---------------------------------------------------------
+
+INSERT INTO conversation (public_id, starter_user_id, created_at)
+VALUES (pg_temp.sid('conv:walk'), pg_temp.uid('港の散歩人'), '2026-04-05 10:00+09');
+
+INSERT INTO post (public_id, conversation_id, user_id, body, moderation_status, posted_at) VALUES
+    (pg_temp.sid('post:walk-1'), pg_temp.cid('walk'), pg_temp.uid('港の散歩人'),
+     '桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった', 'CHECKED', '2026-04-05 10:00+09'),
+    (pg_temp.sid('post:walk-2'), pg_temp.cid('walk'), pg_temp.uid('はまっこ'),
+     'いいですね。汽車道経由ですか？', 'CHECKED', '2026-04-05 12:10+09'),
+    (pg_temp.sid('post:walk-3'), pg_temp.cid('walk'), pg_temp.uid('港の散歩人'),
+     'そう、汽車道を通りました。線路の跡を歩けるのが楽しい', 'CHECKED', '2026-04-05 12:30+09'),
+    (pg_temp.sid('post:walk-4'), pg_temp.cid('walk'), pg_temp.uid('昔の鶴見っ子'),
+     '（規約に反する内容のため非公開）', 'CHECKED', '2026-04-05 13:00+09');
+INSERT INTO post_reference (from_post_id, to_post_id) VALUES
+    (pg_temp.pid('walk-2'), pg_temp.pid('walk-1')),
+    (pg_temp.pid('walk-3'), pg_temp.pid('walk-2'));
+
+-- 投稿の直後の照合（F05）で、桜木町と山下公園が場所の候補になる
+INSERT INTO place_candidate (public_id, conversation_id, place_id, origin, created_at) VALUES
+    (pg_temp.sid('cand:walk-sakuragicho'), pg_temp.cid('walk'), pg_temp.plid('sakuragicho'), 'AI', '2026-04-05 10:00+09'),
+    (pg_temp.sid('cand:walk-yamashita'),   pg_temp.cid('walk'), pg_temp.plid('yamashita'),   'AI', '2026-04-05 10:00+09'),
+    (pg_temp.sid('cand:walk-kishamichi'),  pg_temp.cid('walk'), pg_temp.plid('kishamichi'),  'HUMAN', '2026-04-05 12:10+09');
+INSERT INTO place_candidate_basis (candidate_id, post_id, origin, added_at) VALUES
+    (pg_temp.pcid('walk-sakuragicho'), pg_temp.pid('walk-1'), 'AI', '2026-04-05 10:00+09'),
+    (pg_temp.pcid('walk-yamashita'),   pg_temp.pid('walk-1'), 'AI', '2026-04-05 10:00+09'),
+    (pg_temp.pcid('walk-kishamichi'),  pg_temp.pid('walk-2'), 'HUMAN', '2026-04-05 12:10+09'),
+    (pg_temp.pcid('walk-kishamichi'),  pg_temp.pid('walk-3'), 'HUMAN', '2026-04-05 12:30+09');
+INSERT INTO place_candidate_state_change (candidate_id, to_status, actor_kind, reason, changed_at)
+SELECT id, 'CONSIDERING', 'SYSTEM', '投稿の直後の照合・返信から', created_at FROM place_candidate WHERE conversation_id = pg_temp.cid('walk');
+INSERT INTO place_candidate_voice (candidate_id, user_id, stance, post_id) VALUES
+    (pg_temp.pcid('walk-kishamichi'), pg_temp.uid('はまっこ'), 'SUPPORT', pg_temp.pid('walk-2'));
+
+-- 場所の共有の誘いで、投稿した人が桜木町をワンタップで確かめる（DEC-0023）
+SELECT pg_temp.dec('walk-adopt-1', 'PLACE_ADOPT', 'USER_ACTION', 'USER', '港の散歩人', 'CONVERSATION_STARTER', '2026-04-05 10:01+09');
+INSERT INTO place_adoption (public_id, candidate_id, conversation_id, place_id, role, seq, actor_kind, actor_user_id, created_decision_id, adopted_at)
+VALUES (pg_temp.sid('adopt:walk-sakuragicho'), pg_temp.pcid('walk-sakuragicho'), pg_temp.cid('walk'), pg_temp.plid('sakuragicho'),
+        'START', 1, 'CONVERSATION_STARTER', pg_temp.uid('港の散歩人'), pg_temp.decid('walk-adopt-1'), '2026-04-05 10:01+09');
+INSERT INTO location_sharing_prompt (post_id, status, shown_at, answered_at, place_adoption_id)
+VALUES (pg_temp.pid('walk-1'), 'ANSWERED', '2026-04-05 10:00+09', '2026-04-05 10:01+09',
+        (SELECT id FROM place_adoption WHERE public_id = pg_temp.sid('adopt:walk-sakuragicho')));
+
+-- 「汽車道経由？」「そう」で、会話を始めた人が汽車道と山下公園を採用する
+SELECT pg_temp.dec('walk-adopt-2', 'PLACE_ADOPT', 'USER_ACTION', 'USER', '港の散歩人', 'CONVERSATION_STARTER', '2026-04-05 12:31+09');
+INSERT INTO place_adoption (public_id, candidate_id, conversation_id, place_id, role, seq, actor_kind, actor_user_id, created_decision_id, adopted_at) VALUES
+    (pg_temp.sid('adopt:walk-kishamichi'), pg_temp.pcid('walk-kishamichi'), pg_temp.cid('walk'), pg_temp.plid('kishamichi'),
+     'VIA', 2, 'CONVERSATION_STARTER', pg_temp.uid('港の散歩人'), pg_temp.decid('walk-adopt-2'), '2026-04-05 12:31+09'),
+    (pg_temp.sid('adopt:walk-yamashita'), pg_temp.pcid('walk-yamashita'), pg_temp.cid('walk'), pg_temp.plid('yamashita'),
+     'END', 3, 'CONVERSATION_STARTER', pg_temp.uid('港の散歩人'), pg_temp.decid('walk-adopt-2'), '2026-04-05 12:31+09');
+INSERT INTO decision_target (decision_id, role, place_adoption_id, after_state)
+SELECT created_decision_id, 'RESULT', id, 'ADOPTED' FROM place_adoption WHERE conversation_id = pg_temp.cid('walk');
+INSERT INTO decision_basis_post (decision_id, post_id) VALUES
+    (pg_temp.decid('walk-adopt-1'), pg_temp.pid('walk-1')),
+    (pg_temp.decid('walk-adopt-2'), pg_temp.pid('walk-2')),
+    (pg_temp.decid('walk-adopt-2'), pg_temp.pid('walk-3'));
+
+-- 会話の解析（F02）：主張 → わかってきたこと（価値）
+INSERT INTO claim (post_id, content, analysis_version) VALUES
+    (pg_temp.pid('walk-1'), '桜木町から山下公園まで歩ける', 'sample-analysis-1'),
+    (pg_temp.pid('walk-3'), '汽車道は線路の跡を歩ける', 'sample-analysis-1');
+-- Finding と最初の版は同じ文で作る（finding.current_version の外部キーは遅延の制約）
+WITH f AS (
+    INSERT INTO finding (public_id, conversation_id, kind, analysis_version)
+    VALUES (pg_temp.sid('finding:walk-value'), pg_temp.cid('walk'), 'VALUE', 'sample-analysis-1')
     RETURNING id
 )
-INSERT INTO user_profile (user_id, nickname)
-SELECT u.id, n.nickname
-FROM (SELECT id, row_number() OVER (ORDER BY id) AS rn FROM users) u
-JOIN (SELECT nickname, row_number() OVER () AS rn FROM nicknames) n USING (rn);
+INSERT INTO finding_version (finding_id, version, content, unconfirmed, analysis_version)
+SELECT id, 1, '桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる', false, 'sample-analysis-1' FROM f;
+INSERT INTO finding_version_claim (finding_id, version, claim_id)
+SELECT f.id, 1, c.id FROM finding f, claim c
+ WHERE f.public_id = pg_temp.sid('finding:walk-value') AND c.post_id IN (pg_temp.pid('walk-1'), pg_temp.pid('walk-3'));
 
--- ---------------------------------------------------------
--- Discovery
--- ---------------------------------------------------------
+-- Discovery の候補 → 自動で成立する（由来＝会話）
+INSERT INTO discovery_candidate (conversation_id, proposal, confidence, status, analysis_version)
+VALUES (pg_temp.cid('walk'), '{"places":["桜木町駅","汽車道","山下公園"],"subjects":["散歩","汽車道"]}', 0.82, 'ACTIVE', 'sample-analysis-1');
+INSERT INTO discovery_candidate_finding (candidate_id, finding_id)
+SELECT dc.id, f.id FROM discovery_candidate dc, finding f
+ WHERE dc.conversation_id = pg_temp.cid('walk') AND f.public_id = pg_temp.sid('finding:walk-value');
 
-INSERT INTO discovery (public_id, title, summary, establishment_status, established_at) VALUES
-    ('FMI7GE306Hqw', '大岡川の桜と風景の変化',
-     '桜木町駅の近くから南へ続く大岡川の桜並木。いつから桜の名所になったのか、昔を知る人の記憶や写真が集まっている。',
-     'ESTABLISHED', '2026-03-24T09:00:00+09:00'),
-    ('pNhOuychaTbx', '桜木町から山下公園への海沿い散歩',
-     '桜木町から汽車道、赤レンガ倉庫、象の鼻の横を通り、線路跡の高い遊歩道を歩いて山下公園へ向かう海沿いの散歩道。',
-     'ESTABLISHED', '2026-03-12T09:00:00+09:00'),
-    ('LCy5noRLHXj6', '山下臨港線の跡をたどる',
-     '赤レンガ倉庫から山下公園へ続く高い遊歩道は、かつての貨物線（山下臨港線）の跡。横浜博覧会のころの思い出も集まっている。',
-     'ESTABLISHED', '2026-03-14T09:00:00+09:00'),
-    ('MIZcbwsEfmHc', '氷川丸',
-     '山下公園に係留されている昭和初期の客船。船内を見学でき、夕方には公園から眺める姿も楽しめる。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('i4MiJ28PY7DV', '赤い靴はいてた女の子像',
-     '山下公園にある、童謡「赤い靴」にちなんだ女の子の像。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('OglBhQeYvpZO', '汽車道',
-     '桜木町駅の近くから新港地区へ、水面の上を渡る遊歩道。かつての鉄道の跡を歩ける。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('0cKuRVG95FPG', '山下公園のバラ',
-     '山下公園の花壇では、春と秋にたくさんのバラが咲く。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('nRHOVxNIEiac', '山下公園通りの銀杏並木',
-     '山下公園に沿った通りの銀杏並木。秋には黄色く色づいた並木道を歩ける。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('erme6N6CkQgI', '赤レンガ倉庫の冬の催し',
-     '赤レンガ倉庫の広場では、冬に催しが開かれることがある。れんが造りの建物は一年中見られる。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('QWTFhGoAnUC5', '野毛山動物園',
-     '桜木町駅から坂を上った野毛山公園の中にある動物園。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00'),
-    ('7yYf55tZ2ja1', '横浜港の夏の花火',
-     '夏の夜、横浜港で花火が打ち上げられることがある。',
-     'ESTABLISHED', '2026-03-01T09:00:00+09:00');
-
--- ---------------------------------------------------------
--- Place（座標はおおよそ。経度 緯度 の順）
--- ---------------------------------------------------------
-
-INSERT INTO place (name, spatial_type, geom) VALUES
-    ('大岡川（桜木町駅〜蒔田）', 'ROUTE',
-     pg_temp.geo('LINESTRING(139.6303 35.4507, 139.6282 35.4460, 139.6245 35.4400, 139.6190 35.4330, 139.6135 35.4290)')),
-    ('桜木町〜山下公園（汽車道・赤レンガ倉庫・山下臨港線プロムナード）', 'ROUTE',
-     pg_temp.geo('LINESTRING(139.6309 35.4509, 139.6330 35.4525, 139.6390 35.4555, 139.6425 35.4527, 139.6430 35.4505, 139.6470 35.4470, 139.6495 35.4460)')),
-    ('山下臨港線プロムナード', 'ROUTE',
-     pg_temp.geo('LINESTRING(139.6425 35.4515, 139.6445 35.4490, 139.6475 35.4468)')),
-    ('山下公園（氷川丸）', 'POINT', pg_temp.geo('POINT(139.6503 35.4455)')),
-    ('山下公園（赤い靴はいてた女の子像）', 'POINT', pg_temp.geo('POINT(139.6488 35.4466)')),
-    ('汽車道', 'ROUTE', pg_temp.geo('LINESTRING(139.6330 35.4525, 139.6360 35.4540, 139.6390 35.4555)')),
-    ('山下公園', 'AREA',
-     pg_temp.geo('POLYGON((139.6470 35.4475, 139.6530 35.4450, 139.6520 35.4432, 139.6460 35.4458, 139.6470 35.4475))')),
-    ('山下公園通り', 'ROUTE', pg_temp.geo('LINESTRING(139.6465 35.4460, 139.6520 35.4425)')),
-    ('横浜赤レンガ倉庫', 'POINT', pg_temp.geo('POINT(139.6425 35.4527)')),
-    ('野毛山公園', 'POINT', pg_temp.geo('POINT(139.6256 35.4468)')),
-    ('臨港パーク', 'POINT', pg_temp.geo('POINT(139.6355 35.4620)'));
-
-INSERT INTO discovery_place (discovery_id, place_id, is_primary)
-SELECT pg_temp.did(d), (SELECT id FROM place WHERE name = p), true
-FROM (VALUES
-    ('FMI7GE306Hqw', '大岡川（桜木町駅〜蒔田）'),
-    ('pNhOuychaTbx', '桜木町〜山下公園（汽車道・赤レンガ倉庫・山下臨港線プロムナード）'),
-    ('LCy5noRLHXj6', '山下臨港線プロムナード'),
-    ('MIZcbwsEfmHc', '山下公園（氷川丸）'),
-    ('i4MiJ28PY7DV', '山下公園（赤い靴はいてた女の子像）'),
-    ('OglBhQeYvpZO', '汽車道'),
-    ('0cKuRVG95FPG', '山下公園'),
-    ('nRHOVxNIEiac', '山下公園通り'),
-    ('erme6N6CkQgI', '横浜赤レンガ倉庫'),
-    ('QWTFhGoAnUC5', '野毛山公園'),
-    ('7yYf55tZ2ja1', '臨港パーク')
-) AS v(d, p);
-
--- ---------------------------------------------------------
--- Post（声）
--- key は post:<key> として public_id を決める。reply_to は返信先の key
--- ---------------------------------------------------------
-
-CREATE TEMP TABLE sample_post (
-    key text, discovery text, nickname text, reply_to text, posted_at timestamptz, body text
-) ON COMMIT DROP;
-
-INSERT INTO sample_post VALUES
-    -- 大岡川の桜（疑問 → 経験が集まる → 写真・資料が集まる）
-    ('ooka1', 'FMI7GE306Hqw', 'ななしさん',   NULL,    '2026-03-18T12:10:00+09:00', '大岡川って昔から桜の名所だったのかな？ #大岡川 #桜'),
-    ('ooka2', 'FMI7GE306Hqw', '大岡川の近所', 'ooka1', '2026-03-18T19:40:00+09:00', '子どものころは、今ほど桜は多くなかった気がします。'),
-    ('ooka3', 'FMI7GE306Hqw', 'さくら通り',   'ooka1', '2026-03-19T08:05:00+09:00', '春になると川沿いに屋台が出ていて、家族で歩いたのを覚えています。'),
-    ('ooka4', 'FMI7GE306Hqw', '資料室の人',   'ooka2', '2026-03-21T15:30:00+09:00', '昔の川沿いの写真を見つけました。建物が低くて、空が広いですね。'),
-    ('ooka5', 'FMI7GE306Hqw', 'ななしさん',   'ooka4', '2026-03-21T21:00:00+09:00', '今と比べると全然ちがう！ 同じ場所から桜を見てみたいです #桜'),
-    ('ooka6', 'FMI7GE306Hqw', '夕景さんぽ',   NULL,    '2026-03-25T22:15:00+09:00', '夜の大岡川もきれいでした。川面に桜が映っていて #夜桜'),
-    ('ooka7', 'FMI7GE306Hqw', '川べりの人',   'ooka6', '2026-03-26T07:30:00+09:00', '朝の人が少ない時間に歩くのもおすすめです。'),
-
-    -- 桜木町から山下公園への海沿い散歩（ex-day/poc#2 のシナリオ P1〜P20）
-    ('walk1',  'pNhOuychaTbx', '夕景さんぽ',   NULL,     '2026-03-10T17:20:00+09:00', '桜木町から山下公園まで散歩しました。海沿いがずっと気持ちよかった #散歩'),
-    ('walk2',  'pNhOuychaTbx', 'はまっこ',     'walk1',  '2026-03-10T18:02:00+09:00', '汽車道は通りました？赤レンガ経由ですか？'),
-    ('walk3',  'pNhOuychaTbx', '夕景さんぽ',   'walk2',  '2026-03-10T18:30:00+09:00', '汽車道→赤レンガ→象の鼻の横→線路跡の高い遊歩道→山下公園、の順です。線路跡の遊歩道が好きで'),
-    ('walk4',  'pNhOuychaTbx', 'みなとの猫',   'walk3',  '2026-03-10T20:11:00+09:00', '赤レンガから山下公園までの線路跡、山下臨港線プロムナードですよね。高いところを歩けるのがいい'),
-    ('walk5',  'pNhOuychaTbx', 'てつ子',       'walk3',  '2026-03-10T21:45:00+09:00', 'あの線路跡って、もともと貨物線ですよね'),
-    ('walk6',  'pNhOuychaTbx', '昭和の港',     'walk5',  '2026-03-11T09:12:00+09:00', '横浜博覧会（1989年）のとき、その線路に旅客列車が走ってましたよ。レトロな気動車で、山下公園に臨時の駅があった'),
-    ('walk7',  'pNhOuychaTbx', 'てつ子',       'walk6',  '2026-03-11T10:03:00+09:00', '列車の名前、汐風号と浜風号だった気がする（うろ覚え）'),
-    ('walk8',  'pNhOuychaTbx', 'はまっこ',     'walk6',  '2026-03-11T12:40:00+09:00', '博覧会のころの写真あります'),
-    ('walk9',  'pNhOuychaTbx', '昭和の港',     NULL,     '2026-03-11T19:20:00+09:00', '昔は山下公園の中を高架で線路が通ってたんですよね。今は撤去されて見晴らしがいい'),
-    ('walk10', 'pNhOuychaTbx', 'みなとの猫',   'walk9',  '2026-03-12T08:15:00+09:00', '高架がなくなってから、氷川丸がよく見えるようになった気がする'),
-    ('walk11', 'pNhOuychaTbx', '夕景さんぽ',   'walk10', '2026-03-12T18:50:00+09:00', '夕方の氷川丸、ライトアップがきれいでした #夕焼け'),
-    ('walk12', 'pNhOuychaTbx', 'はじめて横浜', NULL,     '2026-03-12T20:05:00+09:00', '山下公園って、赤い靴に関連する何かなかったっけ？'),
-    ('walk13', 'pNhOuychaTbx', 'はまっこ',     'walk12', '2026-03-12T20:30:00+09:00', '「赤い靴はいてた女の子」の像がありますよ'),
-    ('walk14', 'pNhOuychaTbx', '昭和の港',     'walk13', '2026-03-12T21:02:00+09:00', '童謡の「赤い靴」にちなんだ像ですね。海の方を向いてます'),
-    ('walk15', 'pNhOuychaTbx', 'はじめて横浜', 'walk13', '2026-03-12T21:40:00+09:00', 'ありがとうございます、今度見に行ってみます'),
-    ('walk16', 'pNhOuychaTbx', 'てつ子',       'walk5',  '2026-03-13T10:25:00+09:00', 'ちなみに貨物線は山下埠頭の方まで延びてたはず'),
-    ('walk17', 'pNhOuychaTbx', 'みなとの猫',   NULL,     '2026-03-13T13:00:00+09:00', '汽車道も同じ臨港線の跡なんですか？'),
-    ('walk18', 'pNhOuychaTbx', 'てつ子',       'walk17', '2026-03-13T13:35:00+09:00', '汽車道は別の区間の跡で、先に遊歩道になったはず'),
-    ('walk19', 'pNhOuychaTbx', '通りすがり',   NULL,     '2026-03-14T11:10:00+09:00', '高架が撤去されたのって2010年ごろでしたっけ'),
-    ('walk20', 'pNhOuychaTbx', '通りすがり',   NULL,     '2026-03-14T11:12:00+09:00', '今日は暑かった'),
-
-    -- 山下臨港線の跡をたどる（海沿いの散歩から派生した話の続き）
-    ('rinko1', 'LCy5noRLHXj6', 'てつ子',       NULL,     '2026-03-14T20:00:00+09:00', '臨港線の話はこちらで。山下埠頭の方まで線路が延びていた跡、どこかに残っていないかな #臨港線'),
-    ('rinko2', 'LCy5noRLHXj6', '昭和の港',     'rinko1', '2026-03-15T09:30:00+09:00', '博覧会の臨時の駅は、今の遊歩道のどのあたりだったんでしょうね'),
-    ('rinko3', 'LCy5noRLHXj6', 'よこはま歩き', 'rinko1', '2026-03-16T18:45:00+09:00', '遊歩道の途中に、線路の名残みたいなところがありました');
-
-INSERT INTO post (public_id, discovery_id, user_id, body, posted_at)
-SELECT pg_temp.sid('post:' || key), pg_temp.did(discovery), pg_temp.uid(nickname), body, posted_at
-FROM sample_post
-ORDER BY posted_at;
-
-INSERT INTO post_reference (from_post_id, to_post_id, kind)
-SELECT pg_temp.pid(key), pg_temp.pid(reply_to), 'REPLY'
-FROM sample_post
-WHERE reply_to IS NOT NULL;
--- シナリオの P5 は P3 と P4 の両方に返信している
-INSERT INTO post_reference (from_post_id, to_post_id, kind) VALUES (pg_temp.pid('walk5'), pg_temp.pid('walk4'), 'REPLY');
-
--- 本文中の #タグ（表示するタグ）
-INSERT INTO post_tag (post_id, label)
-SELECT DISTINCT pg_temp.pid(key), m[1]
-FROM sample_post, regexp_matches(body, '#([^\s#]+)', 'g') AS m;
-
--- ---------------------------------------------------------
--- Media（仮の画像）
--- ---------------------------------------------------------
-
-INSERT INTO media (public_id, discovery_id, post_id, kind, name, url, alt, source_status, source_type, source_name) VALUES
-    (pg_temp.sid('media:ooka-sakura'), pg_temp.did('FMI7GE306Hqw'), NULL, 'IMAGE', 'ookagawa-sakura.svg',
-     '/images/sample/placeholder-sakura.svg', '仮の画像（大岡川の桜並木）', 'SELF', NULL, NULL),
-    (pg_temp.sid('media:ooka-old'), pg_temp.did('FMI7GE306Hqw'), pg_temp.pid('ooka4'), 'IMAGE', 'ookagawa-old.svg',
-     '/images/sample/placeholder-old-photo.svg', '仮の画像（昔の大岡川の川沿い）', 'UNSET', NULL, NULL),
-    (pg_temp.sid('media:walk-expo'), pg_temp.did('pNhOuychaTbx'), pg_temp.pid('walk8'), 'IMAGE', 'rinko-expo.svg',
-     '/images/sample/placeholder-train.svg', '仮の画像（臨港線の気動車）', 'SELF', NULL, NULL),
-    (pg_temp.sid('media:walk-sea'), pg_temp.did('pNhOuychaTbx'), NULL, 'IMAGE', 'walk-sea.svg',
-     '/images/sample/placeholder-sea.svg', '仮の画像（海沿いの遊歩道）', 'SELF', NULL, NULL),
-    (pg_temp.sid('media:hikawa'), pg_temp.did('MIZcbwsEfmHc'), NULL, 'IMAGE', 'hikawamaru.svg',
-     '/images/sample/placeholder-ship.svg', '仮の画像（氷川丸）', 'SELF', NULL, NULL),
-    (pg_temp.sid('media:rose'), pg_temp.did('0cKuRVG95FPG'), NULL, 'IMAGE', 'rose.svg',
-     '/images/sample/placeholder-rose.svg', '仮の画像（バラの花壇）', 'SELF', NULL, NULL),
-    (pg_temp.sid('media:icho'), pg_temp.did('nRHOVxNIEiac'), NULL, 'IMAGE', 'icho.svg',
-     '/images/sample/placeholder-ginkgo.svg', '仮の画像（銀杏並木）', 'SELF', NULL, NULL);
-
--- ---------------------------------------------------------
--- Value・Condition（季節）・Hero のメッセージ
--- season が NULL の Value は、季節の条件を持たない
--- ---------------------------------------------------------
-
-CREATE TEMP TABLE sample_value (
-    key text, discovery text, subject text, summary text, body text, picture text,
-    seasons text[], message text, participation text
-) ON COMMIT DROP;
-
-INSERT INTO sample_value VALUES
-    ('ooka-sakura', 'FMI7GE306Hqw', '桜並木', '川沿いに続く桜並木を、水面越しに眺められる',
-     '桜木町駅の近くから南へ、川の両岸に桜並木が続く。橋の上から眺めると、水面に向かって枝が伸びる様子がよく見える。',
-     'ooka-sakura', ARRAY['SPRING'], '桜の季節です。川沿いの桜並木を歩いてみませんか', NULL),
-    ('ooka-yozakura', 'FMI7GE306Hqw', '夜桜', '夜は川面に映る桜も楽しめる',
-     '夜になると、川沿いの明かりに照らされた桜が川面に映る。',
-     NULL, ARRAY['SPRING'], '夜の大岡川では、川面に映る桜も楽しめます', NULL),
-    ('ooka-walk', 'FMI7GE306Hqw', '川沿いの散歩', '一年中、川沿いの遊歩道を歩ける',
-     '桜の季節以外も、川沿いの遊歩道を歩いて昔の風景との違いを探せる。',
-     NULL, ARRAY['ALL_YEAR'], '大岡川の川沿いを歩いて、昔の風景との違いを探してみませんか',
-     '昔を知っている方、写真を持っている方、一緒に残しませんか？'),
-
-    ('walk-sea', 'pNhOuychaTbx', '海沿いの散歩', '海を見ながら、桜木町から山下公園まで歩ける',
-     '汽車道、赤レンガ倉庫、象の鼻の横を通り、海沿いを山下公園まで歩ける。',
-     'walk-sea', ARRAY['ALL_YEAR'], '海沿いを歩いて、山下公園まで行ってみませんか', NULL),
-    ('walk-promenade', 'pNhOuychaTbx', '線路跡の遊歩道', '線路跡の高い遊歩道を歩ける',
-     '赤レンガ倉庫から山下公園へは、線路跡の高い遊歩道を通って歩ける。',
-     NULL, NULL, '線路跡の高い遊歩道から、港を見下ろしながら歩けます', NULL),
-
-    ('rinko-trace', 'LCy5noRLHXj6', '鉄道の跡', '貨物線の跡を、高い遊歩道として歩ける',
-     'かつての貨物線の高架が、遊歩道として残されている。',
-     NULL, NULL, '貨物線の跡を歩きながら、昔の港の姿を想像してみませんか',
-     '横浜博覧会のころを覚えている方、一緒に話しませんか？'),
-
-    ('hikawa-tour', 'MIZcbwsEfmHc', '船内見学', '昭和初期の客船の中を見学できる',
-     '客室や食堂など、当時の客船の内装を見て回れる。',
-     'hikawa', ARRAY['ALL_YEAR'], '昭和初期の客船の中を見学してみませんか', NULL),
-    ('hikawa-evening', 'MIZcbwsEfmHc', '夕方の景色', '夕方、公園から氷川丸を眺められる',
-     '夕方になると、明かりのついた氷川丸を山下公園から眺められる。',
-     NULL, NULL, '夕方の山下公園から、氷川丸を眺めてみませんか', NULL),
-
-    ('akaikutsu-statue', 'i4MiJ28PY7DV', '像', '童謡「赤い靴」にちなんだ像を見られる',
-     '山下公園の中に、海の方を向いた女の子の像がある。',
-     NULL, ARRAY['ALL_YEAR'], '山下公園で、童謡にちなんだ像を探してみませんか', NULL),
-
-    ('kishamichi-night', 'OglBhQeYvpZO', '夜景', '水面の上を歩きながら、みなとみらいの夜景を眺められる',
-     '汽車道は水面の上を渡る遊歩道で、夜はみなとみらいの明かりが水面に映る。',
-     NULL, NULL, '水面の上を歩きながら、夜景を眺めてみませんか', NULL),
-
-    ('rose-spring', '0cKuRVG95FPG', '春のバラ', '春、花壇いっぱいに咲くバラを見られる',
-     '春の終わりごろ、山下公園の花壇にたくさんのバラが咲く。',
-     'rose', ARRAY['SPRING'], 'バラの季節です。山下公園の花壇を見に行ってみませんか', NULL),
-    ('rose-autumn', '0cKuRVG95FPG', '秋のバラ', '秋にもう一度咲くバラを見られる',
-     '秋にも、春より落ち着いた色合いのバラが咲く。',
-     'rose', ARRAY['AUTUMN'], '秋のバラの季節です。山下公園の花壇を歩いてみませんか', NULL),
-
-    ('icho-yellow', 'nRHOVxNIEiac', '黄葉', '黄色く色づいた銀杏並木を歩ける',
-     '秋の終わりごろ、通りの銀杏並木が黄色く色づく。',
-     'icho', ARRAY['AUTUMN'], '銀杏並木が色づく季節です。山下公園通りを歩いてみませんか', NULL),
-
-    ('akarenga-winter', 'erme6N6CkQgI', '冬の催し', '冬の広場の催しを楽しめる',
-     '冬には、赤レンガ倉庫の広場で催しが開かれることがある。',
-     NULL, ARRAY['WINTER'], '冬の赤レンガ倉庫で、広場の催しをのぞいてみませんか', NULL),
-    ('akarenga-building', 'erme6N6CkQgI', 'れんが造りの建物', 'れんが造りの倉庫の建物を見られる',
-     '明治・大正期に建てられたれんが造りの倉庫の外観を見られる。',
-     NULL, ARRAY['ALL_YEAR'], 'れんが造りの倉庫の建物を見に行ってみませんか', NULL),
-
-    ('nogeyama-zoo', 'QWTFhGoAnUC5', '動物園', '桜木町駅から歩いて行ける動物園で、動物を見られる',
-     '野毛山公園の中にあり、身近な動物から珍しい動物まで見られる。',
-     NULL, ARRAY['ALL_YEAR'], '桜木町から坂を上って、動物園に寄ってみませんか', NULL),
-
-    ('hanabi-summer', '7yYf55tZ2ja1', '花火', '夏の夜、港で花火が打ち上げられることがある',
-     '夏には、港の近くで花火大会が開かれることがある。',
-     NULL, ARRAY['SUMMER'], '花火の季節です。夏の夜の港に出かけてみませんか', NULL);
-
-INSERT INTO discovery_value (public_id, discovery_id, subject_label, summary, body, picture_media_id)
-SELECT pg_temp.sid('value:' || key), pg_temp.did(discovery), subject, summary, body,
-       CASE WHEN picture IS NULL THEN NULL ELSE pg_temp.mid(picture) END
-FROM sample_value;
-
+SELECT pg_temp.dec('walk-establish', 'ESTABLISH', 'ANALYSIS', 'SYSTEM', NULL, NULL, '2026-04-06 03:00+09');
+INSERT INTO discovery (public_id, title, summary, established_at, created_at)
+VALUES (pg_temp.sid('disc:walk'), '汽車道を通って、桜木町から山下公園へ海沿いの散歩',
+        '桜木町駅から汽車道を渡り、海を見ながら山下公園まで歩ける。線路の跡を歩けるのも楽しい。',
+        '2026-04-06 03:00+09', '2026-04-06 03:00+09');
+UPDATE discovery_candidate SET status = 'ESTABLISHED', discovery_id = pg_temp.did('walk') WHERE conversation_id = pg_temp.cid('walk');
+INSERT INTO discovery_place (discovery_id, place_id, role, seq, created_decision_id) VALUES
+    (pg_temp.did('walk'), pg_temp.plid('sakuragicho'), 'START', 1, pg_temp.decid('walk-establish')),
+    (pg_temp.did('walk'), pg_temp.plid('kishamichi'),  'VIA',   2, pg_temp.decid('walk-establish')),
+    (pg_temp.did('walk'), pg_temp.plid('yamashita'),   'END',   3, pg_temp.decid('walk-establish'));
+INSERT INTO discovery_value (public_id, discovery_id, description, created_decision_id)
+VALUES (pg_temp.sid('value:walk'), pg_temp.did('walk'), '海を見ながら歩ける、ちょうどいい長さの散歩道', pg_temp.decid('walk-establish'));
 INSERT INTO value_condition (value_id, axis, season)
-SELECT pg_temp.vid(key), 'SEASON', s
-FROM sample_value, unnest(seasons) AS s;
+SELECT id, 'SEASON', 'ALL_YEAR' FROM discovery_value WHERE public_id = pg_temp.sid('value:walk');
+INSERT INTO discovery_origin (discovery_id, kind, conversation_id, decision_id)
+VALUES (pg_temp.did('walk'), 'CONVERSATION', pg_temp.cid('walk'), pg_temp.decid('walk-establish'));
+INSERT INTO subject_assignment (subject_id, discovery_id, assigned_by, created_decision_id)
+SELECT s.id, pg_temp.did('walk'), 'SYSTEM', pg_temp.decid('walk-establish') FROM subject s WHERE s.label IN ('散歩', '汽車道');
+INSERT INTO decision_target (decision_id, role, discovery_id, after_state)
+VALUES (pg_temp.decid('walk-establish'), 'RESULT', pg_temp.did('walk'), 'ESTABLISHED');
+INSERT INTO decision_target (decision_id, role, conversation_id)
+VALUES (pg_temp.decid('walk-establish'), 'SUBJECT', pg_temp.cid('walk'));
+INSERT INTO decision_basis_post (decision_id, post_id) VALUES
+    (pg_temp.decid('walk-establish'), pg_temp.pid('walk-1')),
+    (pg_temp.decid('walk-establish'), pg_temp.pid('walk-3'));
+INSERT INTO decision_basis_snapshot (decision_id, finding_id, version, content)
+SELECT pg_temp.decid('walk-establish'), f.id, 1, v.content
+  FROM finding f JOIN finding_version v ON v.finding_id = f.id AND v.version = 1
+ WHERE f.public_id = pg_temp.sid('finding:walk-value');
 
-INSERT INTO value_presentation (value_id, message, participation_message, generated_by)
-SELECT pg_temp.vid(key), message, participation, 'SAMPLE'
-FROM sample_value;
+-- 運営が見直す（変更なし。F12）
+SELECT pg_temp.dec('walk-review', 'REVIEWED', 'DISCOVERY_REVIEW', 'OPERATOR', 'ex-day 運営', NULL, '2026-04-07 10:00+09');
+INSERT INTO decision_target (decision_id, role, discovery_id) VALUES (pg_temp.decid('walk-review'), 'SUBJECT', pg_temp.did('walk'));
 
--- ---------------------------------------------------------
--- Finding（わかってきたこと）
--- ---------------------------------------------------------
+-- 返信の1つが通報され、運営が非公開にする（F10）
+INSERT INTO content_report (public_id, reporter_user_id, post_id, reason_code, description, status, received_at, resolved_at)
+VALUES (pg_temp.sid('report:walk-4'), pg_temp.uid('はまっこ'), pg_temp.pid('walk-4'), 'RULE_VIOLATION', '関係のない宣伝です',
+        'RESOLVED', '2026-04-05 13:10+09', '2026-04-05 15:00+09');
+SELECT pg_temp.dec('walk-hide', 'VISIBILITY_CHANGE', 'REPORT_HANDLING', 'OPERATOR', 'ex-day 運営', NULL, '2026-04-05 15:00+09');
+UPDATE decision SET reason_code = 'RULE_VIOLATION' WHERE id = pg_temp.decid('walk-hide');
+UPDATE post SET visibility = 'HIDDEN' WHERE id = pg_temp.pid('walk-4');
+INSERT INTO decision_target (decision_id, role, post_id, before_state, after_state)
+VALUES (pg_temp.decid('walk-hide'), 'SUBJECT', pg_temp.pid('walk-4'), 'PUBLIC', 'HIDDEN');
+INSERT INTO decision_target (decision_id, role, content_report_id, before_state, after_state)
+SELECT pg_temp.decid('walk-hide'), 'SUBJECT', id, 'RECEIVED', 'RESOLVED' FROM content_report WHERE public_id = pg_temp.sid('report:walk-4');
 
-CREATE TEMP TABLE sample_finding (
-    key text, discovery text, kind text, text text, backed_by text, sources text[], display_order int
-) ON COMMIT DROP;
-
-INSERT INTO sample_finding VALUES
-    ('ooka-night',   'FMI7GE306Hqw', 'VALUE',  '夜は川面に映る桜も楽しめるらしい', NULL, ARRAY['ooka6'], 1),
-    ('ooka-morning', 'FMI7GE306Hqw', 'VALUE',  '朝の人が少ない時間に歩くのもよいらしい', NULL, ARRAY['ooka7'], 2),
-    ('ooka-fewer',   'FMI7GE306Hqw', 'THEORY', '昔は今より桜の本数が少なかったのでは', NULL, ARRAY['ooka2'], 3),
-    ('ooka-stalls',  'FMI7GE306Hqw', 'THEORY', '春には川沿いに屋台が出ていたらしい', NULL, ARRAY['ooka3'], 4),
-    ('ooka-sky',     'FMI7GE306Hqw', 'THEORY', '昔の川沿いは、今より建物が低く空が広かった', '提供された昔の写真', ARRAY['ooka4'], 5),
-
-    ('walk-sea',       'pNhOuychaTbx', 'VALUE',  '海沿いの散歩が気持ちいい', NULL, ARRAY['walk1'], 1),
-    ('walk-promenade', 'pNhOuychaTbx', 'VALUE',  '線路跡の高い遊歩道を歩ける', NULL, ARRAY['walk3', 'walk4'], 2),
-    ('walk-view',      'pNhOuychaTbx', 'THEORY', '山下公園の中の高架が撤去されて、氷川丸がよく見えるようになったのでは', NULL, ARRAY['walk9', 'walk10'], 3),
-
-    ('rinko-freight', 'LCy5noRLHXj6', 'THEORY', '線路跡は、もともと貨物線（山下臨港線）だった', 'Wikipedia「山下臨港線プロムナード」', ARRAY['walk5', 'walk16'], 1),
-    ('rinko-expo',    'LCy5noRLHXj6', 'THEORY', '横浜博覧会（1989年）のとき旅客列車が走り、山下公園に臨時の駅があった', NULL, ARRAY['walk6'], 2),
-    ('rinko-names',   'LCy5noRLHXj6', 'THEORY', '列車の名前は汐風号・浜風号だったらしい', NULL, ARRAY['walk7'], 3),
-
-    ('hikawa-light', 'MIZcbwsEfmHc', 'VALUE', '夕方の氷川丸のライトアップがきれいらしい', NULL, ARRAY['walk11'], 1),
-
-    ('akaikutsu-sea', 'i4MiJ28PY7DV', 'THEORY', '像は海の方を向いているらしい', NULL, ARRAY['walk14'], 1),
-
-    ('kishamichi-section', 'OglBhQeYvpZO', 'THEORY', '汽車道は臨港線とは別の区間の跡で、先に遊歩道になったらしい', NULL, ARRAY['walk18'], 1);
-
-INSERT INTO finding (public_id, discovery_id, kind, text, backed_by, display_order)
-SELECT pg_temp.sid('finding:' || key), pg_temp.did(discovery), kind, text, backed_by, display_order
-FROM sample_finding;
-
-INSERT INTO finding_source_post (finding_id, post_id)
-SELECT pg_temp.fid(key), pg_temp.pid(s)
-FROM sample_finding, unnest(sources) AS s;
-
--- ---------------------------------------------------------
--- DiscoveryRelation と派生の見立て
--- ---------------------------------------------------------
-
-INSERT INTO discovery_relation (from_discovery_id, to_discovery_id, relation_type, description, origin_post_id) VALUES
-    (pg_temp.did('pNhOuychaTbx'), pg_temp.did('LCy5noRLHXj6'), 'DERIVED', '線路跡の話から、貨物線の歴史の話が広がった', pg_temp.pid('walk8')),
-    (pg_temp.did('pNhOuychaTbx'), pg_temp.did('MIZcbwsEfmHc'), 'RELATED', '散歩の途中で氷川丸の景色の話が出た', NULL),
-    (pg_temp.did('pNhOuychaTbx'), pg_temp.did('i4MiJ28PY7DV'), 'RELATED', '散歩の途中で赤い靴の像の話が出た', NULL),
-    (pg_temp.did('pNhOuychaTbx'), pg_temp.did('OglBhQeYvpZO'), 'RELATED', '散歩のルートに汽車道が含まれる', NULL),
-    (pg_temp.did('LCy5noRLHXj6'), pg_temp.did('OglBhQeYvpZO'), 'RELATED', 'どちらも港の鉄道の跡', NULL),
-    (pg_temp.did('0cKuRVG95FPG'), pg_temp.did('nRHOVxNIEiac'), 'RELATED', 'どちらも山下公園のまわりで季節を感じられる', NULL);
-
--- 派生が確定した後に、元の会話で続いた派生の話題の声
-INSERT INTO post_continuation (post_id, discovery_id) VALUES
-    (pg_temp.pid('walk16'), pg_temp.did('LCy5noRLHXj6')),
-    (pg_temp.pid('walk19'), pg_temp.did('LCy5noRLHXj6'));
+-- リアクション
+INSERT INTO reaction (user_id, post_id, kind) VALUES
+    (pg_temp.uid('はまっこ'), pg_temp.pid('walk-1'), 'EMPATHY'),
+    (pg_temp.uid('坂好き'), pg_temp.pid('walk-3'), 'EMPATHY');
+INSERT INTO reaction (user_id, discovery_id, kind) VALUES
+    (pg_temp.uid('はまっこ'), pg_temp.did('walk'), 'WANT_TO_GO'),
+    (pg_temp.uid('そば好き'), pg_temp.did('walk'), 'AGREE');
+INSERT INTO reaction (user_id, finding_id, finding_version, kind)
+SELECT pg_temp.uid('坂好き'), id, 1, 'AGREE' FROM finding WHERE public_id = pg_temp.sid('finding:walk-value');
 
 -- ---------------------------------------------------------
--- Reaction（数を見せるためのサンプル。ユーザーを先頭から n 人使う）
+-- 2. 小机城址（場所のページから話す。運営が登録した見本の Discovery）
 -- ---------------------------------------------------------
 
-INSERT INTO discovery_reaction (discovery_id, user_id, reaction_type)
-SELECT pg_temp.did(d), u.id, t
-FROM (VALUES
-    ('FMI7GE306Hqw', 'LIKE', 4), ('FMI7GE306Hqw', 'SURPRISED', 1), ('FMI7GE306Hqw', 'LOVE', 6),
-    ('pNhOuychaTbx', 'LIKE', 5), ('pNhOuychaTbx', 'LOVE', 3),
-    ('LCy5noRLHXj6', 'LIKE', 2), ('LCy5noRLHXj6', 'SURPRISED', 3),
-    ('MIZcbwsEfmHc', 'LIKE', 3), ('0cKuRVG95FPG', 'LOVE', 2)
-) AS v(d, t, n)
-CROSS JOIN LATERAL (SELECT id FROM app_user ORDER BY id LIMIT v.n) AS u;
+SELECT pg_temp.dec('kozukue-register', 'OPERATOR_REGISTER', 'OPERATOR_SQL', 'OPERATOR', 'ex-day 運営', NULL, '2026-03-01 10:00+09');
+INSERT INTO discovery (public_id, title, summary, established_at, created_at)
+VALUES (pg_temp.sid('disc:kozukue'), '小机城址で、中世の城の空堀を歩く',
+        '小机城址の森の中に、深い空堀と土塁が残っている。春は竹林の緑と桜もきれい。',
+        '2026-03-01 10:00+09', '2026-03-01 10:00+09');
+INSERT INTO discovery_place (discovery_id, place_id, role, created_decision_id)
+VALUES (pg_temp.did('kozukue'), pg_temp.plid('kozukue-castle'), 'EXPERIENCE', pg_temp.decid('kozukue-register'));
+INSERT INTO discovery_value (public_id, discovery_id, description, created_decision_id) VALUES
+    (pg_temp.sid('value:kozukue-moat'), pg_temp.did('kozukue'), '深い空堀と土塁を、歩いて間近に見られる', pg_temp.decid('kozukue-register')),
+    (pg_temp.sid('value:kozukue-sakura'), pg_temp.did('kozukue'), '春は城跡の桜を楽しめる', pg_temp.decid('kozukue-register'));
+INSERT INTO value_condition (value_id, axis, season)
+SELECT id, 'SEASON', 'SPRING' FROM discovery_value WHERE public_id = pg_temp.sid('value:kozukue-sakura');
+INSERT INTO discovery_origin (discovery_id, kind, decision_id)
+VALUES (pg_temp.did('kozukue'), 'OPERATOR', pg_temp.decid('kozukue-register'));
+INSERT INTO subject_assignment (subject_id, discovery_id, assigned_by, created_decision_id)
+SELECT s.id, pg_temp.did('kozukue'), 'OPERATOR', pg_temp.decid('kozukue-register') FROM subject s WHERE s.label IN ('歴史', '空堀');
+INSERT INTO decision_target (decision_id, role, discovery_id, after_state)
+VALUES (pg_temp.decid('kozukue-register'), 'RESULT', pg_temp.did('kozukue'), 'ESTABLISHED');
 
-INSERT INTO post_reaction (post_id, user_id)
-SELECT pg_temp.pid(k), u.id
-FROM (VALUES ('ooka1', 3), ('ooka4', 5), ('ooka6', 2), ('walk1', 2), ('walk3', 3), ('walk6', 4), ('walk12', 1)) AS v(k, n)
-CROSS JOIN LATERAL (SELECT id FROM app_user ORDER BY id DESC LIMIT v.n) AS u;
+-- 場所のページの「話す」から始めた会話：始まりの時点で、入口の場所の候補と採用を1つの判断の記録で作る
+INSERT INTO conversation (public_id, entry_place_id, starter_user_id, created_at)
+VALUES (pg_temp.sid('conv:kozukue'), pg_temp.plid('kozukue-castle'), pg_temp.uid('はまっこ'), '2026-04-10 09:00+09');
+INSERT INTO post (public_id, conversation_id, user_id, body, moderation_status, posted_at)
+VALUES (pg_temp.sid('post:kozukue-1'), pg_temp.cid('kozukue'), pg_temp.uid('はまっこ'),
+        '空堀、思ったより深くてびっくりした。竹林の中を歩くのも気持ちいい', 'CHECKED', '2026-04-10 09:00+09');
+INSERT INTO place_candidate (public_id, conversation_id, place_id, origin, created_at)
+VALUES (pg_temp.sid('cand:kozukue-entry'), pg_temp.cid('kozukue'), pg_temp.plid('kozukue-castle'), 'ENTRY', '2026-04-10 09:00+09');
+INSERT INTO place_candidate_basis (candidate_id, post_id, origin, added_at)
+VALUES (pg_temp.pcid('kozukue-entry'), pg_temp.pid('kozukue-1'), 'ENTRY', '2026-04-10 09:00+09');
+INSERT INTO place_candidate_state_change (candidate_id, to_status, actor_kind, actor_user_id, reason, changed_at)
+VALUES (pg_temp.pcid('kozukue-entry'), 'CONSIDERING', 'USER', pg_temp.uid('はまっこ'), '場所のページから話した', '2026-04-10 09:00+09');
+SELECT pg_temp.dec('kozukue-adopt', 'PLACE_ADOPT', 'USER_ACTION', 'USER', 'はまっこ', 'CONVERSATION_STARTER', '2026-04-10 09:00+09');
+INSERT INTO place_adoption (public_id, candidate_id, conversation_id, place_id, role, actor_kind, actor_user_id, created_decision_id, adopted_at)
+VALUES (pg_temp.sid('adopt:kozukue'), pg_temp.pcid('kozukue-entry'), pg_temp.cid('kozukue'), pg_temp.plid('kozukue-castle'),
+        'TOPIC', 'CONVERSATION_STARTER', pg_temp.uid('はまっこ'), pg_temp.decid('kozukue-adopt'), '2026-04-10 09:00+09');
+INSERT INTO decision_target (decision_id, role, place_adoption_id, after_state)
+SELECT pg_temp.decid('kozukue-adopt'), 'RESULT', id, 'ADOPTED' FROM place_adoption WHERE public_id = pg_temp.sid('adopt:kozukue');
+INSERT INTO decision_basis_post (decision_id, post_id) VALUES (pg_temp.decid('kozukue-adopt'), pg_temp.pid('kozukue-1'));
 
-INSERT INTO finding_reaction (finding_id, user_id, reaction_type)
-SELECT pg_temp.fid(k), u.id, t
-FROM (VALUES
-    ('ooka-night', 'UNDERSTAND', 3), ('ooka-night', 'WANT_TO_GO', 5),
-    ('ooka-fewer', 'MAYBE', 2), ('ooka-stalls', 'MAYBE', 1),
-    ('walk-sea', 'UNDERSTAND', 4), ('walk-promenade', 'WANT_TO_GO', 3),
-    ('walk-view', 'MAYBE', 2), ('rinko-expo', 'MAYBE', 3), ('rinko-names', 'MAYBE', 1),
-    ('hikawa-light', 'WANT_TO_GO', 2)
-) AS v(k, t, n)
-CROSS JOIN LATERAL (SELECT id FROM app_user ORDER BY id LIMIT v.n) AS u;
+-- ---------------------------------------------------------
+-- 3. 鶴見の急坂番付（推定）：運営のお題の企画
+-- ---------------------------------------------------------
+
+INSERT INTO project (public_id, creator_kind, creator_user_id, type, title, call_text, description, moderation_status, created_at, updated_at)
+VALUES (pg_temp.sid('proj:slopes'), 'OPERATOR', pg_temp.uid('ex-day 運営'), 'RANKING', '鶴見の急坂番付（推定）',
+        'みんなの知ってる急坂はどこ？', '標高のデータと道路から計算した勾配の順に並べた、推定の番付です。',
+        'CHECKED', '2026-03-20 10:00+09', '2026-04-12 20:00+09');
+
+-- 最初の並び（推定の値の順。F09）
+INSERT INTO project_item (public_id, project_id, place_id, position, created_at) VALUES
+    (pg_temp.sid('item:slopes-a'), pg_temp.prid('slopes'), pg_temp.plid('slope-a'), 1, '2026-03-20 10:00+09'),
+    (pg_temp.sid('item:slopes-b'), pg_temp.prid('slopes'), pg_temp.plid('slope-b'), 2, '2026-03-20 10:00+09'),
+    (pg_temp.sid('item:slopes-c'), pg_temp.prid('slopes'), pg_temp.plid('slope-c'), 3, '2026-03-20 10:00+09');
+INSERT INTO project_change (public_id, project_id, kind, changed_by_user_id, changed_at)
+VALUES (pg_temp.sid('change:slopes-created'), pg_temp.prid('slopes'), 'CREATED', pg_temp.uid('ex-day 運営'), '2026-03-20 10:00+09');
+INSERT INTO project_change_item (change_id, place_id, kind, after_position)
+SELECT (SELECT id FROM project_change WHERE public_id = pg_temp.sid('change:slopes-created')), pg_temp.plid(k), 'ADDED', pos
+  FROM (VALUES ('slope-a', 1), ('slope-b', 2), ('slope-c', 3)) AS v (k, pos);
+
+-- 企画そのものの会話（最初の発言のときに作る）
+INSERT INTO conversation (public_id, entry_project_id, is_project_own, starter_user_id, created_at)
+VALUES (pg_temp.sid('conv:slopes-own'), pg_temp.prid('slopes'), true, pg_temp.uid('坂好き'), '2026-04-12 18:00+09');
+INSERT INTO post (public_id, conversation_id, user_id, body, moderation_status, posted_at) VALUES
+    (pg_temp.sid('post:slopes-own-1'), pg_temp.cid('slopes-own'), pg_temp.uid('坂好き'),
+     'この坂も入れてほしい。鶴見の坂D、自転車だと押して歩くしかない', 'CHECKED', '2026-04-12 18:00+09'),
+    (pg_temp.sid('post:slopes-own-2'), pg_temp.cid('slopes-own'), pg_temp.uid('昔の鶴見っ子'),
+     '坂D、たしかにきつい。坂Cより上だと思う', 'CHECKED', '2026-04-12 19:00+09');
+INSERT INTO post_reference (from_post_id, to_post_id) VALUES (pg_temp.pid('slopes-own-2'), pg_temp.pid('slopes-own-1'));
+
+-- 作った人が声を読み、自分で並びを直す（坂D を足して3位にし、坂C を4位にする）。変更の出来事が会話のタイムラインに出る
+UPDATE project_item SET position = 4 WHERE public_id = pg_temp.sid('item:slopes-c');
+INSERT INTO project_item (public_id, project_id, place_id, position, created_at)
+VALUES (pg_temp.sid('item:slopes-d'), pg_temp.prid('slopes'), pg_temp.plid('slope-d'), 3, '2026-04-12 20:00+09');
+INSERT INTO project_change (public_id, project_id, kind, changed_by_user_id, changed_at)
+VALUES (pg_temp.sid('change:slopes-add-d'), pg_temp.prid('slopes'), 'UPDATED', pg_temp.uid('ex-day 運営'), '2026-04-12 20:00+09');
+INSERT INTO project_change_item (change_id, place_id, kind, before_position, after_position)
+SELECT (SELECT id FROM project_change WHERE public_id = pg_temp.sid('change:slopes-add-d')), pg_temp.plid(k), kind, b, a
+  FROM (VALUES ('slope-d', 'ADDED', NULL::int, 3), ('slope-c', 'MOVED', 3, 4)) AS v (k, kind, b, a);
+
+-- 企画をきっかけにした会話（入口＝この企画）。場所は決まっておらず、誘いは「あとで」
+INSERT INTO conversation (public_id, entry_project_id, starter_user_id, created_at)
+VALUES (pg_temp.sid('conv:slopes-snow'), pg_temp.prid('slopes'), pg_temp.uid('昔の鶴見っ子'), '2026-04-13 08:00+09');
+INSERT INTO post (public_id, conversation_id, user_id, body, posted_at)
+VALUES (pg_temp.sid('post:slopes-snow-1'), pg_temp.cid('slopes-snow'), pg_temp.uid('昔の鶴見っ子'),
+        '雪の日、タクシーが坂を上れなくて、坂の下で降ろされたことがある', '2026-04-13 08:00+09');
+INSERT INTO location_sharing_prompt (post_id, status, shown_at)
+VALUES (pg_temp.pid('slopes-snow-1'), 'LATER', '2026-04-13 08:00+09');
+
+-- ---------------------------------------------------------
+-- 4. 水車のあるそば屋（場所を探す問い）
+-- ---------------------------------------------------------
+
+INSERT INTO conversation (public_id, starter_user_id, created_at)
+VALUES (pg_temp.sid('conv:soba'), pg_temp.uid('そば好き'), '2026-04-15 21:00+09');
+INSERT INTO post (public_id, conversation_id, user_id, body, posted_at) VALUES
+    (pg_temp.sid('post:soba-1'), pg_temp.cid('soba'), pg_temp.uid('そば好き'),
+     '昔、横浜駅の近くに水車のあるそば屋があったはず。どこだったか覚えている人いますか？', '2026-04-15 21:00+09'),
+    (pg_temp.sid('post:soba-2'), pg_temp.cid('soba'), pg_temp.uid('はまっこ'),
+     '駅の西口から少し歩いたところにあった気がします', '2026-04-15 22:00+09');
+INSERT INTO post_reference (from_post_id, to_post_id) VALUES (pg_temp.pid('soba-2'), pg_temp.pid('soba-1'));
+INSERT INTO location_sharing_prompt (post_id, status, shown_at, answered_at)
+VALUES (pg_temp.pid('soba-1'), 'DECLINED', '2026-04-15 21:00+09', '2026-04-15 21:00+09');
+
+INSERT INTO open_question (public_id, conversation_id, content, kind, asker_user_id, analysis_version)
+VALUES (pg_temp.sid('q:soba'), pg_temp.cid('soba'), '水車のあるそば屋はどこにあったか', 'WHERE', pg_temp.uid('そば好き'), 'sample-analysis-1');
+INSERT INTO open_question_post (question_id, post_id) VALUES (pg_temp.qid('soba'), pg_temp.pid('soba-1'));
+INSERT INTO open_question_setting (question_id, keep_open, updated_by_user_id) VALUES (pg_temp.qid('soba'), true, pg_temp.uid('そば好き'));
+
+-- 新しい場所の案の候補（採用されるまで Place を作らない）。位置を含む横浜駅のあたりで「探しています」に出る
+INSERT INTO place_candidate (public_id, open_question_id, proposed_name, proposed_spatial_type, proposed_geom, proposed_kinds, origin, created_at)
+VALUES (pg_temp.sid('cand:soba-west'), pg_temp.qid('soba'), '水車のあるそば屋（横浜駅西口のあたり）', 'POINT',
+        pg_temp.geo('POINT(139.6195 35.4662)'), '{店}', 'HUMAN', '2026-04-15 22:00+09');
+INSERT INTO place_candidate_basis (candidate_id, post_id, origin, added_at)
+VALUES (pg_temp.pcid('soba-west'), pg_temp.pid('soba-2'), 'HUMAN', '2026-04-15 22:00+09');
+INSERT INTO place_candidate_state_change (candidate_id, to_status, actor_kind, actor_user_id, reason, changed_at)
+VALUES (pg_temp.pcid('soba-west'), 'CONSIDERING', 'USER', pg_temp.uid('はまっこ'), '返信で場所を指した', '2026-04-15 22:00+09');
+INSERT INTO place_candidate_voice (candidate_id, user_id, stance) VALUES
+    (pg_temp.pcid('soba-west'), pg_temp.uid('昔の鶴見っ子'), 'SUPPORT');
+INSERT INTO reaction (user_id, open_question_id, kind) VALUES (pg_temp.uid('港の散歩人'), pg_temp.qid('soba'), 'CURIOUS');
+
+-- ---------------------------------------------------------
+-- 5. ユーザーの企画（コース）
+-- ---------------------------------------------------------
+
+INSERT INTO project (public_id, creator_kind, creator_user_id, type, title, call_text, description, created_at)
+VALUES (pg_temp.sid('proj:harbor-course'), 'USER', pg_temp.uid('はまっこ'), 'COURSE', '港の見える散歩コース',
+        'おすすめの寄り道があれば教えてください', '桜木町から海沿いを歩き、山下公園と氷川丸まで。', '2026-04-20 10:00+09');
+INSERT INTO project_item (public_id, project_id, place_id, discovery_id, position, note, created_at) VALUES
+    (pg_temp.sid('item:course-1'), pg_temp.prid('harbor-course'), NULL, pg_temp.did('walk'), 1, '汽車道を通るのがおすすめ', '2026-04-20 10:00+09'),
+    (pg_temp.sid('item:course-2'), pg_temp.prid('harbor-course'), pg_temp.plid('hikawamaru'), NULL, 2, '', '2026-04-20 10:00+09');
+INSERT INTO project_change (public_id, project_id, kind, changed_by_user_id, changed_at)
+VALUES (pg_temp.sid('change:course-created'), pg_temp.prid('harbor-course'), 'CREATED', pg_temp.uid('はまっこ'), '2026-04-20 10:00+09');
+INSERT INTO project_change_item (change_id, place_id, discovery_id, kind, after_position)
+SELECT (SELECT id FROM project_change WHERE public_id = pg_temp.sid('change:course-created')), p, d, 'ADDED', pos
+  FROM (VALUES (NULL::bigint, pg_temp.did('walk'), 1), (pg_temp.plid('hikawamaru'), NULL::bigint, 2)) AS v (p, d, pos);
+
+-- ---------------------------------------------------------
+-- 6. 季節の違う Discovery（運営の見本）と、成立を取り消した Discovery
+-- ---------------------------------------------------------
+
+SELECT pg_temp.dec('seasonal-register', 'OPERATOR_REGISTER', 'OPERATOR_SQL', 'OPERATOR', 'ex-day 運営', NULL, '2026-03-01 10:00+09');
+INSERT INTO discovery (public_id, title, summary, established_at) VALUES
+    (pg_temp.sid('disc:roses'), '山下公園のバラを、海と一緒に見る', '春と秋に、海沿いのバラ園でたくさんの品種が咲く。', '2026-03-01 10:00+09'),
+    (pg_temp.sid('disc:ooka-sakura'), '大岡川の桜並木を、川沿いに歩く', '春、大岡川の両岸に桜が続き、川沿いを歩いて楽しめる。', '2026-03-01 10:00+09');
+INSERT INTO discovery_place (discovery_id, place_id, role, created_decision_id) VALUES
+    (pg_temp.did('roses'), pg_temp.plid('yamashita'), 'EXPERIENCE', pg_temp.decid('seasonal-register')),
+    (pg_temp.did('ooka-sakura'), pg_temp.plid('ooka'), 'EXPERIENCE', pg_temp.decid('seasonal-register'));
+INSERT INTO discovery_value (public_id, discovery_id, description, created_decision_id) VALUES
+    (pg_temp.sid('value:roses'), pg_temp.did('roses'), '海を背景に、たくさんの品種のバラが見られる', pg_temp.decid('seasonal-register')),
+    (pg_temp.sid('value:ooka-sakura'), pg_temp.did('ooka-sakura'), '川沿いに続く桜並木を歩ける', pg_temp.decid('seasonal-register'));
+INSERT INTO value_condition (value_id, axis, season)
+SELECT v.id, 'SEASON', s FROM discovery_value v,
+       (VALUES ('value:roses', 'SPRING'), ('value:roses', 'AUTUMN'), ('value:ooka-sakura', 'SPRING')) AS t (k, s)
+ WHERE v.public_id = pg_temp.sid(t.k);
+INSERT INTO discovery_origin (discovery_id, kind, decision_id) VALUES
+    (pg_temp.did('roses'), 'OPERATOR', pg_temp.decid('seasonal-register')),
+    (pg_temp.did('ooka-sakura'), 'OPERATOR', pg_temp.decid('seasonal-register'));
+INSERT INTO subject_assignment (subject_id, discovery_id, assigned_by, created_decision_id)
+SELECT s.id, d, 'OPERATOR', pg_temp.decid('seasonal-register')
+  FROM subject s, (VALUES ('バラ', pg_temp.did('roses')), ('桜', pg_temp.did('ooka-sakura')), ('季節の楽しみ', pg_temp.did('roses'))) AS t (label, d)
+ WHERE s.label = t.label;
+INSERT INTO decision_target (decision_id, role, discovery_id, after_state)
+SELECT pg_temp.decid('seasonal-register'), 'RESULT', id, 'ESTABLISHED' FROM discovery
+ WHERE public_id IN (pg_temp.sid('disc:roses'), pg_temp.sid('disc:ooka-sakura'));
+
+-- 1つの投稿から自動で成立したが、運営が見直して成立を取り消した Discovery（F12。行は消さない）
+SELECT pg_temp.dec('kozukue-post-establish', 'ESTABLISH', 'ANALYSIS', 'SYSTEM', NULL, NULL, '2026-04-11 03:00+09');
+INSERT INTO discovery (public_id, title, summary, established_at, withdrawn_at)
+VALUES (pg_temp.sid('disc:bamboo'), '小机の竹林を歩く', '（運営の見直しで成立を取り消した例）', '2026-04-11 03:00+09', '2026-04-11 12:00+09');
+INSERT INTO discovery_place (discovery_id, place_id, role, created_decision_id)
+VALUES (pg_temp.did('bamboo'), pg_temp.plid('kozukue-castle'), 'EXPERIENCE', pg_temp.decid('kozukue-post-establish'));
+INSERT INTO discovery_value (public_id, discovery_id, description, created_decision_id)
+VALUES (pg_temp.sid('value:bamboo'), pg_temp.did('bamboo'), '竹林の中を歩ける', pg_temp.decid('kozukue-post-establish'));
+INSERT INTO discovery_origin (discovery_id, kind, post_id, decision_id)
+VALUES (pg_temp.did('bamboo'), 'POST', pg_temp.pid('kozukue-1'), pg_temp.decid('kozukue-post-establish'));
+INSERT INTO decision_target (decision_id, role, discovery_id, after_state)
+VALUES (pg_temp.decid('kozukue-post-establish'), 'RESULT', pg_temp.did('bamboo'), 'ESTABLISHED');
+INSERT INTO decision_target (decision_id, role, discovery_id)
+VALUES (pg_temp.decid('kozukue-post-establish'), 'COMPARED', pg_temp.did('kozukue'));
+SELECT pg_temp.dec('bamboo-withdraw', 'WITHDRAW_ESTABLISHMENT', 'DISCOVERY_REVIEW', 'OPERATOR', 'ex-day 運営', NULL, '2026-04-11 12:00+09');
+UPDATE decision SET reason_text = '小机城址の Discovery の一部で、別の Discovery にするほどの違いがない' WHERE id = pg_temp.decid('bamboo-withdraw');
+INSERT INTO decision_target (decision_id, role, discovery_id, before_state, after_state)
+VALUES (pg_temp.decid('bamboo-withdraw'), 'SUBJECT', pg_temp.did('bamboo'), 'ESTABLISHED', 'WITHDRAWN');
+
+-- ---------------------------------------------------------
+-- 写し（会話の公開の Post の数・最終の時点）と、既読
+-- ---------------------------------------------------------
+
+UPDATE conversation c
+   SET public_post_count = s.n, last_public_posted_at = s.last_at
+  FROM (SELECT conversation_id, count(*) AS n, max(posted_at) AS last_at
+          FROM post WHERE visibility = 'PUBLIC' GROUP BY conversation_id) AS s
+ WHERE s.conversation_id = c.id;
+
+INSERT INTO user_conversation_read (user_id, conversation_id, read_until)
+VALUES (pg_temp.uid('港の散歩人'), pg_temp.cid('walk'), '2026-04-05 12:10+09');
+
+-- 検索のための情報（F07 の中身が決まるまでの仮のもの）
+INSERT INTO search_profile (discovery_id, search_text, subjects, seasons, analysis_version)
+SELECT id, title || ' ' || summary, '{}', '{}', 'sample-analysis-1' FROM visible_discovery;
+INSERT INTO search_profile (project_id, search_text, analysis_version)
+SELECT id, title || ' ' || call_text || ' ' || description, 'sample-analysis-1' FROM visible_project;
