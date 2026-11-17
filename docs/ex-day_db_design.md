@@ -1,7 +1,7 @@
 # ex-day DB 設計 v0.2（MVP）
 
 - 作成日：2026-10-31（v0.1：閲覧用・S01・S03）、v0.2：2026-11-17（[Issue #135](https://github.com/ex-day/platform/issues/135)）
-- 状態：案。表と列の骨組み、「いずれか1種類を指す」関係の持ち方、判断の記録・写し・公開制御の方針を決める。テーブル定義（`db/migration/V2__*`）とサンプルデータは、本書のレビューのあとの PR で作る（2026-11-17 の人の判断）
+- 状態：案。表と列の骨組み、「いずれか1種類を指す」関係の持ち方、判断の記録・写し・公開制御・データの保持の方針を決める。テーブル定義（`db/migration/V2__*`）とサンプルデータは、本書のレビューのあとの PR で作る（2026-11-17 の人の判断）
 - 入力：[画面とデータの対応表](ex-day_screen_data_map.md)（2〜8節）、[論理エンティティ設計 v0.2](ex-day_logical_entity_design.md)、[MVP スコープ v0.4](ex-day_mvp_scope.md)、各画面の定義（`docs/ui/screens/`）
 - v0.1（v0.1 の論理設計に基づく閲覧用の DB。Discovery を器とする形）の本文は Git の履歴にある
 - **対象外**：
@@ -26,11 +26,21 @@
 | 行を消さない | 判断の対象・採用した構造・判断の記録の行は消さない。状態と判断の記録で表す。外部キーに `ON DELETE CASCADE` を付けない | 論理設計 6.2・6.5節、MVP スコープ 7・12節 |
 | 判断の記録が要る変更 | データの変更と判断の記録の追加を1つのトランザクションで行う（2.3節） | 対応表 8節 |
 
+### 1.1 データの保持
+
+2026-11-17 の人の判断（PR #150 のレビュー）。
+
+- データを持つかは、サービスの上の利用目的、整合性の維持、セキュリティ、監査、法令の遵守などの、はっきりした必要に基づいて決める
+- 将来使うかもしれないこと、保存の費用が小さいことだけを理由に持たない
+- 特に、利用者が書いた内容の写しは、公開制御・削除・保持期間・アクセスの権限を考えたうえで、持つ必要があるかを決める
+
+企画の変更の履歴（3.5節）は、この原則の例外ではなく、利用目的（企画の会話のタイムラインに出す）がはっきりしたので持つ。
+
 ## 2. 共通の決まり
 
 ### 2.1 画面・URL・API に出す識別子
 
-- `public_id` を持つ表：API で一つずつ指して開く・操作するもの。`place`、`conversation`、`post`、`discovery`、`discovery_value`、`project`、`project_item`、`finding`、`open_question`、`place_candidate`、`place_adoption`、`question_answer`、`decision`、`content_report`
+- `public_id` を持つ表：API で一つずつ指して開く・操作するもの。`place`、`conversation`、`post`、`discovery`、`discovery_value`、`project`、`project_item`、`project_change`、`finding`、`open_question`、`place_candidate`、`place_adoption`、`question_answer`、`decision`、`content_report`
 - 持たない表：関係・履歴・設定の行（`discovery_place`、`place_relation`、`reaction` 等）。API では親の `public_id` と中身で指す
 - 作り方：DB の関数 `exday_public_id()` を既定値にする。`gen_random_uuid()`（PostgreSQL の標準。拡張は要らない）のランダムな値から12文字を取る。重なりは一意の制約で拒む（起きる見込みはごく小さい）
 - User は持たない（MVP では他人のプロフィールページがない。論理設計 4.1節）
@@ -51,6 +61,7 @@
 |---|---|---|---|
 | 会話の入口 | `conversation` | `entry_place_id`・`entry_discovery_id`・`entry_project_id` | 0か1（入口なしを許す） |
 | 企画の項目の指す先 | `project_item` | `place_id`・`discovery_id` | 1 |
+| 企画の変更で動いた項目 | `project_change_item` | `place_id`・`discovery_id` | 1 |
 | 場所の候補の対象 | `place_candidate` | `conversation_id`・`open_question_id` | 1 |
 | 場所の候補の候補の場所 | `place_candidate` | `place_id` ／ 新しい場所の案の列（`proposed_*`） | どちらか一方 |
 | 場所の採用の対象 | `place_adoption` | `conversation_id`・`open_question_id`（候補と同じ値。複合の外部キーで候補と食い違わせない。3.8節） | 1 |
@@ -94,9 +105,24 @@
 ### 2.5 公開制御
 
 - 公開状態 `visibility`（`PUBLIC`／`HIDDEN`）を持つ表：`conversation`、`post`、`discovery`、`project`。場所は公開状態を持たない（MVP では場所を非公開にしない。統合・廃止は状態で表す。S13）
-- 一般のユーザー向けの読み取りは、公開状態で絞る。**案**：一般向けの問い合わせは、公開のものだけを返すビュー（`visible_post` 等）を通し、運営・作った人向けの読み取りだけが表を直接読む。集計・検索・わかってきたことに非公開の Post・会話が混ざるのを、問い合わせの書き忘れで起こさないため（対応表 7節）
-- 会話が非公開なら、その会話の Post・わかってきたこと・問い・場所の候補も一般には出さない。ビューは会話の公開状態も見る
-- 非公開になった Post を材料にした見立ての作り直し・出し分けは、F02・F10 の設計で決める（対応表 7節）。DB は、見立てから根拠の Post をたどれるように持つ（`finding_claim` → `claim.post_id`）
+- **一般のユーザー向けの読み取りは、公開のものだけを返すビューを通す**（2026-11-17 の人の判断、PR #150 のレビュー）。公開の条件を個々の SQL に散らさず、何を見て公開と判断しているかを1か所で分かるようにするため
+- ビューだけでアクセスの制御が終わるわけではない。運営の権限・作った人本人の読み取り（非公開の自分の Post・企画、運営が開く非公開・統合済み・取り消された対象）は、表を直接読み、権限をサーバー側で確かめる（S18、画面一覧「運営の権限」）
+- ビューの公開の条件（**案**。マイグレーションの PR で書く）：
+
+| ビュー | 公開とする条件 |
+|---|---|
+| `visible_conversation` | 会話が公開 |
+| `visible_post` | Post が公開、かつ属する会話が公開 |
+| `visible_discovery` | Discovery が公開、かつ成立を取り消していない（`withdrawn_at` が空。3.4節） |
+| `visible_project` | 企画が公開 |
+| `visible_project_item` | 企画が公開、かつ指す先が見えるもの（場所、または `visible_discovery` の Discovery）。見えない Discovery を指す項目の出し方（伏せて出すか、外すか）は S15 で決める |
+| `visible_finding`・`visible_open_question`・`visible_place_candidate` | 属する会話（場所の候補は対象の会話・問いの会話）が公開 |
+| `visible_project_change` | 企画が公開（3.5節） |
+
+- 親の公開状態を見る：Post・わかってきたこと・問い・場所の候補は、属する会話が非公開なら出さない
+- **入口が非公開になっても、会話は非公開にしない**：入口の Discovery・企画が非公開・成立の取り消しになっても、その入口から始まった会話は場所の会話として残す（独立した会話まで一律に非公開にしない）。入口へのリンクだけを出さない
+- 関連の情報からの漏えいを防ぐ：企画の項目・Discovery の関係・由来・数・地図など、ほかの対象を指して出すものは、指す先も公開のビューで引く
+- SearchProfile：検索の結果は、対象を公開のビューで引き直して出す（非公開・取り消しの対象を結果に出さない）。非公開になった Post・会話を材料にした SearchProfile・わかってきたこと・要約の作り直しは、F02・F07・F10 の設計で決める（対応表 7節）。DB は、見立てから根拠の Post を版ごとにたどれるように持つ（`finding_version_claim` → `claim.post_id`。3.7節）
 
 ### 2.6 暫定公開
 
@@ -121,7 +147,7 @@
 
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
-| `place` | `public_id`、`name`（表示名）、`spatial_type`（POINT／AREA／ROUTE）、`geom`、`status`（ACTIVE／MERGED／ABOLISHED）、`merged_into_place_id`、`origin`（OPEN_DATA／CONVERSATION／OPERATOR）、`source_dataset`・`source_record_id`・`source_license`・`imported_at`、`existed_from`・`existed_to`、`access_station_place_id`（行き方の代表の駅）、`created_decision_id` | `geom` に GiST。`status = 'MERGED'` と `merged_into_place_id` の有無を CHECK でそろえる（統合先の持ち方。5節）。一意（`source_dataset`, `source_record_id`）。会話から育った場所は `created_decision_id`（採用の判断）を持つ |
+| `place` | `public_id`、`name`（表示名）、`spatial_type`（POINT／AREA／ROUTE）、`geom`、`status`（ACTIVE／MERGED／ABOLISHED）、`merged_into_place_id`、`origin`（OPEN_DATA／CONVERSATION／OPERATOR）、`source_dataset`・`source_record_id`・`source_license`・`imported_at`、`existed_from`・`existed_to`、`access_station_place_id`（行き方の代表の駅）、`created_decision_id` | `geom` に GiST。`status = 'MERGED'` と `merged_into_place_id` の有無を CHECK でそろえ、統合先が自分自身でないことも CHECK で守る（統合先の持ち方。5節。循環は 3.12節）。一意（`source_dataset`, `source_record_id`）。会話から育った場所は `created_decision_id`（採用の判断）を持つ |
 | `place_name` | `place_id`、`name`、`kind`（DISPLAY／ALIAS／FORMER）、`valid_from`・`valid_to` | 別名・旧称（時代つき）。検索（F07）の照合にも使う |
 | `place_kind` | `place_id`、`kind` | 主キー（`place_id`, `kind`）。種類は CHECK を付けない text（城跡・公園・駅・坂等） |
 | `place_estimate` | `place_id`、`metric`（勾配等）、`value`、`unit`、`method`・`method_version`、`computed_at` | 番付の最初の並び（F09）の根拠。計算の出どころと版を持つ |
@@ -146,13 +172,14 @@
 
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
-| `discovery` | `public_id`、`title`、`summary`、`visibility`、`established_at` | 成立状態を持たない（DEC-0020 決定9）。成立の取り消しの持ち方は判断待ち（6節） |
+| `discovery` | `public_id`、`title`、`summary`、`visibility`、`established_at`、`withdrawn_at` | 成立状態を持たない（DEC-0020 決定9）。`withdrawn_at` は成立の取り消し（下記） |
 | `discovery_place` | `discovery_id`、`place_id`、`role`、`seq`、`valid_from`・`valid_to`、`description`、`status`（ACTIVE／REMOVED）、`created_decision_id`、`removed_decision_id` | `role` は CHECK を付けない text。付け替えでも行を消さず REMOVED にする。場所が0件にならないことはアプリで守る（足してから外す）。index（`place_id`）WHERE ACTIVE |
 | `discovery_value` | `public_id`、`discovery_id`、`description`、`status`（ACTIVE／REMOVED）、`created_decision_id`、`removed_decision_id` | Value。Reaction の対象になるので `public_id` を持つ |
 | `value_condition` | `value_id`、`axis`（MVP は SEASON）、`season`（SPRING／SUMMER／AUTUMN／WINTER／ALL_YEAR）、`description` | 軸の行がないことは「その軸に依存しない」（v0.1 を引き継ぐ）。通年は ALL_YEAR で表し、条件なしと区別する |
 | `discovery_origin` | `discovery_id`、`kind`（CONVERSATION／POST／PROJECT／DERIVED／OPERATOR）、種類ごとの対象の列（2.2節）、`decision_id` | 種類と対象の列を CHECK でそろえる。成立の判断の記録を必ず持つ |
-| `discovery_relation` | `from_discovery_id`、`to_discovery_id`、`kind`（DERIVED／RELATED／MERGED）、`description`、`status`（ACTIVE／REVOKED）、`created_decision_id`、`revoked_decision_id` | 統合（MERGED）は from が統合された側。部分一意（`from_discovery_id`）WHERE `kind = 'MERGED'` AND ACTIVE（統合先は1つ） |
+| `discovery_relation` | `from_discovery_id`、`to_discovery_id`、`kind`（DERIVED／RELATED／MERGED）、`description`、`status`（ACTIVE／REVOKED）、`created_decision_id`、`revoked_decision_id` | 統合（MERGED）は from が統合された側。部分一意（`from_discovery_id`）WHERE `kind = 'MERGED'` AND ACTIVE（統合先は1つ）。自分自身を指さない（CHECK）。統合の循環は統合の処理で確かめる（3.12節） |
 
+- **成立の取り消し**（2026-11-17 の人の判断、PR #150 のレビュー）：`discovery.withdrawn_at` に持ち、公開状態とは分ける。正本は成立の取り消しの判断の記録で、`withdrawn_at` はその写しとして同じトランザクションで入れる。取り消しを戻すときは空にし、判断の記録を足す。非公開は安全・規約の理由、取り消しは「Discovery ではなかった」という判断で、理由も戻し方も違うため。一般の読み取り（`visible_discovery`）・数・検索から外す。論理設計 原則6・4.5節を併せて直した
 - v0.1 の `value_presentation`（Hero の文言）と `post_continuation`（派生の続きの注記）は持たない。Hero は Value の説明と Recommendation で出す（S03）。文言を別に作ることにしたら、そのときに足す
 - 運営が付けたタグ（v0.1 の `discovery_operator_tag`）は持たない（タグは MVP の対象外）
 
@@ -162,9 +189,29 @@
 |---|---|---|
 | `project` | `public_id`、`creator_kind`（OPERATOR／USER）、`creator_user_id`、`type`（COURSE／RANKING／COLLECTION／MEMORY）、`title`、`call_text`（呼びかけ）、`description`、`visibility`、`moderation_status` | 運営が作った企画も、作ったアカウントの User を持つ（編集できるのは作った人だけ。判定は `creator_user_id`） |
 | `project_item` | `public_id`、`project_id`、`place_id`・`discovery_id`（2.2節）、`position`、`note` | 一意（`project_id`, `position`）を遅延の制約にする（並べ替えを1つのトランザクションで行うため） |
-| `project_arrangement` | `project_id`、`items`（jsonb。項目と順番の写し）、`changed_by_user_id`、`changed_at` | 並びの履歴。MVP でデータを残すかは判断待ち（6節） |
+| `project_change` | `public_id`、`project_id`、`changed_by_user_id`、`changed_at`、`fields_changed`（text[]。TITLE／CALL_TEXT／DESCRIPTION 等。中身は写さない） | 企画の変更の履歴（下記）。保存のうち、項目が動いたか表示する項目が変わったものだけを1行にする |
+| `project_change_item` | `change_id`、`place_id`・`discovery_id`（2.2節）、`kind`（ADDED／REMOVED／MOVED）、`before_position`、`after_position` | 動いた項目ごとに1行。指す先は企画の項目の行ではなく場所・Discovery で持つ（項目を外すと項目の行はなくなるため） |
 
 - 作れる数の上限は、値が決まったらアプリで確かめる（MVP スコープ 8節）
+
+**企画の変更の履歴**（2026-11-17 の人の判断、PR #150 のレビュー）：
+
+- **目的**：会話を通して企画が育つ過程を見せ、参加した人が自分の声が反映されたことを感じられるようにする。企画そのものの会話のタイムラインに、変更の出来事（「坂Bを足しました」「坂Aが3位から2位に」）を出す。保存の費用が小さいから持つのではない（1.1節）
+- **対象**：順位・順番の変更だけを特別に扱わない。4つの型（コース・番付・まとめ・記憶）の項目の追加・外す・順番の変更を持つ。表題・呼びかけ・説明の変更は「変えた」という事実だけを持ち、中身は写さない（表示するかは S15 で決める）。項目の説明（作った人の文）の変更は持たない
+- **持ち方の比較**：
+
+| 持ち方 | タイムラインに出す | 過去の並びを再現する | 利用者が書いた文の写し |
+|---|---|---|---|
+| 保存のたびに企画全体を写す（jsonb） | 前後の写しを比べて差分を作る | そのまま読める | 表題・説明・項目の説明が写しの数だけ残る |
+| 保存のたびに並び（項目と順番）だけを写す | 前後を比べて差分を作る | そのまま読める | 項目の説明を含めるかによる |
+| **変更の出来事と、動いた項目の差分だけを持つ（推す）** | そのまま出来事として読める | 作った時点（全部 ADDED）から順に重ねれば再現できる | 持たない（場所・Discovery への参照と順番だけ） |
+
+- **決めたこと（案）**：差分の出来事で持つ（`project_change`・`project_change_item`）。タイムラインに出す単位がそのまま出来事になり、利用者が書いた文を写さないので、守る範囲が企画そのものの公開制御に収まる。過去の並びも差分を重ねれば再現でき、専用の画面を後で作るときに困らない
+- **作った時点**：企画を作ったときも1件の出来事にする（全項目が ADDED）。これで「最初の並び」もたどれる
+- **公開制御・削除**：出来事の見え方は企画の公開状態に従う（`visible_project_change`）。動いた項目が指す Discovery が非公開・成立の取り消し・統合になったときは、今の状態で出す（非公開・取り消しは伏せる。統合は統合先へ案内する）。出来事は利用者の文を持たないので、削除の求めには企画と Post の側で応じればよい
+- **タイムラインの出し方と会話の関係**：出来事は企画に属し、会話には属さない。S15 は、企画そのものの会話の Post と企画の変更の出来事を、時点の順に混ぜて出す。**企画そのものの会話がまだないときも出来事は出せる**ので、履歴を出すためだけに空の会話を作らない（会話は最初の発言のときに作る、という決定を変えない）
+- **継続検討**：過去の並びを再現して見る専用の画面を MVP に設けるか。提案のもとの Post と変更を明示的に結ぶか（結ぶときは `project_change` に Post への参照を足す）。運営の企画でもタイムラインに出すか（データは同じ形で持つ）
+- **運営の事後チェックとは目的を分ける**：非公開の企画を作った人が直したことを運営が分かるための更新の検知は、`project.updated_at` で足りるかを F10 で決める。本表はユーザー向けの履歴であり、事後チェックのための記録ではない
 
 ### 3.6 Subject（7.2・7.3節）
 
@@ -180,10 +227,10 @@
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
 | `claim` | `post_id`、`content`、`exclusion_reason`（除外したときの理由。除外しても消さない） | ― |
-| `finding` | `public_id`、`conversation_id`、`kind`（THEORY／VALUE）、`current_version`、`status`（ACTIVE／MERGED／SPLIT／EXPIRED）、`merged_into_finding_id` | 中身は版に持つ |
+| `finding` | `public_id`、`conversation_id`、`kind`（THEORY／VALUE）、`current_version`、`status`（ACTIVE／MERGED／SPLIT／EXPIRED）、`merged_into_finding_id` | 中身は版に持つ。統合先が自分自身でないことを CHECK で守る |
 | `finding_version` | `finding_id`、`version`、`content`、`backed`（裏付けの有無）、`unconfirmed` | 主キー（`finding_id`, `version`）。Reaction と判断の記録はこの版を指す |
-| `finding_claim` | `finding_id`、`claim_id` | 根拠の主張 |
-| `open_question` | `public_id`、`conversation_id`、`content`、`kind`（WHERE／WHY／WHAT／OTHER）、`asker_user_id`、`status`（ACTIVE／MERGED／EXPIRED）、`merged_into_question_id` | 回答の状態は持たない（3.8節から導く） |
+| `finding_version_claim` | `finding_id`、`version`、`claim_id` | 根拠の主張を**版ごとに**持つ。根拠の Post が非公開になったとき、`claim.post_id` から、影響を受ける Finding の版（と今の版か）を引ける |
+| `open_question` | `public_id`、`conversation_id`、`content`、`kind`（WHERE／WHY／WHAT／OTHER）、`asker_user_id`、`status`（ACTIVE／MERGED／EXPIRED）、`merged_into_question_id` | 回答の状態は持たない（3.8節から導く）。統合先が自分自身でないことを CHECK で守る |
 | `open_question_post` | `question_id`、`post_id` | 問いの Post（人が書いたもの） |
 | `open_question_setting` | `question_id`（主キー）、`keep_open`、`updated_by_user_id` | 「引き続き募集するか」。問いを立てた人の意思なので、見立ての `open_question` と分ける（論理設計 5.3節の案A）。統合のときに引き継ぐ |
 | `discovery_candidate` | 出どころの列（2.2節）、`proposal`（jsonb。場所・Subject・価値・時間の候補）、`confidence`、`status`（ACTIVE／ESTABLISHED／EXPIRED）、`discovery_id` | 候補の中身は見立てなので jsonb にまとめる |
@@ -216,7 +263,7 @@
 
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
-| `decision` | `public_id`、`kind`（下記）、`method`（AUTO／HUMAN）、`actor_kind`（SYSTEM／OPERATOR／USER）、`actor_user_id`、`actor_role`（QUESTION_OWNER／CONVERSATION_STARTER／PROJECT_CREATOR）、`reason_code`、`reason_text`、`rule_version`、`analysis_version`、`decided_at` | `SYSTEM` なら User を持たず `AUTO`。運営・ユーザーなら User を持つ（CHECK） |
+| `decision` | `public_id`、`kind`（下記）、`workflow`（判断を行った業務の流れ。下記）、`method`（AUTO／HUMAN）、`actor_kind`（SYSTEM／OPERATOR／USER）、`actor_user_id`、`actor_role`（QUESTION_OWNER／CONVERSATION_STARTER／PROJECT_CREATOR）、`reason_code`、`reason_text`、`rule_version`、`analysis_version`、`decided_at` | `SYSTEM` なら User を持たず `AUTO`。運営・ユーザーなら User を持つ（CHECK） |
 | `decision_target` | `decision_id`、`role`（SUBJECT 対象／RESULT 結果／COMPARED 比べた既存）、指す先の列（下記）、`before_state`、`after_state` | 指す先はちょうど1つ（2.2節） |
 | `decision_basis_post` | `decision_id`、`post_id` | 固めた根拠の Post（参照で固める） |
 | `decision_basis_snapshot` | `decision_id`、`claim_id`・`finding_id`・`open_question_id`、`version`、`content` | 見立ては版の中身を写して固める（論理設計 6.5節） |
@@ -224,7 +271,8 @@
 - **判断の種類**（`kind`。値はマイグレーションの PR で並べる）：成立、成立の取り消し、統合・統合の取り消し、派生、関連、Discovery の場所・価値の付け替え、場所の採用・採用し直し・再検討中にする・保つ・取り消し、場所の候補の不採用・失効、回答の採用（同じ並び）、問いの統合、関係の候補の却下、公開状態の変更、通報の対応の状態の変更、**見直し（変更なし）**、場所の統合・廃止、運営の登録
 - **`decision_target` の指す先の列**：`conversation`、`post`、`project`、`discovery`、`discovery_place`、`discovery_value`、`discovery_relation`、`discovery_candidate`、`relation_candidate`、`place`、`place_candidate`、`place_adoption`、`open_question`、`question_answer`、`content_report`
 - 非公開の理由の分類（作った人に出す）は、公開状態の変更の判断の記録の `reason_code` に持つ。分類の一覧は F10 で決める
-- S18 の自動で成立した Discovery の「見直しの状態」は、成立の判断より後に、その Discovery を対象にした運営の判断の記録（見直し（変更なし）を含む）があるかで導く
+- **業務の流れ（`workflow`）**：判断の記録が、どの業務の中で行われたかを持つ（**案**の値：`DISCOVERY_REVIEW`（F12 の見直し）、`REPORT_HANDLING`（F10 の通報・事後チェックの対応）、`ANALYSIS`（F02）、`USER_ACTION`（利用者の採用など）、`OPERATOR_SQL`（運営が SQL で補ったもの））。値は F10・F12 で確定する
+- S18 の自動で成立した Discovery の「見直しの状態」は、成立の判断より後に、その Discovery を対象にした `workflow = 'DISCOVERY_REVIEW'` の判断の記録（見直し（変更なし）、成立の取り消し、付け替え、統合）があるかで導く。通報の対応などほかの業務の判断では、見直し済みにしない（2026-11-17、PR #150 のレビュー）
 
 ### 3.10 Reaction・通報（4.7・8.3節）
 
@@ -248,6 +296,11 @@ Reaction の種類（**案**。C10・S03・S14）：
 |---|---|---|
 | `user_conversation_read` | `user_id`、`conversation_id`、`read_until` | 既読（S09 の新しい動き）。論理 Entity にしない。詳細の画面から戻っただけでは消さない（S09） |
 
+### 3.12 統合の自己参照と循環
+
+- 統合先を持つ列（`place.merged_into_place_id`、`discovery_relation`（MERGED）、`finding.merged_into_finding_id`、`open_question.merged_into_question_id`）は、自分自身を指さないことを CHECK で守る
+- 循環（A → B → A）は、統合の処理の中で、統合先から先をたどって元に戻らないことを確かめる。DB のトリガーは使わない（PR #150 のレビュー）。運営が SQL で統合するときも同じ確認を行う
+
 ## 4. 論理 Entity との対応
 
 ### 4.1 MVP で表にするもの
@@ -261,11 +314,12 @@ Reaction の種類（**案**。C10・S03・S14）：
 | ConversationPlace（4.3.1。導出） | ビュー `conversation_place` |
 | Post・PostReference・LocationSharingPrompt（4.4） | `post`・`post_reference`・`location_sharing_prompt` |
 | Discovery・DiscoveryPlace・Value・Condition（4.5） | `discovery`・`discovery_place`・`discovery_value`・`value_condition` |
-| Project・ProjectItem・並びの履歴（4.6） | `project`・`project_item`・`project_arrangement`（判断待ち） |
+| Project・ProjectItem・企画の変更の履歴（4.6） | `project`・`project_item`・`project_change`・`project_change_item` |
 | Reaction（4.7） | `reaction` |
-| Claim・Finding・OpenQuestion（5.1〜5.3） | `claim`・`finding`・`finding_version`・`finding_claim`・`open_question`・`open_question_post`・`open_question_setting` |
+| Claim・Finding・OpenQuestion（5.1〜5.3） | `claim`・`finding`・`finding_version`・`finding_version_claim`・`open_question`・`open_question_post`・`open_question_setting` |
 | DiscoveryCandidate・RelationCandidate（5.4・5.5） | `discovery_candidate`・`discovery_candidate_finding`・`relation_candidate` |
 | SearchProfile（5.7） | `search_profile` |
+| 公開のものだけを返すビュー（2.5節） | `visible_*` |
 | PlaceCandidate（＋根拠・声・状態の履歴）・PlaceAdoption・QuestionAnswer（6.1・6.2・6.4） | `place_candidate`・`place_candidate_basis`・`place_candidate_voice`・`place_candidate_state_change`・`place_adoption`・`question_answer` |
 | Decision（6.5） | `decision`・`decision_target`・`decision_basis_post`・`decision_basis_snapshot` |
 | DiscoveryOrigin・DiscoveryRelation（6.6・6.7） | `discovery_origin`・`discovery_relation` |
@@ -301,17 +355,22 @@ Reaction の種類（**案**。C10・S03・S14）：
 | 寄り道の到達圏の事前計算 | F06 の設計の PR で足す |
 | 企画そのものの会話の同時投稿の重複防止 | `conversation` の部分一意（`entry_project_id`）WHERE `is_project_own`（3.3節） |
 
-## 6. 判断待ち
+## 6. レビューで決めたこと（2026-11-17、PR #150）
 
-| 項目 | 内容 | 案 |
-|---|---|---|
-| 成立の取り消しの持ち方 | 運営が自動で成立した Discovery の成立を取り消したとき、それをどう表すか（論理設計 4.5節の要検討。F12 で要る） | **案A（推す）**：`discovery.withdrawn_at` を持つ。正本は成立の取り消しの判断の記録で、その写しとして同じトランザクションで入れる（戻すときは空にし、判断の記録を足す）。一般の画面・集計・検索から外す。公開状態とは分ける（非公開は安全・規約の理由、取り消しは「Discovery ではなかった」という判断で、理由も戻し方も違うため）。**案B**：公開状態を非公開にして表す。列は増えないが、非公開の理由の分類に「成立の取り消し」が混ざる。案A なら、論理設計 原則6（Discovery の永続の状態は公開状態だけ）に「成立の取り消しは判断の記録の写しとして持つ」を足す |
-| 並びの履歴を MVP で残すか | MVP スコープ 18節の要検討 | **残す（推す）**：変えるたびに並びの写しを jsonb で1行足すだけで、費用が小さい。あとから見せる画面・戻す機能を作るときに、MVP の間の履歴がないと困る |
-| 一般向けの読み取りを、公開のものだけのビューに通すか | 2.5節 | **通す（推す）**。API の実装の規約にする |
+本書の初版で判断待ちにした3つは、次のように決めた。
+
+| 項目 | 決めたこと |
+|---|---|
+| 成立の取り消しの持ち方 | `discovery.withdrawn_at` に持ち、公開状態とは分ける（3.4節）。一般の読み取りでは成立の取り消しも見る（`visible_discovery`） |
+| 一般向けの読み取り | 公開のものだけを返すビューを通す（2.5節）。運営・本人向けの読み取りの権限は別に確かめる |
+| 並びの履歴 | 「並びの履歴を MVP で残すか」ではなく、**企画の変更の履歴を MVP で持ち、企画そのものの会話のタイムラインに出す**（3.5節）。持ち方（差分の出来事）は本書の案。専用の画面と、提案の Post との結び付けは継続検討 |
+
+あわせて、データの保持の原則（1.1節）を足した。
 
 ## 7. 後続
 
 - **次の PR（本書のレビューのあと）**：`db/migration/V2__*`（V1 の表を消し、本書の表・ビュー・関数を作る）、`db/sample/R__sample_data.sql` の作り直し（論理設計 10節・MVP スコープ 16節のシナリオから、横浜の始める地域で）、`db/README.md`。`docker compose up` で Flyway が通ることを確かめる
 - API（`apps/api`）・画面（`apps/web`）を新しい表に合わせる（V2 を入れると、直すまで動かない）
 - F06（到達圏の表）、F02（解析の運用の記録）、F07（検索の中身）、F10（通報・事後チェックの値）で、本書の表に足す・値を決める
-- 本書で論理設計に足りなかったことを決めたときは、論理設計を併せて直す（対応表 6節）。本 PR では Place の統合先を直す。成立の取り消しは判断待ちの結果で直す
+- 本書で論理設計に足りなかったことを決めたときは、論理設計を併せて直す（対応表 6節）。本 PR では Place の統合先、成立の取り消し、企画の変更の履歴、Finding の根拠を版ごとに持つこと、統合の自己参照を直した
+- マイグレーションの PR で、PostgreSQL 18 ＋ PostGIS ＋ Flyway の上で次を確かめる（PR #150 のレビュー）：採用・取り消し・採用し直しの整合、同時投稿での企画そのものの会話の重複防止、公開の Post の数の同時更新、複合の外部キーと NULL の制約、公開のビューの境界
