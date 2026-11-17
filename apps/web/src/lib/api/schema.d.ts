@@ -101,6 +101,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/places/{placeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S13（場所のページ）の内容を取得する
+         * @description 1つの場所の内容を、S13 の区画ごとに返す（画面定義 docs/ui/screens/S13-place.md）。
+         *     場所は Discovery や会話がなくても存在するので、発見も会話もない場所でも 200 を返す（中身のない区画は空）。
+         *     「最初の声のお誘い」は、ここでの発見・このあたりで探している人がいます・この場所の会話がどれも空で、
+         *     `capabilities.canStartConversation` が true のときに画面が出す（統合済みの場所では出さず、廃止の場所では出せる）。
+         *
+         *     - **見えるもの**：場所は公開状態を持たないので、あれば返す（統合済み・廃止の場所も返す）。採用されていない場所（新しい場所の案）は
+         *       場所ではないので、このページを持たない（論理設計 4.2節）。場所の中に出すもの（発見・会話・企画・探している話）は、
+         *       一般のユーザーに見えるものだけ（DB 設計 2.5節）
+         *     - **統合済みの場所**：200 で返し、`state.status` を merged にする。案内する統合先は `state.target`（たどった最後の統合先。
+         *       最後の統合先を決められないときは返さない。PlaceState）。`capabilities` で、新しい会話を受け付けないことを返す
+         *       （自動では移らない。S13 の判断待ちの「案内だけにする」案に従う）
+         *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読み、応答はその時点の公開状態を表す
+         *       （apps/api/AGENTS.md「読み取りの一貫性と公開制御」）
+         *     - **件数の多い区画**（ここでの発見、このあたりで探している人がいます、この場所の会話、この場所が入っている企画、このあたりの場所）は、
+         *       決まった順に、決まった数まで返し、公開のものの全体の件数（`totalCount`）を返す。続きを取る API は、必要になったときに足す
+         *       （この場所の会話の続きは、S13 の中で読み込む。S13 の判断待ち）
+         *     - **後で足すもの**：運営の操作（C38）・判断の記録（認証 #75 のあと）、小さな地図の到達圏（寄り道 F06 の API）、
+         *       駅から先の行き方（DB に持っていない）、資料の撮影場所の候補（資料は二次開発）
+         */
+        get: operations["getPlace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -285,7 +322,12 @@ export interface components {
             findings: components["schemas"]["FindingItem"][];
             /** @description この発見のもとになった会話（由来＝会話。C40）。公開の会話だけ。会話の開始の時点の古い順 */
             originConversations: components["schemas"]["ConversationCard"][];
+            /** @description この発見から始まった会話（入口＝この Discovery。C40） */
             startedConversations: components["schemas"]["ConversationCardPage"];
+            /**
+             * @description 関わる企画（C29）。この Discovery、またはこの Discovery の関わる場所を項目に持つ企画。
+             *     matchedBy は、この Discovery を指す項目があれば discovery（場所を指す項目もあっても discovery）、なければ place
+             */
             projects: components["schemas"]["ProjectCardPage"];
             relations: components["schemas"]["DiscoveryRelations"];
         };
@@ -378,11 +420,7 @@ export interface components {
         /** @description 関わる場所の1件分（Discovery と場所の関係） */
         DiscoveryPlaceItem: {
             place: components["schemas"]["PlaceRef"];
-            /**
-             * @description 場所の形（地点・エリア・経路）。geometry の type と対応する（point は Point、route は LineString・MultiLineString、area は Polygon・MultiPolygon）
-             * @enum {string}
-             */
-            spatialType: "point" | "area" | "route";
+            spatialType: components["schemas"]["SpatialType"];
             /** @description 場所の種類（城跡・公園・駅・坂 等）。値は足せる形にするため列挙しない */
             kinds: string[];
             role: components["schemas"]["DiscoveryPlaceRole"];
@@ -519,9 +557,9 @@ export interface components {
             places: components["schemas"]["PlaceRef"][];
         };
         /**
-         * @description この発見から始まった会話（入口＝この Discovery。C40）。公開の会話だけ。
-         *     **会話の開始の時点（startedAt）の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。
-         *     totalCount は公開の会話の全体の数。続きを取る API は、必要になったときに足す
+         * @description 会話カード（C40）の一覧。公開の会話だけ。**会話の開始の時点（startedAt）の新しい順**に、最大10件（固定）。
+         *     同じ時点なら識別子の順。totalCount は公開の会話の全体の数。どの会話を集めるかは、使う項目の説明に書く。
+         *     続きを取る API は、必要になったときに足す
          */
         ConversationCardPage: {
             items: components["schemas"]["ConversationCard"][];
@@ -544,8 +582,8 @@ export interface components {
             /** @description 作った人の今のニックネーム */
             creatorName: string;
             /**
-             * @description どの項目でこの Discovery に関わるか。この Discovery を指す項目があれば discovery（場所を指す項目もあっても discovery）、
-             *     なければ、この Discovery の関わる場所（places）を指す項目があるので place
+             * @description どの種類の項目で、ページの対象（Discovery・場所）に関わるか。決め方は、使う項目の説明に書く
+             *     （S03：この Discovery を指す項目があれば discovery、なければ place。S13：この場所を指す項目があれば place、なければ discovery）
              * @enum {string}
              */
             matchedBy: "discovery" | "place";
@@ -553,9 +591,9 @@ export interface components {
             position?: number;
         };
         /**
-         * @description 関わる企画（C29）。この Discovery、またはこの Discovery の関わる場所を項目に持つ、公開の企画（DB の visible_project_item で
-         *     見える項目だけで判定する）。**企画ごとに1件**（複数の項目が当てはまっても重ねない）。
-         *     **企画の作成の時点の新しい順**に、最大10件（固定）。同じ時点なら識別子の順。totalCount は公開の企画の全体の数
+         * @description 企画カード（C29）の一覧。公開の企画だけ（DB の visible_project_item で見える項目だけで判定する）。
+         *     **企画ごとに1件**（複数の項目が当てはまっても重ねない）。**企画の作成の時点の新しい順**に、最大10件（固定）。
+         *     同じ時点なら識別子の順。totalCount は公開の企画の全体の数。どの企画を集めるかは、使う項目の説明に書く
          */
         ProjectCardPage: {
             items: components["schemas"]["ProjectCard"][];
@@ -583,6 +621,206 @@ export interface components {
             title: string;
             summary: string;
             displayPlaces: components["schemas"]["PlaceRef"][];
+        };
+        PlaceDetail: {
+            id: components["schemas"]["PublicId"];
+            /** @description 表示名 */
+            name: string;
+            spatialType: components["schemas"]["SpatialType"];
+            /** @description 場所の種類（城跡・公園・駅・坂 等）。値は足せる形にするため列挙しない。名前の順 */
+            kinds: string[];
+            /** @description 別名・旧称（時代つき）。0件なら画面は出さない */
+            aliases: components["schemas"]["PlaceAlias"][];
+            /** @description 存在した期間。今はない場所（昔の跨線橋）だけ。分からなければ返さない */
+            existedPeriod?: components["schemas"]["Period"];
+            state: components["schemas"]["PlaceState"];
+            capabilities: components["schemas"]["PlaceCapabilities"];
+            /** @description 場所の形（小さな地図 C35 に出す） */
+            geometry: components["schemas"]["Geometry"];
+            /** @description 行き方の代表の駅（DEC-0013 決定2・3）。分からなければ返さない。駅から先の手段は DB に持っていないので返さない */
+            accessStation?: components["schemas"]["PlaceRef"];
+            /**
+             * @description 場所の階層（「神奈川県 › 横浜市港北区 › 小机町」）。上位から順。この場所は含めない。
+             *     上位は、場所どうしの関係の行政の階層（ADMINISTRATIVE）と地理的な包含（CONTAINS）を、この場所から上へたどって作る。
+             *     1つの場所に上位が複数あるときは、行政の階層を先に、同じ種類なら識別子の順で最初のものをたどる。
+             *     **この場所自身と、すでに通った場所は含めない**（循環していたら、そこでたどるのをやめる）。**たどるのは10段まで**で、
+             *     上限に達したらそこまでを返す。0件のこともある
+             */
+            breadcrumb: components["schemas"]["PlaceRef"][];
+            /** @description この場所のデータ（推定の値と出どころ）。坂の勾配など。画面は「推定」と出どころを必ず添える。0件なら出さない */
+            estimates: components["schemas"]["PlaceEstimate"][];
+            discoveries: components["schemas"]["PlaceDiscoveryGroups"];
+            seeking: components["schemas"]["SeekingCardPage"];
+            /**
+             * @description この場所の会話（C40）。この場所が採用されている（採用中・再検討中）公開の会話。入口＝この場所の会話も、始まりの時点で
+             *     この場所が採用されるので含まれる。会話の開始の時点の新しい順に最大10件（固定）
+             */
+            conversations: components["schemas"]["ConversationCardPage"];
+            /**
+             * @description この場所が入っている企画（C29）。項目がこの場所、またはこの場所が関わる Discovery（公開）を指す、公開の企画。
+             *     matchedBy は、この場所を指す項目があれば place、なければ discovery
+             */
+            projects: components["schemas"]["ProjectCardPage"];
+            nearbyPlaces: components["schemas"]["NearbyPlacePage"];
+        };
+        /**
+         * @description 場所の形（地点・エリア・経路）。geometry の type と対応する（point は Point、route は LineString・MultiLineString、area は Polygon・MultiPolygon）
+         * @enum {string}
+         */
+        SpatialType: "point" | "area" | "route";
+        PlaceAlias: {
+            name: string;
+            /**
+             * @description alias は別名、former は旧称
+             * @enum {string}
+             */
+            kind: "alias" | "former";
+            /** @description その名前が使われた期間。分からなければ返さない */
+            period?: components["schemas"]["Period"];
+        };
+        /**
+         * @description 場所の状態。`status` で判別する。
+         *     - active：有効
+         *     - merged：統合済み。統合先への案内を出す（自動では移らない）。統合先がさらに統合されているときは、たどった最後の統合先を
+         *       target にする。最後の統合先を決められない（循環している、深さの上限で止まった）ときは target を返さない
+         *     - abolished：廃止。存在した期間があれば、そのまま表示する
+         */
+        PlaceState: components["schemas"]["ActivePlaceState"] | components["schemas"]["MergedPlaceState"] | components["schemas"]["AbolishedPlaceState"];
+        ActivePlaceState: {
+            /** @enum {string} */
+            status: "active";
+        };
+        MergedPlaceState: {
+            /** @enum {string} */
+            status: "merged";
+            /** @description 案内する統合先（たどった最後の統合先）。決められないときは返さない */
+            target?: components["schemas"]["PlaceRef"];
+        };
+        AbolishedPlaceState: {
+            /** @enum {string} */
+            status: "abolished";
+        };
+        /**
+         * @description この場所に対して始められる操作（ログインの有無とは別に、対象として受け付けるか）。
+         *     統合済みの場所では、新しい会話（話す）を受け付けず、統合先への案内に置き換える。廃止の場所では受け付ける（今はない場所の記憶を話せる）。
+         *     「最初の声のお誘い」も、canStartConversation が true のときだけ出す
+         */
+        PlaceCapabilities: {
+            canStartConversation: boolean;
+        };
+        /** @description 場所の推定の値（データから計算した値）と、その計算の出どころ。ex-day の認定ではない */
+        PlaceEstimate: {
+            /** @description 何の値か（例：SLOPE_GRADE は坂の勾配）。値は足せる形にするため列挙しない。表示名は画面で決め、知らない値は出さない */
+            metric: string;
+            /** Format: double */
+            value: number;
+            /** @description 単位（例：percent） */
+            unit: string;
+            /** @description 計算の出どころ（例：elevation-x-road は標高データ × 道路） */
+            method: string;
+            methodVersion?: string;
+            /** Format: date-time */
+            computedAt: string;
+        };
+        /**
+         * @description ここでの発見。この場所が関わる（Discovery と場所の関係が有効な）、公開で成立を取り消しておらず、統合された側でない Discovery。
+         *     **対象の選び方**：当てはまる Discovery を、成立の時点の新しい順（同じ時点なら識別子の順）に**30件（固定）まで選んでから**、
+         *     観点ごとにまとめる（観点の名前の順で選ぶ対象が偏らないようにする）。全グループの items の合計は30件以下。
+         *     **観点ごとにまとめる**（MVP の暫定の表示の決まり。2026-11-17 の人の判断、PR #153 のレビュー）：1つの Discovery は、
+         *     観点（Subject の観点）の代表表記の順で最初の観点のグループに1回だけ入れる（同じ Discovery を複数の観点に重ねない）。
+         *     これはドメインの「主な観点」を決める規則ではない（観点の優先度は人の興味・検索の目的・遷移元で変わり得る。S13 の将来の検討事項）。
+         *     観点のない Discovery は、観点なしのグループに入れる。グループは観点の代表表記の順で、観点なしは最後。
+         *     グループの中は、成立の時点の新しい順（同じ時点なら識別子の順）。同じ Discovery がこの場所に別の役割で関わっていても、1件にまとめて roles に並べる
+         */
+        PlaceDiscoveryGroups: {
+            groups: components["schemas"]["PlaceDiscoveryGroup"][];
+            /** @description 当てはまる Discovery の全体の数 */
+            totalCount: number;
+        };
+        PlaceDiscoveryGroup: {
+            /** @description 観点の代表表記。観点なしのグループでは返さない。観点が1つしかないときに見出しを省くかは画面で決める。グループごとに違う値 */
+            aspect?: string;
+            items: components["schemas"]["PlaceDiscoveryCard"][];
+        };
+        /** @description ここでの発見のカード（C03）。この場所での役割を添える */
+        PlaceDiscoveryCard: {
+            discovery: components["schemas"]["DiscoverySummary"];
+            /** @description この Discovery でのこの場所の役割（同じ場所が別の役割で関わることがある）。知らない値は画面で出さない */
+            roles: components["schemas"]["DiscoveryPlaceRole"][];
+        };
+        /**
+         * @description このあたりで探している人がいます（C30）の1件分。場所がまだ決まっていない会話・問いで、この場所を検討中の候補に持つもの。
+         *     `kind` で判別する。押すと会話のページ（S14）
+         *     - conversation：会話の話の場所を探している（対象＝会話の場所の候補。その会話に採用中・再検討中の場所がない）
+         *     - question：問いが場所を探している（対象＝問いの場所の候補。その問いに採用中・再検討中の回答がない）
+         */
+        SeekingCard: components["schemas"]["SeekingConversationCard"] | components["schemas"]["SeekingQuestionCard"];
+        SeekingConversationCard: {
+            /** @enum {string} */
+            kind: "conversation";
+            conversation: components["schemas"]["ConversationCard"];
+            /** @description この場所に当てはまる、検討中の候補 */
+            candidates: components["schemas"]["SeekingCandidate"][];
+        };
+        SeekingQuestionCard: {
+            /** @enum {string} */
+            kind: "question";
+            /** @description 問いが属する会話 */
+            conversation: components["schemas"]["ConversationCard"];
+            question: components["schemas"]["QuestionRef"];
+            /** @description この場所に当てはまる、検討中の候補 */
+            candidates: components["schemas"]["SeekingCandidate"][];
+        };
+        /** @description 問い（ex-day が会話から見立てたもの）への参照 */
+        QuestionRef: {
+            id: components["schemas"]["PublicId"];
+            /** @description 問いの内容 */
+            content: string;
+        };
+        /**
+         * @description 検討中の場所の候補。`kind` で判別する。
+         *     - place：既存の場所（この場所）の候補
+         *     - proposal：新しい場所の案で、おおよその位置がこの場所の範囲に入るもの（エリアの場所のときだけ）。採用されるまで場所ではない
+         */
+        SeekingCandidate: components["schemas"]["ExistingPlaceCandidate"] | components["schemas"]["ProposedPlaceCandidate"];
+        ExistingPlaceCandidate: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            kind: "place";
+            place: components["schemas"]["PlaceRef"];
+        };
+        ProposedPlaceCandidate: {
+            id: components["schemas"]["PublicId"];
+            /** @enum {string} */
+            kind: "proposal";
+            /** @description 新しい場所の案の名称（場所ではないので、識別子・座標は返さない） */
+            name: string;
+        };
+        /**
+         * @description このあたりで探している人がいます（C30）。公開の会話のものだけ（問いは、問いが属する会話が公開のもの）。
+         *     会話・問いごとに1件（その会話・問いの、この場所に当てはまる検討中の候補を candidates に並べる）。
+         *     **並び**：会話・問いごとに、当てはまる候補のうち最も新しく作られた候補の作成の時点の新しい順。同じ時点なら、
+         *     会話（問いのカードは問い）の識別子の順。最大10件（固定）。totalCount は会話・問いの全体の数。
+         *     candidates の中は、候補の作成の時点の古い順（同じ時点なら候補の識別子の順）
+         */
+        SeekingCardPage: {
+            items: components["schemas"]["SeekingCard"][];
+            totalCount: number;
+        };
+        /** @description このあたりの場所（C28）の1件分 */
+        NearbyPlace: {
+            place: components["schemas"]["PlaceRef"];
+            kinds: string[];
+        };
+        /**
+         * @description このあたりの場所（C28）。場所どうしの関係（行政の階層・地理的な包含・観光や生活のエリア）で、この場所の中に入る場所のうち、
+         *     ここでの発見（公開）か、この場所の会話（公開）がある場所だけ（空の受け皿の場所が並ばないようにする。ドメイン設計 3.3節）。
+         *     位置から計算で導ける包含は使わず、保存した関係だけを使う（論理設計 4.2.1節）。直接の関係（1段）だけを使い、この場所自身は含めない。
+         *     **名前の順（同じ名前なら識別子の順）**に最大20件（固定）。totalCount は当てはまる場所の全体の数
+         */
+        NearbyPlacePage: {
+            items: components["schemas"]["NearbyPlace"][];
+            totalCount: number;
         };
         /** @description RFC 9457 Problem Details */
         Problem: {
@@ -618,6 +856,8 @@ export interface components {
     parameters: {
         /** @description セクションの key（/discovery-sections で返したもの） */
         SectionKey: components["schemas"]["SectionKey"];
+        /** @description 場所の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+        PlaceId: components["schemas"]["PublicId"];
         /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         DiscoveryId: components["schemas"]["PublicId"];
     };
@@ -702,6 +942,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPlace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 場所の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                placeId: components["parameters"]["PlaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 場所の内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceDetail"];
                 };
             };
             400: components["responses"]["BadRequest"];
