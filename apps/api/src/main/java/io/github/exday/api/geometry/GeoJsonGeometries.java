@@ -1,4 +1,4 @@
-package io.github.exday.api.discovery;
+package io.github.exday.api.geometry;
 
 import io.github.exday.api.generated.model.Geometry;
 import io.github.exday.api.generated.model.LineStringGeometry;
@@ -15,12 +15,12 @@ import java.util.List;
  * <p>{@code ST_AsGeoJSON} の出力は {@code {"type":"Point","coordinates":[139.63,35.45]}} の形に決まっているので、
  * JSON の汎用の読み込みは使わず、{@code type} と、数の入れ子の配列（{@code coordinates}）だけを読む。
  */
-final class GeoJsonGeometries {
+public final class GeoJsonGeometries {
 
     private GeoJsonGeometries() {}
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    static Geometry parse(String geoJson) {
+    public static Geometry parse(String geoJson) {
         String type = readType(geoJson);
         int start = geoJson.indexOf("\"coordinates\"");
         if (start < 0) {

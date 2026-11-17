@@ -46,6 +46,16 @@ class DiscoverySectionsApiTest {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     DiscoveryDetailQueries discoveryDetailQueries;
 
+    // DB を使う読み取りの部品（このテストは DB を使わない）
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    io.github.exday.api.card.conversation.ConversationCards conversationCards;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    io.github.exday.api.card.discovery.DiscoveryCards discoveryCards;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    io.github.exday.api.place.PlaceQueries placeQueries;
+
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
         new ParameterizedTypeReference<>() {};
 

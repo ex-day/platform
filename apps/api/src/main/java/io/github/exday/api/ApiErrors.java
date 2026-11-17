@@ -1,6 +1,7 @@
 package io.github.exday.api;
 
 import io.github.exday.api.discovery.DiscoveryNotFoundException;
+import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.generated.model.SectionKey;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.TypeMismatchException;
@@ -18,7 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * すべてのエンドポイントのエラーを RFC 9457（problem+json）で返す。
  *
- * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery は仕様に合わせて 404。
+ * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery、ない場所は仕様に合わせて 404。
  */
 @RestControllerAdvice
 public class ApiErrors extends ResponseEntityExceptionHandler {
@@ -33,6 +34,11 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     public ProblemDetail discoveryNotFound(DiscoveryNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
             "Discovery がない、または見られない（非公開・成立の取り消し）。");
+    }
+
+    @ExceptionHandler(PlaceNotFoundException.class)
+    public ProblemDetail placeNotFound(PlaceNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "場所がない。");
     }
 
     @Override

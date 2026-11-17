@@ -1,7 +1,6 @@
 package io.github.exday.api.discovery;
 
 import java.sql.Array;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -11,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import io.github.exday.api.card.project.ProjectCards;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -23,9 +23,6 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class DiscoveryDetailQueries {
-
-    /** 出す位置の場所の役割（論理設計 4.5節、OpenAPI の DiscoveryPlaceRole）。 */
-    static final List<String> DISPLAY_ROLES = List.of("EXPERIENCE", "START");
 
     private static final String FIND_DISCOVERY = """
         SELECT d.id, d.public_id, d.title, d.summary
@@ -137,31 +134,6 @@ public class DiscoveryDetailQueries {
         SELECT count(*) FROM visible_conversation c WHERE c.entry_discovery_id = :discoveryId
         """;
 
-    // 会話カード：最初の Post（時点、識別子の順で最初）と、それが公開かどうか
-    private static final String FIND_CONVERSATION_CARDS = """
-        SELECT c.id, c.public_id, c.created_at, c.public_post_count, c.last_public_posted_at,
-               fp.visibility AS first_post_visibility, fp.body AS first_post_body, up.nickname AS starter_name
-          FROM conversation c
-          JOIN LATERAL (
-              SELECT p.visibility, p.body, p.user_id
-                FROM post p
-               WHERE p.conversation_id = c.id
-               ORDER BY p.posted_at, p.id
-               LIMIT 1
-          ) fp ON true
-          JOIN user_profile up ON up.user_id = fp.user_id
-         WHERE c.id IN (:conversationIds)
-        """;
-
-    private static final String FIND_CONVERSATION_PLACES = """
-        SELECT cp.conversation_id, p.public_id, p.name
-          FROM conversation_place cp
-          JOIN place p ON p.id = cp.place_id
-         WHERE cp.conversation_id IN (:conversationIds)
-         GROUP BY cp.conversation_id, p.public_id, p.name
-         ORDER BY cp.conversation_id, min(coalesce(cp.seq, 2147483647)), p.name
-        """;
-
     // 関わる企画：この Discovery を指す項目、またはこの Discovery の関わる場所を指す項目を持つ、公開の企画（企画ごとに1件）
     private static final String FIND_PROJECTS = """
         WITH discovery_places AS (
@@ -230,13 +202,6 @@ public class DiscoveryDetailQueries {
     record FindingRow(String publicId, String kind, String content, boolean backed, boolean unconfirmed,
             int agree, int wantToGo, int maybe) {}
 
-    record ConversationCardRow(long id, String publicId, OffsetDateTime createdAt, int publicPostCount,
-            OffsetDateTime lastPublicPostedAt, boolean firstPostVisible, String firstPostBody, String starterName) {}
-
-    record PlaceRefRow(String publicId, String name) {}
-
-    record ProjectRow(String publicId, String title, String type, String creatorKind, String creatorName,
-            Integer discoveryPosition, Integer placePosition) {}
 
     record RelationRow(String kind, boolean outgoing, long otherId, String otherPublicId, String otherTitle,
             String otherSummary) {}
@@ -278,7 +243,7 @@ public class DiscoveryDetailQueries {
     }
 
     /** 関わる場所を Discovery ごとにまとめて返す（順番、識別子の順）。 */
-    public Map<Long, List<PlaceRow>> findPlaces(Collection<Long> discoveryIds) {
+    Map<Long, List<PlaceRow>> findPlaces(Collection<Long> discoveryIds) {
         if (discoveryIds.isEmpty()) {
             return Map.of();
         }
@@ -367,44 +332,13 @@ public class DiscoveryDetailQueries {
             .single();
     }
 
-    /** 会話カードの材料を、会話の識別子ごとに返す。 */
-    public Map<Long, ConversationCardRow> findConversationCards(Collection<Long> conversationIds) {
-        if (conversationIds.isEmpty()) {
-            return Map.of();
-        }
-        return jdbcClient.sql(FIND_CONVERSATION_CARDS)
-            .param("conversationIds", conversationIds)
-            .query((rs, rowNum) -> new ConversationCardRow(
-                rs.getLong("id"), rs.getString("public_id"), rs.getObject("created_at", OffsetDateTime.class),
-                rs.getInt("public_post_count"), rs.getObject("last_public_posted_at", OffsetDateTime.class),
-                "PUBLIC".equals(rs.getString("first_post_visibility")),
-                rs.getString("first_post_body"), rs.getString("starter_name")))
-            .list().stream()
-            .collect(Collectors.toMap(ConversationCardRow::id, row -> row));
-    }
-
-    /** 会話と場所の採用した紐付き（採用中・再検討中）を、会話の識別子ごとに返す。 */
-    public Map<Long, List<PlaceRefRow>> findConversationPlaces(Collection<Long> conversationIds) {
-        if (conversationIds.isEmpty()) {
-            return Map.of();
-        }
-        var result = new java.util.HashMap<Long, List<PlaceRefRow>>();
-        jdbcClient.sql(FIND_CONVERSATION_PLACES)
-            .param("conversationIds", conversationIds)
-            .query((ResultSet rs) -> {
-                result.computeIfAbsent(rs.getLong("conversation_id"), key -> new ArrayList<>())
-                    .add(new PlaceRefRow(rs.getString("public_id"), rs.getString("name")));
-            });
-        return result;
-    }
-
     /** 関わる企画（企画の作成の時点の新しい順、最大 {@link #LIST_LIMIT} 件）。 */
-    public List<ProjectRow> findProjects(long discoveryId) {
+    public List<ProjectCards.ProjectRow> findProjects(long discoveryId) {
         return jdbcClient.sql(FIND_PROJECTS)
             .param("discoveryId", discoveryId)
             .param("active", ACTIVE)
             .param("limit", LIST_LIMIT)
-            .query((rs, rowNum) -> new ProjectRow(
+            .query((rs, rowNum) -> new ProjectCards.ProjectRow(
                 rs.getString("public_id"), rs.getString("title"), rs.getString("type"),
                 rs.getString("creator_kind"), rs.getString("creator_name"),
                 (Integer) rs.getObject("discovery_position"), (Integer) rs.getObject("place_position")))
