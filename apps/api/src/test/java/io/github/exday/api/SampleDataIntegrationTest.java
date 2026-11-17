@@ -2,7 +2,12 @@ package io.github.exday.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.util.stream.Collectors;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -23,6 +28,9 @@ import org.testcontainers.utility.DockerImageName;
  * <p>{@code db/Dockerfile} と同じ構成（PostgreSQL 18 ＋ PostGIS）の DB を Testcontainers で立て、
  * {@code db/migration} と {@code db/sample} を Flyway で流したうえで、JdbcClient でサンプルデータを
  * 読めることと、PostGIS の関数が使えることを確かめる（Issue #89）。
+ *
+ * <p>DB V2（Issue #135）では、V1 から V2 までのマイグレーションとサンプルデータが Flyway で通ることと、
+ * 制約・ビューの確認（{@code db/check/v2_checks.sql}）が PostgreSQL 18 ＋ PostGIS の上で通ることも確かめる。
  */
 @SpringBootTest
 @Testcontainers
@@ -67,19 +75,32 @@ class SampleDataIntegrationTest {
     JdbcClient jdbcClient;
 
     @Test
-    void 公開中のDiscoveryの件数がサンプルデータどおりに読める() {
-        // サンプルデータ（db/sample/R__sample_data.sql）で PUBLIC の Discovery を 11 件入れている。
+    void 一般に見えるDiscoveryの件数がサンプルデータどおりに読める() {
+        // サンプルデータ（db/sample/R__sample_data.sql）で Discovery を 5 件入れ、1 件は成立を取り消している。
         long count = SampleQueries.countPublicDiscoveries(jdbcClient);
-        assertThat(count).isEqualTo(11L);
+        assertThat(count).isEqualTo(4L);
     }
 
     @Test
     void PostGISの関数が使える() {
-        // 大岡川（桜木町駅〜蒔田）と 山下公園（氷川丸）の代表点の距離（メートル）が
-        // 正の値として求められることを確かめる。値そのものは概算で、桁の範囲で確認する。
-        double meters = SampleQueries.distanceBetweenPlaces(
-                jdbcClient, "大岡川（桜木町駅〜蒔田）", "山下公園（氷川丸）");
+        // 汽車道（経路）と山下公園（地点）の距離（メートル）が正の値として求められることを確かめる。
+        // 値そのものはサンプルの概算の形によるので、桁の範囲で確認する。
+        double meters = SampleQueries.distanceBetweenPlaces(jdbcClient, "汽車道", "山下公園");
         assertThat(meters).isGreaterThan(0.0);
         assertThat(meters).isLessThan(50_000.0);
+    }
+
+    @Test
+    void 制約とビューの確認が通る() throws Exception {
+        // db/check/v2_checks.sql は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。
+        // 失敗すると RAISE EXCEPTION（NG: ...）で SQLException になる。最後に ROLLBACK するのでデータは変わらない。
+        String script = Files.readAllLines(DB_DIR.resolve("check/v2_checks.sql")).stream()
+                .filter(line -> !line.startsWith("\\"))
+                .collect(Collectors.joining("\n"));
+        try (Connection connection = DriverManager.getConnection(
+                        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute(script);
+        }
     }
 }

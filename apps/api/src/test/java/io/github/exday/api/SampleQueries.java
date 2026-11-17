@@ -11,14 +11,13 @@ final class SampleQueries {
 
     private SampleQueries() {}
 
-    /** 公開中の Discovery の件数。 */
+    /** 一般のユーザーに見える Discovery の件数（公開、かつ成立を取り消していない。visible_discovery のビュー）。 */
     static final String COUNT_PUBLIC_DISCOVERIES = """
             SELECT count(*)
-              FROM discovery
-             WHERE visibility = :visibility
+              FROM visible_discovery
             """;
 
-    /** PostGIS の関数（ST_Distance）で、大岡川と山下公園の代表点との距離（メートル）を求める。 */
+    /** PostGIS の関数（ST_Distance）で、2つの場所の形の間の距離（メートル）を求める。 */
     static final String DISTANCE_BETWEEN_PLACES = """
             SELECT ST_Distance(
                        (SELECT geom FROM place WHERE name = :fromName),
@@ -28,7 +27,6 @@ final class SampleQueries {
 
     static long countPublicDiscoveries(JdbcClient jdbcClient) {
         return jdbcClient.sql(COUNT_PUBLIC_DISCOVERIES)
-                .param("visibility", "PUBLIC")
                 .query(Long.class)
                 .single();
     }

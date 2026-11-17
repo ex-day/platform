@@ -1,7 +1,7 @@
 # ex-day DB 設計 v0.2（MVP）
 
 - 作成日：2026-10-31（v0.1：閲覧用・S01・S03）、v0.2：2026-11-17（[Issue #135](https://github.com/ex-day/platform/issues/135)）
-- 状態：案。表と列の骨組み、「いずれか1種類を指す」関係の持ち方、判断の記録・写し・公開制御・データの保持の方針を決める。テーブル定義（`db/migration/V2__*`）とサンプルデータは、本書のレビューのあとの PR で作る（2026-11-17 の人の判断）
+- 状態：案。テーブル定義は `db/migration/V2__*`（本書と食い違うときは、どちらかを直す）。表と列の骨組み、「いずれか1種類を指す」関係の持ち方、判断の記録・写し・公開制御・データの保持の方針を決める。テーブル定義とサンプルデータは、本書のレビュー（PR #150）のあとの PR で作った（2026-11-17 の人の判断）
 - 入力：[画面とデータの対応表](ex-day_screen_data_map.md)（2〜8節）、[論理エンティティ設計 v0.2](ex-day_logical_entity_design.md)、[MVP スコープ v0.4](ex-day_mvp_scope.md)、各画面の定義（`docs/ui/screens/`）
 - v0.1（v0.1 の論理設計に基づく閲覧用の DB。Discovery を器とする形）の本文は Git の履歴にある
 - **対象外**：
@@ -189,7 +189,7 @@
 |---|---|---|
 | `project` | `public_id`、`creator_kind`（OPERATOR／USER）、`creator_user_id`、`type`（COURSE／RANKING／COLLECTION／MEMORY）、`title`、`call_text`（呼びかけ）、`description`、`visibility`、`moderation_status` | 運営が作った企画も、作ったアカウントの User を持つ（編集できるのは作った人だけ。判定は `creator_user_id`） |
 | `project_item` | `public_id`、`project_id`、`place_id`・`discovery_id`（2.2節）、`position`、`note` | 一意（`project_id`, `position`）を遅延の制約にする（並べ替えを1つのトランザクションで行うため） |
-| `project_change` | `public_id`、`project_id`、`changed_by_user_id`、`changed_at`、`fields_changed`（text[]。TITLE／CALL_TEXT／DESCRIPTION 等。中身は写さない） | 企画の変更の履歴（下記）。保存のうち、項目が動いたか表示する項目が変わったものだけを1行にする |
+| `project_change` | `public_id`、`project_id`、`kind`（CREATED／UPDATED。CREATED は企画ごとに1つ）、`changed_by_user_id`、`changed_at`、`fields_changed`（text[]。TITLE／CALL_TEXT／DESCRIPTION 等。中身は写さない） | 企画の変更の履歴（下記）。保存のうち、項目が動いたか表示する項目が変わったものだけを1行にする |
 | `project_change_item` | `change_id`、`place_id`・`discovery_id`（2.2節）、`kind`（ADDED／REMOVED／MOVED）、`before_position`、`after_position` | 動いた項目ごとに1行。指す先は企画の項目の行ではなく場所・Discovery で持つ（項目を外すと項目の行はなくなるため） |
 
 - 作れる数の上限は、値が決まったらアプリで確かめる（MVP スコープ 8節）
@@ -208,7 +208,7 @@
 
 - **決めたこと（案）**：差分の出来事で持つ（`project_change`・`project_change_item`）。タイムラインに出す単位がそのまま出来事になり、利用者が書いた文を写さないので、守る範囲が企画そのものの公開制御に収まる。過去の並びも差分を重ねれば再現でき、専用の画面を後で作るときに困らない
 - **作った時点**：企画を作ったときも1件の出来事にする（全項目が ADDED）。これで「最初の並び」もたどれる
-- **公開制御・削除**：出来事の見え方は企画の公開状態に従う（`visible_project_change`）。動いた項目が指す Discovery が非公開・成立の取り消し・統合になったときは、今の状態で出す（非公開・取り消しは伏せる。統合は統合先へ案内する）。出来事は利用者の文を持たないので、削除の求めには企画と Post の側で応じればよい
+- **公開制御・削除**：出来事の見え方は企画の公開状態に従う（`visible_project_change`）。動いた項目が指す Discovery が非公開・成立の取り消し・統合になったときは、今の状態で出す（非公開・取り消しは伏せる。統合は統合先へ案内する）。出来事は利用者の文を写さないが、変更した人の User と、過去の項目（場所・Discovery）への参照は持つ。そのため、履歴そのものの削除・匿名化の要否、保持期間、退会後の表示、本人・運営・一般のアクセスの権限は、退会・削除・公開制御の設計（規約を含む）で決める（PR #150 の再レビュー。7.1節）
 - **タイムラインの出し方と会話の関係**：出来事は企画に属し、会話には属さない。S15 は、企画そのものの会話の Post と企画の変更の出来事を、時点の順に混ぜて出す。**企画そのものの会話がまだないときも出来事は出せる**ので、履歴を出すためだけに空の会話を作らない（会話は最初の発言のときに作る、という決定を変えない）
 - **継続検討**：過去の並びを再現して見る専用の画面を MVP に設けるか。提案のもとの Post と変更を明示的に結ぶか（結ぶときは `project_change` に Post への参照を足す）。運営の企画でもタイムラインに出すか（データは同じ形で持つ）
 - **運営の事後チェックとは目的を分ける**：非公開の企画を作った人が直したことを運営が分かるための更新の検知は、`project.updated_at` で足りるかを F10 で決める。本表はユーザー向けの履歴であり、事後チェックのための記録ではない
@@ -227,7 +227,7 @@
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
 | `claim` | `post_id`、`content`、`exclusion_reason`（除外したときの理由。除外しても消さない） | ― |
-| `finding` | `public_id`、`conversation_id`、`kind`（THEORY／VALUE）、`current_version`、`status`（ACTIVE／MERGED／SPLIT／EXPIRED）、`merged_into_finding_id` | 中身は版に持つ。統合先が自分自身でないことを CHECK で守る |
+| `finding` | `public_id`、`conversation_id`、`kind`（THEORY／VALUE）、`current_version`、`status`（ACTIVE／MERGED／SPLIT／EXPIRED）、`merged_into_finding_id` | 中身は版に持つ。`current_version` は `finding_version` への遅延の外部キー（Finding と最初の版を同じトランザクションで作る）。統合先が自分自身でないことを CHECK で守る |
 | `finding_version` | `finding_id`、`version`、`content`、`backed`（裏付けの有無）、`unconfirmed` | 主キー（`finding_id`, `version`）。Reaction と判断の記録はこの版を指す |
 | `finding_version_claim` | `finding_id`、`version`、`claim_id` | 根拠の主張を**版ごとに**持つ。根拠の Post が非公開になったとき、`claim.post_id` から、影響を受ける Finding の版（と今の版か）を引ける |
 | `open_question` | `public_id`、`conversation_id`、`content`、`kind`（WHERE／WHY／WHAT／OTHER）、`asker_user_id`、`status`（ACTIVE／MERGED／EXPIRED）、`merged_into_question_id` | 回答の状態は持たない（3.8節から導く）。統合先が自分自身でないことを CHECK で守る |
@@ -369,8 +369,22 @@ Reaction の種類（**案**。C10・S03・S14）：
 
 ## 7. 後続
 
-- **次の PR（本書のレビューのあと）**：`db/migration/V2__*`（V1 の表を消し、本書の表・ビュー・関数を作る）、`db/sample/R__sample_data.sql` の作り直し（論理設計 10節・MVP スコープ 16節のシナリオから、横浜の始める地域で）、`db/README.md`。`docker compose up` で Flyway が通ることを確かめる
+- **テーブル定義**：[db/migration/V2__recreate_tables_for_mvp.sql](../db/migration/V2__recreate_tables_for_mvp.sql)（V1 の表を消し、本書の表・ビュー・関数を作る）。サンプルデータ：[db/sample/R__sample_data.sql](../db/sample/R__sample_data.sql)（論理設計 10節・MVP スコープ 16節のシナリオから、横浜の始める地域で）。制約・ビューの確認：[db/check/](../db/check/README.md)
 - API（`apps/api`）・画面（`apps/web`）を新しい表に合わせる（V2 を入れると、直すまで動かない）
 - F06（到達圏の表）、F02（解析の運用の記録）、F07（検索の中身）、F10（通報・事後チェックの値）で、本書の表に足す・値を決める
 - 本書で論理設計に足りなかったことを決めたときは、論理設計を併せて直す（対応表 6節）。本 PR では Place の統合先、成立の取り消し、企画の変更の履歴、Finding の根拠を版ごとに持つこと、統合の自己参照を直した
 - マイグレーションの PR で、PostgreSQL 18 ＋ PostGIS ＋ Flyway の上で次を確かめる（PR #150 のレビュー）：採用・取り消し・採用し直しの整合、同時投稿での企画そのものの会話の重複防止、公開の Post の数の同時更新、複合の外部キーと NULL の制約、公開のビューの境界
+
+### 7.1 後続の工程への申し送り（PR #150 の再レビュー）
+
+本書のマージを止めるものではないが、後続の工程で漏れなく扱う確認事項。どれも、その工程の設計・実装の中で扱い、独立した再設計の工程は設けない。決定済みの事項と継続検討の事項を分けて進める。
+
+| 工程 | 確認すること |
+|---|---|
+| DDL・企画の更新の API | 企画・項目の更新と `project_change`・`project_change_item` の登録を同じトランザクションで行う。失敗時のロールバック、同時更新での差分の整合、項目の追加・外す・順番の変更と、作った時点からの並びの再現を確かめる |
+| 退会・削除・公開制御の設計（規約を含む） | 企画の変更の履歴そのものの削除・匿名化の要否、保持期間、退会後の表示、参照先（場所・Discovery）の削除・非公開・成立の取り消し・統合のときの扱い、本人・運営・一般のアクセスの権限（3.5節）。「削除の求めには企画と Post の側で応じればよい」とは言い切らない |
+| S15・タイムラインの具体化 | 変更の出来事の文言、1回の保存で多くの項目が変わったときのまとめ方、表題・呼びかけ・説明を変えた事実を出すか、運営の企画でも出すか。Post と出来事の時点の順の並べ方、企画そのものの会話がまだないときの出し方。**継続検討のまま**扱うもの（採用を決めたものとして扱わない）：過去の並びを再現して見る専用の画面を MVP に設けるか、提案のもとの Post との明示的な結び付け |
+| F02・F07・F10 | 非公開の Post・会話を根拠にした Finding・要約・SearchProfile 等の扱いと作り直し、公開の読み取りと関連・派生の情報からの漏えい防止。F10 では、企画の事後チェックに要る更新の検知が `updated_at` で足りるか |
+| F10・F12 | 判断の記録の `workflow` などの値を確定し、通報の対応と Discovery の見直しを区別する |
+| 統合の処理の設計・実装 | 自己参照・循環の防止を、同時の更新と、運営が SQL で行う操作も含めて確かめる |
+| マイグレーションの PR | 上の7節の確認（PostgreSQL 18 ＋ PostGIS ＋ Flyway）。企画の変更の履歴の整合は、DDL・API の実装の段階で確かめる |

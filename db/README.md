@@ -1,11 +1,14 @@
 # db
 
-ex-day の DB（PostgreSQL 18 ＋ PostGIS）のテーブル定義とサンプルデータ。設計は [docs/ex-day_db_design.md](../docs/ex-day_db_design.md) を参照。
+ex-day の DB（PostgreSQL 18 ＋ PostGIS）のテーブル定義とサンプルデータ。設計は [docs/ex-day_db_design.md](../docs/ex-day_db_design.md)（v0.2）を参照。
+
+`V2__recreate_tables_for_mvp.sql` で、V1（閲覧用）の表をすべて消し、MVP の表に作り直した（Issue #135）。API（`apps/api`）・画面（`apps/web`）は V1 の表を読んでいるので、新しい表に合わせるまで動かない。
 
 | フォルダ | 内容 |
 |---|---|
 | `migration/` | テーブル定義（Flyway のマイグレーション。`V<番号>__<内容>.sql`） |
-| `sample/` | 閲覧用のサンプルデータ（`R__sample_data.sql`）。ローカル環境だけで使う |
+| `sample/` | サンプルデータ（`R__sample_data.sql`）。ローカル環境だけで使う |
+| `check/` | 制約・ビューの確認の SQL と手順（[check/README.md](check/README.md)）。Flyway では流さない |
 | `Dockerfile` | DB のイメージ（ex-day/poc と同じ構成） |
 
 ## 動かし方
@@ -36,4 +39,6 @@ docker compose exec db psql -U exday exday
 
 ## サンプルデータについて
 
-会話や Discovery の内容は利用イメージであり、史実と異なる場合がある。写真は仮の画像、ニックネームは架空のもの。
+会話・Discovery・企画の内容は利用イメージであり、史実と異なる場合がある。場所の位置・形はおおよそで、オープンデータから取り込んだものではない。坂の勾配などの推定の値は仮の値。ニックネームは架空のもの。中身はファイルの冒頭の説明を参照。
+
+一般のユーザー向けに読むときは、公開のものだけを返すビュー（`visible_*`）を使う。表を直接読むのは、運営・本人向けの読み取りで、権限を API で確かめたときだけにする（DB 設計 2.5節）。
