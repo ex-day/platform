@@ -223,7 +223,7 @@ public class ConversationQueries {
     // ---- わかってきたこと（C25） ----
 
     private static final String FIND_FINDING_IDS = """
-        SELECT f.id
+        SELECT f.id, f.public_id
           FROM visible_finding f
          WHERE f.conversation_id = :conversationId AND f.status = :active
            %s
@@ -511,7 +511,7 @@ public class ConversationQueries {
     }
 
     /** キーより後の有効なわかってきたことを最大 {@code limit} 件（キーが null なら最初から）。 */
-    public List<Long> findFindingIds(long conversationId, Key after, int limit) {
+    public List<IdRef> findFindingIds(long conversationId, Key after, int limit) {
         var spec = jdbcClient.sql(FIND_FINDING_IDS.formatted(after == null ? "" : FINDINGS_AFTER_KEY))
             .param("conversationId", conversationId)
             .param("active", ACTIVE)
@@ -519,7 +519,7 @@ public class ConversationQueries {
         if (after != null) {
             spec = spec.param("afterAt", after.at()).param("afterPublicId", after.publicId());
         }
-        return spec.query(Long.class).list();
+        return spec.query((rs, rowNum) -> new IdRef(rs.getLong("id"), rs.getString("public_id"))).list();
     }
 
     public int countFindings(long conversationId) {

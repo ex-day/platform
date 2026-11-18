@@ -437,16 +437,16 @@ public class ConversationAssembler {
 
     /** キーより後の有効なわかってきたこと（並びは作成の時点・識別子の順）。moved は空。 */
     public FindingPage findings(long conversationId, Key after, int limit) {
-        var ids = new ArrayList<>(queries.findFindingIds(conversationId, after, limit + 1));
-        boolean hasNext = ids.size() > limit;
+        var refs = new ArrayList<>(queries.findFindingIds(conversationId, after, limit + 1));
+        boolean hasNext = refs.size() > limit;
         if (hasNext) {
-            ids.remove(ids.size() - 1);
+            refs.remove(refs.size() - 1);
         }
-        var cards = findingCards.cards(ids);
-        List<FindingItem> items = ids.stream().map(cards::get).filter(Objects::nonNull).toList();
+        var cards = findingCards.cards(refs.stream().map(IdRef::id).toList());
+        List<FindingItem> items = refs.stream().map(ref -> cards.get(ref.id())).filter(Objects::nonNull).toList();
         var page = new FindingPage().items(items).totalCount(queries.countFindings(conversationId)).moved(List.of());
-        if (hasNext && !items.isEmpty()) {
-            page.nextCursor(items.get(items.size() - 1).getId());
+        if (hasNext && !refs.isEmpty()) {
+            page.nextCursor(refs.get(refs.size() - 1).publicId());
         }
         return page;
     }
