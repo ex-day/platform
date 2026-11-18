@@ -1533,7 +1533,7 @@ export interface components {
             changedAt: string;
             /** @description 動いた項目（保存した順のまま）。まとめ方は画面が決める */
             items: components["schemas"]["ProjectChangeItem"][];
-            /** @description 変えた表示の項目（表題・呼びかけ・説明）。中身は返さない */
+            /** @description 変えた表示の項目（表題・呼びかけ・説明。同じものは1回だけ、この順）。中身は返さない */
             changedFields: ("title" | "callText" | "description")[];
         };
         ProjectChangeItem: {

@@ -15,7 +15,8 @@ info:
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
       わかってきたこと、統合の状態、会話カード）。TypeScript では判別できる union 型になる。
       OpenAPI の `discriminator` は書かない（API の Java の生成器（openapi-generator 7.10）が、判別の項目を列挙にしたときに
-      正しいコードを作れないため。PR #152）。判別の項目は文字列にし、真偽にしない（同じ生成器が、真偽を1つの値に制限した型を作れないため）
+      正しいコードを作れないため。PR #152）。判別の項目は文字列にし、真偽にしない（同じ生成器が、真偽を1つの値に制限した型を作れないため）。
+      配列に `uniqueItems` は書かず、重複しないことは説明に書く（同じ生成器が、使っていない Jackson 2 の注釈を付けるため。PR #155）
       足せる形にする値（場所の役割・種類）は列挙にせず、形だけを制約し、知らない値でも画面が壊れないようにする
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
@@ -2130,8 +2131,8 @@ components:
           items: { $ref: '#/components/schemas/ProjectChangeItem' }
         changedFields:
           type: array
-          uniqueItems: true
-          description: 変えた表示の項目（表題・呼びかけ・説明）。中身は返さない
+          maxItems: 3
+          description: 変えた表示の項目（表題・呼びかけ・説明。同じものは1回だけ、この順）。中身は返さない
           items:
             type: string
             enum: [title, callText, description]
