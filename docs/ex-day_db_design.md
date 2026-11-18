@@ -116,7 +116,7 @@
 | `visible_post` | Post が公開、かつ属する会話が公開 |
 | `visible_discovery` | Discovery が公開、かつ成立を取り消していない（`withdrawn_at` が空。3.4節） |
 | `visible_project` | 企画が公開 |
-| `visible_project_item` | 企画が公開、かつ指す先が見えるもの（場所、または `visible_discovery` の Discovery）。見えない Discovery を指す項目の出し方（伏せて出すか、外すか）は S15 で決める |
+| `visible_project_item` | 企画が公開、かつ指す先が見えるもの（場所、または `visible_discovery` の Discovery）。見えない Discovery を指す項目の出し方は S15 で決めた：S15 の並びは位置を残して「表示できません」と出すので、このビューは使わず、`visible_project` で企画の公開を確かめてから `project_item` を読み、指す先だけを公開の判定にかける（2026-11-18、PR #155）。指す先が見える項目だけを集める読み取り（S03・S13 の企画カード）は、このビューを使う |
 | `visible_finding`・`visible_open_question`・`visible_place_candidate` | 属する会話（場所の候補は対象の会話・問いの会話）が公開 |
 | `visible_project_change` | 企画が公開（3.5節） |
 
@@ -198,7 +198,7 @@
 | `project_change` | `public_id`、`project_id`、`kind`（CREATED／UPDATED。CREATED は企画ごとに1つ）、`changed_by_user_id`、`changed_at`、`fields_changed`（text[]。TITLE／CALL_TEXT／DESCRIPTION 等。中身は写さない） | 企画の変更の履歴（下記）。保存のうち、項目が動いたか表示する項目が変わったものだけを1行にする |
 | `project_change_item` | `change_id`、`place_id`・`discovery_id`（2.2節）、`kind`（ADDED／REMOVED／MOVED）、`before_position`、`after_position` | 動いた項目ごとに1行。指す先は企画の項目の行ではなく場所・Discovery で持つ（項目を外すと項目の行はなくなるため） |
 
-- 作れる数の上限は、値が決まったらアプリで確かめる（MVP スコープ 8節）
+- 一定期間内に1人が新しく作れる企画の数の上限は、期間と件数が決まったらアプリで確かめる（累計の上限ではない。MVP スコープ 8節、2026-11-18 の人の判断、PR #155）
 
 **企画の変更の履歴**（2026-11-17 の人の判断、PR #150 のレビュー）：
 
