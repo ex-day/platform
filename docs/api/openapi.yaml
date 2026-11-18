@@ -2092,13 +2092,6 @@ components:
               adoption: { status: adopted, adoptedBy: conversationStarter }
               basisPostIds: [6f4a5fcb7e0b]
               voices: { support: 0, oppose: 0 }
-            - id: 5578074b4cfc
-              target: { kind: conversation }
-              place: { kind: place, place: { id: 74a63aeb68dd, name: 山下公園 } }
-              status: considering
-              adoption: { status: adopted, adoptedBy: conversationStarter }
-              basisPostIds: [6f4a5fcb7e0b]
-              voices: { support: 0, oppose: 0 }
             - id: e366b4f89e96
               target: { kind: conversation }
               place: { kind: place, place: { id: 743e09f2520a, name: 汽車道 } }
@@ -2106,6 +2099,13 @@ components:
               adoption: { status: adopted, adoptedBy: conversationStarter }
               basisPostIds: [e4381ab9c3d6, 41f8904b78b4]
               voices: { support: 1, oppose: 0 }
+            - id: 5578074b4cfc
+              target: { kind: conversation }
+              place: { kind: place, place: { id: 74a63aeb68dd, name: 山下公園 } }
+              status: considering
+              adoption: { status: adopted, adoptedBy: conversationStarter }
+              basisPostIds: [6f4a5fcb7e0b]
+              voices: { support: 0, oppose: 0 }
           others: []
           othersTotalCount: 0
         questions: { answered: [], others: [], othersTotalCount: 0, moved: [] }
