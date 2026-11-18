@@ -7,15 +7,16 @@ info:
     画面が必要とする取得用の API の約束事。Issue #89 で S01・S03 の閲覧用として作り、
     Issue #135（根本整理）で、DB V2（docs/ex-day_db_design.md v0.2）に合わせて画面ごとに作り直している。
 
-    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）は v0.2 の形（DB V2・画面定義の書き直しに合わせた）。
-      S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す（それまで API の実装は動かない）。
-      S15・S17 は、順に足す
+    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）・S15（企画のページ）は v0.2 の形
+      （DB V2・画面定義の書き直しに合わせた）。S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す
+      （それまで API の実装は動かない）。S17 は、順に足す
     - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
       制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
       わかってきたこと、統合の状態、会話カード）。TypeScript では判別できる union 型になる。
       OpenAPI の `discriminator` は書かない（API の Java の生成器（openapi-generator 7.10）が、判別の項目を列挙にしたときに
-      正しいコードを作れないため。PR #152）。判別の項目は文字列にし、真偽にしない（同じ生成器が、真偽を1つの値に制限した型を作れないため）
+      正しいコードを作れないため。PR #152）。判別の項目は文字列にし、真偽にしない（同じ生成器が、真偽を1つの値に制限した型を作れないため）。
+      配列に `uniqueItems` は書かず、重複しないことは説明に書く（同じ生成器が、使っていない Jackson 2 の注釈を付けるため。PR #155）
       足せる形にする値（場所の役割・種類）は列挙にせず、形だけを制約し、知らない値でも画面が壊れないようにする
 
     - 対象は読み取りだけ。投稿・リアクション・ログイン等の書き込みは扱わない（#75 を待たない）。
@@ -58,6 +59,8 @@ tags:
     description: 場所のページ
   - name: S14
     description: 会話のページ
+  - name: S15
+    description: 企画のページ
 paths:
   /discovery-sections:
     get:
@@ -318,6 +321,73 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+  /projects/{projectId}:
+    get:
+      tags: [S15]
+      operationId: getProject
+      summary: S15（企画のページ）の内容を取得する
+      description: |
+        1つの企画の内容を、S15 の区画ごとに返す（画面定義 docs/ui/screens/S15-project.md「取得用 API で返すもの」）。
+        タイムライン（企画そのものの会話の Post と企画の変更の出来事）は、新しい側から一定数だけを返す。それより前は `getProjectTimeline` で読む。
+
+        - **見えるもの**：一般のユーザーには、公開の企画だけを返す（DB の visible_project）。非公開の企画は、直接の識別子でも 404。
+          運営・その企画を作った人が非公開の企画を見る形と「編集する」の可否は、認証（#75）のあとに足す
+        - **並び**：企画の公開を確かめてから項目を全部読み、指す先だけを公開の判定にかける（visible_project_item は使わない）。
+          見えない Discovery を指す項目は、位置を残して `UnavailableProjectItem` にする（番付・コースの順位を飛ばさない）
+        - **公開状態は対象ごとに独立して扱う**（DB 設計 2.5節）：非公開の Post は枠だけを返す（S14 の HiddenPost）
+        - **企画の作った人**：運営の企画も、作ったアカウントの今のニックネームを返す。ユーザーの企画は、画面が「ex-day の認定ではありません」を添える
+        - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+        - **返さないもの**：運営の操作（C38）、企画への Reaction（MVP では付けない）、企画どうしの関連付け
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: timelineLimit
+          in: query
+          required: false
+          description: 新しい側から返すタイムラインの数（暫定の既定値20）
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: 企画の内容
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDetail' }
+              examples:
+                slopes:
+                  $ref: '#/components/examples/ProjectSlopes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/timeline:
+    get:
+      tags: [S15]
+      operationId: getProjectTimeline
+      summary: S15 の「これまでのやりとりを見る」で、それより前のタイムラインを取得する
+      description: |
+        カーソル（`before`）より前のタイムラインを、新しい側から `limit` 件だけ選び、古い順に並べて返す（並びは ProjectTimeline）。
+        企画が非公開、またはカーソルがこの企画のタイムラインのものでなければ 404。カーソルの形が合わなければ 400
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: before
+          in: query
+          required: true
+          description: カーソル。これより前のタイムラインを返す
+          schema: { $ref: '#/components/schemas/TimelineCursor' }
+        - name: limit
+          in: query
+          required: false
+          description: 返す数（暫定の既定値20）
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: それより前のタイムライン
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OlderTimelinePage' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   parameters:
     SectionKey:
@@ -337,6 +407,12 @@ components:
       in: path
       required: true
       description: 会話の識別子（画面・URL に出すもの）。形が合わなければ 400
+      schema: { $ref: '#/components/schemas/PublicId' }
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: 企画の識別子（画面・URL に出すもの）。形が合わなければ 400
       schema: { $ref: '#/components/schemas/PublicId' }
     DiscoveryId:
       name: discoveryId
@@ -1857,6 +1933,255 @@ components:
           type: string
           enum: [candidate, area]
           description: candidate はこの場所が候補の場所、area は新しい場所の案の位置がこのエリアに入る
+    # ---- S15 企画のページ ----
+    ProjectType:
+      type: string
+      enum: [course, ranking, collection, memory]
+      description: 企画の型（コース・番付・まとめ・記憶）。順番・順位を出すのはコース・番付だけ
+    ProjectDetail:
+      type: object
+      description: S15（企画のページ）の内容。区画ごとの読み方は画面定義の「取得用 API で返すもの」
+      additionalProperties: false
+      required: [id, type, title, creatorKind, creatorName, items, timeline, triggeredConversations]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        type: { $ref: '#/components/schemas/ProjectType' }
+        title: { type: string, minLength: 1 }
+        callText: { type: string, minLength: 1, description: 呼びかけ。なければ返さない }
+        description: { type: string, minLength: 1, description: 説明。なければ返さない }
+        creatorKind:
+          type: string
+          enum: [operator, user]
+          description: 運営の企画か、ユーザーの企画か（ユーザーの企画は「ex-day の認定ではありません」を添える）
+        creatorName:
+          type: string
+          minLength: 1
+          description: 作った人の今のニックネーム（表示のたびに引く。Issue #74）
+        items:
+          type: array
+          maxItems: 100
+          description: |
+            並び（C37）。順番の順。1つの企画の項目は最大100件（暫定。企画の作成・編集の API で守る）。
+            指す先が見えない項目も、位置を残して返す（UnavailableProjectItem）
+          items: { $ref: '#/components/schemas/ProjectItem' }
+        ownConversationId:
+          $ref: '#/components/schemas/PublicId'
+          description: 企画そのものの会話（公開のもの）。まだ最初の発言がなく会話がないときは返さない（返信を書くとき・S14 へ移るときに使う）
+        timeline: { $ref: '#/components/schemas/ProjectTimeline' }
+        triggeredConversations:
+          $ref: '#/components/schemas/ConversationCardPage'
+          description: |
+            企画をきっかけにした会話（入口＝この企画で、企画そのものの会話でないもの）。始まりの新しい順、同じなら識別子の順。
+            最大10件と全体の数。続きを読む API はない（MVP の制限。会話が増えたら足す）
+    ProjectItem:
+      description: 企画の項目（C37）。`kind` で判別する（場所・見える Discovery・表示できない項目）
+      oneOf:
+        - $ref: '#/components/schemas/PlaceProjectItem'
+        - $ref: '#/components/schemas/DiscoveryProjectItem'
+        - $ref: '#/components/schemas/UnavailableProjectItem'
+    PlaceProjectItem:
+      type: object
+      description: 場所を指す項目。根拠（推定の値と会話の数）は保存した値ではなく、場所・会話から導く（論理設計 4.6.1節）
+      additionalProperties: false
+      required: [kind, id, place, placeKinds, spatialType, geometry, anchor, estimates, conversationCount]
+      properties:
+        kind: { type: string, enum: [place] }
+        id: { $ref: '#/components/schemas/PublicId' }
+        position: { type: integer, minimum: 1, description: 順番・順位。コース・番付のときだけ返す }
+        note: { type: string, minLength: 1, description: 作った人の説明。なければ返さない }
+        place: { $ref: '#/components/schemas/PlaceRef' }
+        placeKinds:
+          type: array
+          description: 場所の種類（文字コードの順）
+          items: { type: string, minLength: 1 }
+        spatialType: { $ref: '#/components/schemas/SpatialType' }
+        geometry: { $ref: '#/components/schemas/Geometry' }
+        anchor:
+          $ref: '#/components/schemas/Position'
+          description: 代表点（ピンの位置、コースの回る順の線を結ぶ点）。点はその点、経路は始点、エリアは形の中の1点
+        estimates:
+          type: array
+          description: 推定の値と出どころ（S13 の estimates と同じ形と選び方）。画面は「推定」と出どころを添える
+          items: { $ref: '#/components/schemas/PlaceEstimate' }
+        conversationCount:
+          type: integer
+          minimum: 0
+          description: この場所が採用されている公開の会話の数（S13 の「この場所の会話」の全体の数と同じ）
+    DiscoveryProjectItem:
+      type: object
+      description: |
+        Discovery を指す項目。統合されていれば、最後の統合先（見えるもの）を出す。場所の推定の値は付けない
+        （Discovery 自体の根拠のように見せないため）
+      additionalProperties: false
+      required: [kind, id, discovery, mapPlaces, anchor, originConversationCount, startedConversationCount]
+      properties:
+        kind: { type: string, enum: [discovery] }
+        id: { $ref: '#/components/schemas/PublicId' }
+        position: { type: integer, minimum: 1, description: 順番・順位。コース・番付のときだけ返す }
+        note: { type: string, minLength: 1, description: 作った人の説明。なければ返さない }
+        discovery: { $ref: '#/components/schemas/DiscoverySummary' }
+        mapPlaces:
+          type: array
+          minItems: 1
+          description: |
+            地図に出す場所（出す位置の場所。DiscoverySummary.displayPlaces と同じ選び方・同じ順）とその形。
+            Discovery の中の順番を示す線は返さない
+          items: { $ref: '#/components/schemas/ProjectMapPlace' }
+        anchor:
+          $ref: '#/components/schemas/Position'
+          description: 代表点。出す位置の場所の最初の1つの代表点（点はその点、経路は始点、エリアは形の中の1点）
+        originConversationCount:
+          type: integer
+          minimum: 0
+          description: この Discovery の由来の、公開の会話の数（同じ会話は1回）
+        startedConversationCount:
+          type: integer
+          minimum: 0
+          description: この Discovery から始まった公開の会話の数（同じ会話は1回）。根拠とは限らないので、由来の会話と分けて出す
+    ProjectMapPlace:
+      type: object
+      additionalProperties: false
+      required: [place, spatialType, geometry]
+      properties:
+        place: { $ref: '#/components/schemas/PlaceRef' }
+        spatialType: { $ref: '#/components/schemas/SpatialType' }
+        geometry: { $ref: '#/components/schemas/Geometry' }
+    UnavailableProjectItem:
+      type: object
+      description: |
+        表示できない項目。指していた Discovery（統合されていれば統合先）が非公開・成立の取り消し、または統合先を決められない。
+        順番の位置だけを残し、項目・指していたものの識別子・中身・理由は返さない（画面は「表示できません」と出す）
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [unavailable] }
+        position: { type: integer, minimum: 1, description: 順番・順位。コース・番付のときだけ返す }
+    # ---- タイムライン ----
+    TimelineCursor:
+      type: string
+      description: タイムラインの続きを読むカーソル（並びのキーを含む）。画面は中身を解釈せず、そのまま `before` に渡す
+      pattern: '^[cp][0-9A-Za-z]{12}$'
+      minLength: 13
+      maxLength: 13
+    ProjectTimeline:
+      type: object
+      description: |
+        企画そのものの会話の Post と、企画の変更の出来事を混ぜたタイムライン。企画そのものの会話がなくても、出来事だけで返す。
+
+        - **全順序**：時点（Post は投稿の時点、変更の出来事は変更の時点）→ 種類（変更の出来事を先、次に Post）→ 識別子（文字コードの順）
+        - 新しい側から `timelineLimit` 件を選び、古い順に並べて返す。それより前が残っていれば `olderCursor` を返す
+        - 最初の Post をいつも返すことはしない（企画を作った出来事がタイムラインの最初になる）
+        - 非公開の Post も枠として返し、件数に数える（PostItem の HiddenPost）
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/TimelineEntry' }
+        olderCursor: { $ref: '#/components/schemas/TimelineCursor' }
+    OlderTimelinePage:
+      type: object
+      description: カーソルより前のタイムライン（古い順。並びは ProjectTimeline）。さらに前が残っていれば `olderCursor` を返す
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/TimelineEntry' }
+        olderCursor: { $ref: '#/components/schemas/TimelineCursor' }
+    TimelineEntry:
+      description: タイムラインの1つ。`kind` で判別する（Post か、変更の出来事か）
+      oneOf:
+        - $ref: '#/components/schemas/TimelinePost'
+        - $ref: '#/components/schemas/TimelineChange'
+    TimelinePost:
+      type: object
+      additionalProperties: false
+      required: [kind, post]
+      properties:
+        kind: { type: string, enum: [post] }
+        post: { $ref: '#/components/schemas/PostItem' }
+    TimelineChange:
+      type: object
+      additionalProperties: false
+      required: [kind, change]
+      properties:
+        kind: { type: string, enum: [change] }
+        change: { $ref: '#/components/schemas/ProjectChangeEvent' }
+    ProjectChangeEvent:
+      type: object
+      description: |
+        企画の変更の出来事（1回の保存）。運営の企画にも出す。表題・呼びかけ・説明は中身を写さず、変えたことだけを返す。
+        出来事の中の項目はページングしない（1回の保存で動く項目は最大200件。暫定。企画の作成・編集の API で守る）
+      additionalProperties: false
+      required: [id, kind, changedAt, items, changedFields]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        kind:
+          type: string
+          enum: [created, updated]
+          description: created は企画を作った（全部の項目が足された）、updated は変えた
+        changedAt: { type: string, format: date-time }
+        items:
+          type: array
+          maxItems: 200
+          description: 動いた項目（保存した順のまま）。まとめ方は画面が決める
+          items: { $ref: '#/components/schemas/ProjectChangeItem' }
+        changedFields:
+          type: array
+          maxItems: 3
+          description: 変えた表示の項目（表題・呼びかけ・説明。同じものは1回だけ、この順）。中身は返さない
+          items:
+            type: string
+            enum: [title, callText, description]
+    ProjectChangeItem:
+      type: object
+      additionalProperties: false
+      required: [kind, target]
+      properties:
+        kind:
+          type: string
+          enum: [added, removed, moved]
+          description: 足した・外した・順番を変えた
+        beforePosition:
+          type: integer
+          minimum: 1
+          description: 前の順番・順位（外した・順番を変えたとき）。コース・番付のときだけ返す
+        afterPosition:
+          type: integer
+          minimum: 1
+          description: 後の順番・順位（足した・順番を変えたとき）。コース・番付のときだけ返す
+        target: { $ref: '#/components/schemas/ChangeTarget' }
+    ChangeTarget:
+      description: |
+        動いた項目の指す先。`kind` で判別する。今の状態で出す（並びの項目と同じ決まり）：Discovery が統合されていれば
+        最後の統合先（見えるもの）、非公開・成立の取り消し・統合先を決められないときは表示できない（識別子・中身を返さない）
+      oneOf:
+        - $ref: '#/components/schemas/PlaceChangeTarget'
+        - $ref: '#/components/schemas/DiscoveryChangeTarget'
+        - $ref: '#/components/schemas/UnavailableChangeTarget'
+    PlaceChangeTarget:
+      type: object
+      additionalProperties: false
+      required: [kind, place]
+      properties:
+        kind: { type: string, enum: [place] }
+        place: { $ref: '#/components/schemas/PlaceRef' }
+    DiscoveryChangeTarget:
+      type: object
+      additionalProperties: false
+      required: [kind, discovery]
+      properties:
+        kind: { type: string, enum: [discovery] }
+        discovery: { $ref: '#/components/schemas/DiscoveryRef' }
+    UnavailableChangeTarget:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [unavailable] }
     Problem:
       type: object
       description: RFC 9457 Problem Details
@@ -2129,3 +2454,109 @@ components:
               displayPlaces: [{ id: 160663e75a0b, name: 桜木町駅 }]
           totalCount: 1
         reach: { items: [], totalCount: 0 }
+    ProjectSlopes:
+      summary: 鶴見の急坂番付（推定）。運営のお題（サンプルデータ。作った人が坂D を足して3位にした）
+      value:
+        id: 3b99200e12f7
+        type: ranking
+        title: 鶴見の急坂番付（推定）
+        callText: みんなの知ってる急坂はどこ？
+        description: 標高のデータと道路から計算した勾配の順に並べた、推定の番付です。
+        creatorKind: operator
+        creatorName: ex-day 運営
+        items:
+          - kind: place
+            id: 825c7765ca82
+            position: 1
+            place: { id: 036f5fb6be96, name: 鶴見の坂A }
+            placeKinds: [坂]
+            spatialType: route
+            geometry: { type: LineString, coordinates: [[139.67, 35.503], [139.6712, 35.5042]] }
+            anchor: [139.67, 35.503]
+            estimates:
+              - { metric: SLOPE_GRADE, value: 14.2, unit: percent, method: elevation-x-road, methodVersion: sample-1, computedAt: '2026-03-20T09:00:00+09:00' }
+            conversationCount: 0
+          - kind: place
+            id: 9e755d63381a
+            position: 2
+            place: { id: 299b61cb154b, name: 鶴見の坂B }
+            placeKinds: [坂]
+            spatialType: route
+            geometry: { type: LineString, coordinates: [[139.665, 35.51], [139.6661, 35.5108]] }
+            anchor: [139.665, 35.51]
+            estimates:
+              - { metric: SLOPE_GRADE, value: 12.8, unit: percent, method: elevation-x-road, methodVersion: sample-1, computedAt: '2026-03-20T09:00:00+09:00' }
+            conversationCount: 0
+          - kind: place
+            id: fa782e556ea5
+            position: 3
+            place: { id: be7157b1670c, name: 鶴見の坂D }
+            placeKinds: [坂]
+            spatialType: route
+            geometry: { type: LineString, coordinates: [[139.66, 35.498], [139.6608, 35.4991]] }
+            anchor: [139.66, 35.498]
+            estimates:
+              - { metric: SLOPE_GRADE, value: 13.1, unit: percent, method: elevation-x-road, methodVersion: sample-1, computedAt: '2026-03-20T09:00:00+09:00' }
+            conversationCount: 0
+          - kind: place
+            id: 03d403b9603a
+            position: 4
+            place: { id: 91f0a10b3328, name: 鶴見の坂C }
+            placeKinds: [坂]
+            spatialType: route
+            geometry: { type: LineString, coordinates: [[139.68, 35.5], [139.6815, 35.5006]] }
+            anchor: [139.68, 35.5]
+            estimates:
+              - { metric: SLOPE_GRADE, value: 10.5, unit: percent, method: elevation-x-road, methodVersion: sample-1, computedAt: '2026-03-20T09:00:00+09:00' }
+            conversationCount: 0
+        ownConversationId: cba7874027fc
+        timeline:
+          items:
+            - kind: change
+              change:
+                id: 8e59c530d300
+                kind: created
+                changedAt: '2026-03-20T10:00:00+09:00'
+                items:
+                  - { kind: added, afterPosition: 1, target: { kind: place, place: { id: 036f5fb6be96, name: 鶴見の坂A } } }
+                  - { kind: added, afterPosition: 2, target: { kind: place, place: { id: 299b61cb154b, name: 鶴見の坂B } } }
+                  - { kind: added, afterPosition: 3, target: { kind: place, place: { id: 91f0a10b3328, name: 鶴見の坂C } } }
+                changedFields: []
+            - kind: post
+              post:
+                id: af55a5eb0a0b
+                visibility: visible
+                body: この坂も入れてほしい。鶴見の坂D、自転車だと押して歩くしかない
+                authorName: 坂好き
+                postedAt: '2026-04-12T18:00:00+09:00'
+                replyTo: []
+                reactions: { empathy: 0 }
+            - kind: post
+              post:
+                id: ed4414f25827
+                visibility: visible
+                body: 坂D、たしかにきつい。坂Cより上だと思う
+                authorName: 昔の鶴見っ子
+                postedAt: '2026-04-12T19:00:00+09:00'
+                replyTo: [af55a5eb0a0b]
+                reactions: { empathy: 0 }
+            - kind: change
+              change:
+                id: 3db2287f9c6c
+                kind: updated
+                changedAt: '2026-04-12T20:00:00+09:00'
+                items:
+                  - { kind: added, afterPosition: 3, target: { kind: place, place: { id: be7157b1670c, name: 鶴見の坂D } } }
+                  - { kind: moved, beforePosition: 3, afterPosition: 4, target: { kind: place, place: { id: 91f0a10b3328, name: 鶴見の坂C } } }
+                changedFields: []
+        triggeredConversations:
+          items:
+            - id: 3993839119f7
+              firstPost: visible
+              excerpt: 雪の日、タクシーが坂を上れなくて、坂の下で降ろされたことがある
+              starterName: 昔の鶴見っ子
+              replyCount: 0
+              startedAt: '2026-04-13T08:00:00+09:00'
+              lastPostedAt: '2026-04-13T08:00:00+09:00'
+              places: []
+          totalCount: 1

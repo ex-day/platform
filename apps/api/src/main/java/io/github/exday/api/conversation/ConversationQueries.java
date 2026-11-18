@@ -56,14 +56,10 @@ public class ConversationQueries {
 
     // ---- Post ----
 
-    private static final String POST_COLUMNS = """
-        SELECT p.id, p.public_id, p.visibility, p.body, p.posted_at, u.nickname,
-               (SELECT count(*) FROM reaction r WHERE r.post_id = p.id AND r.kind = 'EMPATHY') AS empathy,
-               (SELECT array_agg(t.public_id ORDER BY t.posted_at, t.public_id COLLATE "C")
-                  FROM post_reference pr JOIN post t ON t.id = pr.to_post_id
-                 WHERE pr.from_post_id = p.id AND pr.kind = 'REPLY' AND t.conversation_id = p.conversation_id) AS reply_to
+    // Post の中身は PostCards（C26）。ここでは並びのキー（時点・識別子）で選ぶだけ
+    private static final String POST_KEYS = """
+        SELECT p.id, p.public_id
           FROM post p
-          LEFT JOIN user_profile u ON u.user_id = p.user_id
         """;
 
     private static final String POSTS_BEFORE_KEY = """
@@ -72,14 +68,14 @@ public class ConversationQueries {
     private static final String FINDINGS_AFTER_KEY = """
         AND (f.created_at > :afterAt OR (f.created_at = :afterAt AND f.public_id COLLATE "C" > :afterPublicId))""";
 
-    private static final String FIND_FIRST_POST = POST_COLUMNS + """
+    private static final String FIND_FIRST_POST = POST_KEYS + """
          WHERE p.conversation_id = :conversationId
          ORDER BY p.posted_at, p.public_id COLLATE "C"
          LIMIT 1
         """;
 
     // 最初の Post を除いて、キー（時点・識別子）より前の Post を新しい側から。キーがなければ最新から
-    private static final String FIND_POSTS_BEFORE = POST_COLUMNS + """
+    private static final String FIND_POSTS_BEFORE = POST_KEYS + """
          WHERE p.conversation_id = :conversationId
            AND p.id <> :firstPostId
            %s
@@ -316,9 +312,6 @@ public class ConversationQueries {
 
     record PlaceRow(String publicId, String name, String role, Integer seq, String status, boolean fromQuestion) {}
 
-    record PostRow(long id, String publicId, boolean visible, String body, OffsetDateTime postedAt, String nickname,
-            int empathy, List<String> replyTo) {}
-
     record Key(OffsetDateTime at, String publicId) {}
 
     record CandidateRow(String publicId, String status, String questionPublicId, boolean adopted,
@@ -389,15 +382,15 @@ public class ConversationQueries {
             .list();
     }
 
-    public Optional<PostRow> findFirstPost(long conversationId) {
+    public Optional<IdRef> findFirstPost(long conversationId) {
         return jdbcClient.sql(FIND_FIRST_POST)
             .param("conversationId", conversationId)
-            .query((rs, rowNum) -> toPost(rs))
+            .query((rs, rowNum) -> new IdRef(rs.getLong("id"), rs.getString("public_id")))
             .optional();
     }
 
     /** キーより前の Post を新しい側から最大 {@code limit} 件（キーが null なら最新から）。最初の Post は含めない。 */
-    public List<PostRow> findPostsBefore(long conversationId, long firstPostId, Key before, int limit) {
+    public List<IdRef> findPostsBefore(long conversationId, long firstPostId, Key before, int limit) {
         var spec = jdbcClient.sql(FIND_POSTS_BEFORE.formatted(before == null ? "" : POSTS_BEFORE_KEY))
             .param("conversationId", conversationId)
             .param("firstPostId", firstPostId)
@@ -405,7 +398,7 @@ public class ConversationQueries {
         if (before != null) {
             spec = spec.param("beforeAt", before.at()).param("beforePublicId", before.publicId());
         }
-        return spec.query((rs, rowNum) -> toPost(rs)).list();
+        return spec.query((rs, rowNum) -> new IdRef(rs.getLong("id"), rs.getString("public_id"))).list();
     }
 
     public Optional<Key> findPostKey(long conversationId, String publicId) {
@@ -414,12 +407,6 @@ public class ConversationQueries {
             .param("publicId", publicId)
             .query((rs, rowNum) -> new Key(rs.getObject("posted_at", OffsetDateTime.class), rs.getString("public_id")))
             .optional();
-    }
-
-    private static PostRow toPost(ResultSet rs) throws SQLException {
-        return new PostRow(rs.getLong("id"), rs.getString("public_id"), "PUBLIC".equals(rs.getString("visibility")),
-            rs.getString("body"), rs.getObject("posted_at", OffsetDateTime.class), rs.getString("nickname"),
-            rs.getInt("empathy"), strings(rs.getArray("reply_to")));
     }
 
     public List<CandidateRow> findCandidates(long conversationId) {
