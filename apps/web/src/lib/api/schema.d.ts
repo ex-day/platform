@@ -223,6 +223,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S15（企画のページ）の内容を取得する
+         * @description 1つの企画の内容を、S15 の区画ごとに返す（画面定義 docs/ui/screens/S15-project.md「取得用 API で返すもの」）。
+         *     タイムライン（企画そのものの会話の Post と企画の変更の出来事）は、新しい側から一定数だけを返す。それより前は `getProjectTimeline` で読む。
+         *
+         *     - **見えるもの**：一般のユーザーには、公開の企画だけを返す（DB の visible_project）。非公開の企画は、直接の識別子でも 404。
+         *       運営・その企画を作った人が非公開の企画を見る形と「編集する」の可否は、認証（#75）のあとに足す
+         *     - **並び**：企画の公開を確かめてから項目を全部読み、指す先だけを公開の判定にかける（visible_project_item は使わない）。
+         *       見えない Discovery を指す項目は、位置を残して `UnavailableProjectItem` にする（番付・コースの順位を飛ばさない）
+         *     - **公開状態は対象ごとに独立して扱う**（DB 設計 2.5節）：非公開の Post は枠だけを返す（S14 の HiddenPost）
+         *     - **企画の作った人**：運営の企画も、作ったアカウントの今のニックネームを返す。ユーザーの企画は、画面が「ex-day の認定ではありません」を添える
+         *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+         *     - **返さないもの**：運営の操作（C38）、企画への Reaction（MVP では付けない）、企画どうしの関連付け
+         */
+        get: operations["getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S15 の「これまでのやりとりを見る」で、それより前のタイムラインを取得する
+         * @description カーソル（`before`）より前のタイムラインを、新しい側から `limit` 件だけ選び、古い順に並べて返す（並びは ProjectTimeline）。
+         *     企画が非公開、またはカーソルがこの企画のタイムラインのものでなければ 404。カーソルの形が合わなければ 400
+         */
+        get: operations["getProjectTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1338,6 +1389,184 @@ export interface components {
              */
             matchedBy: "candidate" | "area";
         };
+        /**
+         * @description 企画の型（コース・番付・まとめ・記憶）。順番・順位を出すのはコース・番付だけ
+         * @enum {string}
+         */
+        ProjectType: "course" | "ranking" | "collection" | "memory";
+        /** @description S15（企画のページ）の内容。区画ごとの読み方は画面定義の「取得用 API で返すもの」 */
+        ProjectDetail: {
+            id: components["schemas"]["PublicId"];
+            type: components["schemas"]["ProjectType"];
+            title: string;
+            /** @description 呼びかけ。なければ返さない */
+            callText?: string;
+            /** @description 説明。なければ返さない */
+            description?: string;
+            /**
+             * @description 運営の企画か、ユーザーの企画か（ユーザーの企画は「ex-day の認定ではありません」を添える）
+             * @enum {string}
+             */
+            creatorKind: "operator" | "user";
+            /** @description 作った人の今のニックネーム（表示のたびに引く。Issue */
+            creatorName: string;
+            /**
+             * @description 並び（C37）。順番の順。1つの企画の項目は最大100件（暫定。企画の作成・編集の API で守る）。
+             *     指す先が見えない項目も、位置を残して返す（UnavailableProjectItem）
+             */
+            items: components["schemas"]["ProjectItem"][];
+            /** @description 企画そのものの会話（公開のもの）。まだ最初の発言がなく会話がないときは返さない（返信を書くとき・S14 へ移るときに使う） */
+            ownConversationId?: components["schemas"]["PublicId"];
+            timeline: components["schemas"]["ProjectTimeline"];
+            /**
+             * @description 企画をきっかけにした会話（入口＝この企画で、企画そのものの会話でないもの）。始まりの新しい順、同じなら識別子の順。
+             *     最大10件と全体の数。続きを読む API はない（MVP の制限。会話が増えたら足す）
+             */
+            triggeredConversations: components["schemas"]["ConversationCardPage"];
+        };
+        /** @description 企画の項目（C37）。`kind` で判別する（場所・見える Discovery・表示できない項目） */
+        ProjectItem: components["schemas"]["PlaceProjectItem"] | components["schemas"]["DiscoveryProjectItem"] | components["schemas"]["UnavailableProjectItem"];
+        /** @description 場所を指す項目。根拠（推定の値と会話の数）は保存した値ではなく、場所・会話から導く（論理設計 4.6.1節） */
+        PlaceProjectItem: {
+            /** @enum {string} */
+            kind: "place";
+            id: components["schemas"]["PublicId"];
+            /** @description 順番・順位。コース・番付のときだけ返す */
+            position?: number;
+            /** @description 作った人の説明。なければ返さない */
+            note?: string;
+            place: components["schemas"]["PlaceRef"];
+            /** @description 場所の種類（文字コードの順） */
+            placeKinds: string[];
+            spatialType: components["schemas"]["SpatialType"];
+            geometry: components["schemas"]["Geometry"];
+            /** @description 代表点（ピンの位置、コースの回る順の線を結ぶ点）。点はその点、経路は始点、エリアは形の中の1点 */
+            anchor: components["schemas"]["Position"];
+            /** @description 推定の値と出どころ（S13 の estimates と同じ形と選び方）。画面は「推定」と出どころを添える */
+            estimates: components["schemas"]["PlaceEstimate"][];
+            /** @description この場所が採用されている公開の会話の数（S13 の「この場所の会話」の全体の数と同じ） */
+            conversationCount: number;
+        };
+        /**
+         * @description Discovery を指す項目。統合されていれば、最後の統合先（見えるもの）を出す。場所の推定の値は付けない
+         *     （Discovery 自体の根拠のように見せないため）
+         */
+        DiscoveryProjectItem: {
+            /** @enum {string} */
+            kind: "discovery";
+            id: components["schemas"]["PublicId"];
+            /** @description 順番・順位。コース・番付のときだけ返す */
+            position?: number;
+            /** @description 作った人の説明。なければ返さない */
+            note?: string;
+            discovery: components["schemas"]["DiscoverySummary"];
+            /**
+             * @description 地図に出す場所（出す位置の場所。DiscoverySummary.displayPlaces と同じ選び方・同じ順）とその形。
+             *     Discovery の中の順番を示す線は返さない
+             */
+            mapPlaces: components["schemas"]["ProjectMapPlace"][];
+            /** @description 代表点。出す位置の場所の最初の1つの代表点（点はその点、経路は始点、エリアは形の中の1点） */
+            anchor: components["schemas"]["Position"];
+            /** @description この Discovery の由来の、公開の会話の数（同じ会話は1回） */
+            originConversationCount: number;
+            /** @description この Discovery から始まった公開の会話の数（同じ会話は1回）。根拠とは限らないので、由来の会話と分けて出す */
+            startedConversationCount: number;
+        };
+        ProjectMapPlace: {
+            place: components["schemas"]["PlaceRef"];
+            spatialType: components["schemas"]["SpatialType"];
+            geometry: components["schemas"]["Geometry"];
+        };
+        /**
+         * @description 表示できない項目。指していた Discovery（統合されていれば統合先）が非公開・成立の取り消し、または統合先を決められない。
+         *     順番の位置だけを残し、項目・指していたものの識別子・中身・理由は返さない（画面は「表示できません」と出す）
+         */
+        UnavailableProjectItem: {
+            /** @enum {string} */
+            kind: "unavailable";
+            /** @description 順番・順位。コース・番付のときだけ返す */
+            position?: number;
+        };
+        /** @description タイムラインの続きを読むカーソル（並びのキーを含む）。画面は中身を解釈せず、そのまま `before` に渡す */
+        TimelineCursor: string;
+        /**
+         * @description 企画そのものの会話の Post と、企画の変更の出来事を混ぜたタイムライン。企画そのものの会話がなくても、出来事だけで返す。
+         *
+         *     - **全順序**：時点（Post は投稿の時点、変更の出来事は変更の時点）→ 種類（変更の出来事を先、次に Post）→ 識別子（文字コードの順）
+         *     - 新しい側から `timelineLimit` 件を選び、古い順に並べて返す。それより前が残っていれば `olderCursor` を返す
+         *     - 最初の Post をいつも返すことはしない（企画を作った出来事がタイムラインの最初になる）
+         *     - 非公開の Post も枠として返し、件数に数える（PostItem の HiddenPost）
+         */
+        ProjectTimeline: {
+            items: components["schemas"]["TimelineEntry"][];
+            olderCursor?: components["schemas"]["TimelineCursor"];
+        };
+        /** @description カーソルより前のタイムライン（古い順。並びは ProjectTimeline）。さらに前が残っていれば `olderCursor` を返す */
+        OlderTimelinePage: {
+            items: components["schemas"]["TimelineEntry"][];
+            olderCursor?: components["schemas"]["TimelineCursor"];
+        };
+        /** @description タイムラインの1つ。`kind` で判別する（Post か、変更の出来事か） */
+        TimelineEntry: components["schemas"]["TimelinePost"] | components["schemas"]["TimelineChange"];
+        TimelinePost: {
+            /** @enum {string} */
+            kind: "post";
+            post: components["schemas"]["PostItem"];
+        };
+        TimelineChange: {
+            /** @enum {string} */
+            kind: "change";
+            change: components["schemas"]["ProjectChangeEvent"];
+        };
+        /**
+         * @description 企画の変更の出来事（1回の保存）。運営の企画にも出す。表題・呼びかけ・説明は中身を写さず、変えたことだけを返す。
+         *     出来事の中の項目はページングしない（1回の保存で動く項目は最大200件。暫定。企画の作成・編集の API で守る）
+         */
+        ProjectChangeEvent: {
+            id: components["schemas"]["PublicId"];
+            /**
+             * @description created は企画を作った（全部の項目が足された）、updated は変えた
+             * @enum {string}
+             */
+            kind: "created" | "updated";
+            /** Format: date-time */
+            changedAt: string;
+            /** @description 動いた項目（保存した順のまま）。まとめ方は画面が決める */
+            items: components["schemas"]["ProjectChangeItem"][];
+            /** @description 変えた表示の項目（表題・呼びかけ・説明）。中身は返さない */
+            changedFields: ("title" | "callText" | "description")[];
+        };
+        ProjectChangeItem: {
+            /**
+             * @description 足した・外した・順番を変えた
+             * @enum {string}
+             */
+            kind: "added" | "removed" | "moved";
+            /** @description 前の順番・順位（外した・順番を変えたとき）。コース・番付のときだけ返す */
+            beforePosition?: number;
+            /** @description 後の順番・順位（足した・順番を変えたとき）。コース・番付のときだけ返す */
+            afterPosition?: number;
+            target: components["schemas"]["ChangeTarget"];
+        };
+        /**
+         * @description 動いた項目の指す先。`kind` で判別する。今の状態で出す（並びの項目と同じ決まり）：Discovery が統合されていれば
+         *     最後の統合先（見えるもの）、非公開・成立の取り消し・統合先を決められないときは表示できない（識別子・中身を返さない）
+         */
+        ChangeTarget: components["schemas"]["PlaceChangeTarget"] | components["schemas"]["DiscoveryChangeTarget"] | components["schemas"]["UnavailableChangeTarget"];
+        PlaceChangeTarget: {
+            /** @enum {string} */
+            kind: "place";
+            place: components["schemas"]["PlaceRef"];
+        };
+        DiscoveryChangeTarget: {
+            /** @enum {string} */
+            kind: "discovery";
+            discovery: components["schemas"]["DiscoveryRef"];
+        };
+        UnavailableChangeTarget: {
+            /** @enum {string} */
+            kind: "unavailable";
+        };
         /** @description RFC 9457 Problem Details */
         Problem: {
             /** Format: uri-reference */
@@ -1376,6 +1605,8 @@ export interface components {
         PlaceId: components["schemas"]["PublicId"];
         /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         ConversationId: components["schemas"]["PublicId"];
+        /** @description 企画の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+        ProjectId: components["schemas"]["PublicId"];
         /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         DiscoveryId: components["schemas"]["PublicId"];
     };
@@ -1575,6 +1806,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FindingPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: {
+                /** @description 新しい側から返すタイムラインの数（暫定の既定値20） */
+                timelineLimit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 企画の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 企画の内容 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDetail"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getProjectTimeline: {
+        parameters: {
+            query: {
+                /** @description カーソル。これより前のタイムラインを返す */
+                before: components["schemas"]["TimelineCursor"];
+                /** @description 返す数（暫定の既定値20） */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 企画の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                projectId: components["parameters"]["ProjectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description それより前のタイムライン */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OlderTimelinePage"];
                 };
             };
             400: components["responses"]["BadRequest"];
