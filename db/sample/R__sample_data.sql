@@ -130,7 +130,7 @@ SELECT pg_temp.plid(k), kind FROM (VALUES
 ) AS v (k, kind);
 
 INSERT INTO place_estimate (place_id, metric, value, unit, method, method_version, computed_at)
-SELECT pg_temp.plid(k), 'SLOPE_GRADE', v, 'percent', 'elevation-x-road', 'sample-1', now()
+SELECT pg_temp.plid(k), 'SLOPE_GRADE', v, 'percent', 'elevation-x-road', 'sample-1', timestamptz '2026-03-20 09:00+09'
   FROM (VALUES ('slope-a', 14.2), ('slope-b', 12.8), ('slope-c', 10.5), ('slope-d', 13.1)) AS t (k, v);
 
 -- 行政の階層と、エリアの包含

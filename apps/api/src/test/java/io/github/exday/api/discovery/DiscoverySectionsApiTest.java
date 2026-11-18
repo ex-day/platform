@@ -46,24 +46,9 @@ class DiscoverySectionsApiTest {
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     DiscoveryDetailQueries discoveryDetailQueries;
 
-    // DB を使う読み取りの部品（このテストは DB を使わない）
+    // DB を使う読み取りの部品は、JdbcClient を mock にして作る（このテストは DB を使わない。部品を足すたびに mock を足さない）
     @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.card.conversation.ConversationCards conversationCards;
-
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.card.discovery.DiscoveryCards discoveryCards;
-
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.place.PlaceQueries placeQueries;
-
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.card.finding.FindingCards findingCards;
-
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.merge.MergeChains mergeChains;
-
-    @org.springframework.test.context.bean.override.mockito.MockitoBean
-    io.github.exday.api.conversation.ConversationQueries conversationQueries;
+    org.springframework.jdbc.core.simple.JdbcClient jdbcClient;
 
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
         new ParameterizedTypeReference<>() {};

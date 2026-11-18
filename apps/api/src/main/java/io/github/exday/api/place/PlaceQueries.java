@@ -4,7 +4,6 @@ import io.github.exday.api.card.project.ProjectCards;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -83,13 +82,6 @@ public class PlaceQueries {
         """;
 
     // 推定の値：値の種類と計算の出どころごとに、いちばん新しく計算したもの
-    private static final String FIND_ESTIMATES = """
-        SELECT DISTINCT ON (e.metric, e.method) e.metric, e.value, e.unit, e.method, e.method_version, e.computed_at
-          FROM place_estimate e
-         WHERE e.place_id = :placeId
-         ORDER BY e.metric, e.method, e.computed_at DESC, e.id DESC
-        """;
-
     // ここでの発見：この場所が関わる、公開で成立を取り消しておらず、統合された側でない Discovery。
     // 成立の時点の新しい順に上限まで選んでから、観点（代表表記の文字コードの順で最初のもの）を付ける
     private static final String FIND_DISCOVERIES = """
@@ -165,12 +157,6 @@ public class PlaceQueries {
          LIMIT :limit
         """;
 
-    private static final String COUNT_CONVERSATIONS = """
-        SELECT count(*)
-          FROM visible_conversation c
-         WHERE EXISTS (SELECT 1 FROM conversation_place cp WHERE cp.conversation_id = c.id AND cp.place_id = :placeId)
-        """;
-
     // この場所が入っている企画：この場所を指す項目、またはこの場所が関わる Discovery（公開）を指す項目を持つ、公開の企画
     private static final String PLACE_PROJECT_MATCHES = """
         WITH place_discoveries AS (
@@ -234,9 +220,6 @@ public class PlaceQueries {
     public record AliasRow(String name, String kind, LocalDate validFrom, LocalDate validTo) {}
 
     public record PlaceRefRow(String publicId, String name) {}
-
-    public record EstimateRow(String metric, double value, String unit, String method, String methodVersion,
-            OffsetDateTime computedAt) {}
 
     public record DiscoveryRow(long id, String publicId, String title, String summary, List<String> roles,
             String aspect, int total) {}
@@ -310,15 +293,6 @@ public class PlaceQueries {
             .list();
     }
 
-    public List<EstimateRow> findEstimates(long placeId) {
-        return jdbcClient.sql(FIND_ESTIMATES)
-            .param("placeId", placeId)
-            .query((rs, rowNum) -> new EstimateRow(
-                rs.getString("metric"), rs.getDouble("value"), rs.getString("unit"), rs.getString("method"),
-                rs.getString("method_version"), rs.getObject("computed_at", OffsetDateTime.class)))
-            .list();
-    }
-
     public List<DiscoveryRow> findDiscoveries(long placeId) {
         return jdbcClient.sql(FIND_DISCOVERIES)
             .param("placeId", placeId)
@@ -355,13 +329,6 @@ public class PlaceQueries {
             .param("limit", LIST_LIMIT)
             .query((rs, rowNum) -> rs.getLong("id"))
             .list();
-    }
-
-    public int countConversations(long placeId) {
-        return jdbcClient.sql(COUNT_CONVERSATIONS)
-            .param("placeId", placeId)
-            .query(Integer.class)
-            .single();
     }
 
     public List<ProjectCards.ProjectRow> findProjects(long placeId) {

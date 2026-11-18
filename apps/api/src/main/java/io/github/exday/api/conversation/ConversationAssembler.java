@@ -2,13 +2,13 @@ package io.github.exday.api.conversation;
 
 import io.github.exday.api.card.discovery.DiscoveryCards;
 import io.github.exday.api.card.finding.FindingCards;
+import io.github.exday.api.card.post.PostCards;
 import io.github.exday.api.conversation.ConversationQueries.CandidateRow;
 import io.github.exday.api.conversation.ConversationQueries.FindingVersion;
 import io.github.exday.api.conversation.ConversationQueries.ConversationRow;
 import io.github.exday.api.conversation.ConversationQueries.IdRef;
 import io.github.exday.api.conversation.ConversationQueries.Key;
 import io.github.exday.api.conversation.ConversationQueries.OwnedRef;
-import io.github.exday.api.conversation.ConversationQueries.PostRow;
 import io.github.exday.api.conversation.ConversationQueries.QuestionRow;
 import io.github.exday.api.generated.model.ActiveCandidateAdoption;
 import io.github.exday.api.generated.model.AdoptionActor;
@@ -33,7 +33,6 @@ import io.github.exday.api.generated.model.DiscoverySummaryPage;
 import io.github.exday.api.generated.model.FindingItem;
 import io.github.exday.api.generated.model.FindingPage;
 import io.github.exday.api.generated.model.FindingQuestionAnswer;
-import io.github.exday.api.generated.model.HiddenPost;
 import io.github.exday.api.generated.model.MovedItem;
 import io.github.exday.api.generated.model.OlderPostPage;
 import io.github.exday.api.generated.model.Period;
@@ -43,7 +42,6 @@ import io.github.exday.api.generated.model.PlaceCandidateSection;
 import io.github.exday.api.generated.model.PlaceEntry;
 import io.github.exday.api.generated.model.PlaceQuestionAnswer;
 import io.github.exday.api.generated.model.PlaceRef;
-import io.github.exday.api.generated.model.PostItem;
 import io.github.exday.api.generated.model.PostQuestionAnswer;
 import io.github.exday.api.generated.model.PostThread;
 import io.github.exday.api.generated.model.ProjectEntry;
@@ -59,8 +57,6 @@ import io.github.exday.api.generated.model.ReconsideringCandidateAdoption;
 import io.github.exday.api.generated.model.RevokedCandidateAdoption;
 import io.github.exday.api.generated.model.SpatialType;
 import io.github.exday.api.generated.model.UnavailableAnswerRef;
-import io.github.exday.api.generated.model.VisiblePost;
-import io.github.exday.api.generated.model.VisiblePostReactions;
 import io.github.exday.api.geometry.GeoJsonGeometries;
 import io.github.exday.api.merge.MergeChains;
 import io.github.exday.api.merge.MergeChains.Resolution;
@@ -83,13 +79,15 @@ public class ConversationAssembler {
     private final MergeChains mergeChains;
     private final DiscoveryCards discoveryCards;
     private final FindingCards findingCards;
+    private final PostCards postCards;
 
     public ConversationAssembler(ConversationQueries queries, MergeChains mergeChains, DiscoveryCards discoveryCards,
-            FindingCards findingCards) {
+            FindingCards findingCards, PostCards postCards) {
         this.queries = queries;
         this.mergeChains = mergeChains;
         this.discoveryCards = discoveryCards;
         this.findingCards = findingCards;
+        this.postCards = postCards;
     }
 
     public ConversationDetail assemble(ConversationRow conversation, int postLimit, int findingLimit) {
@@ -164,7 +162,7 @@ public class ConversationAssembler {
         var first = queries.findFirstPost(conversationId)
             .orElseThrow(() -> new IllegalStateException("会話に Post がない: " + conversationId));
         var page = olderPage(conversationId, first.id(), null, limit);
-        var thread = new PostThread().first(toPost(first)).recent(page.getItems());
+        var thread = new PostThread().first(postCards.cards(List.of(first.id())).get(first.id())).recent(page.getItems());
         if (page.getOlderCursor() != null) {
             thread.olderCursor(page.getOlderCursor());
         }
@@ -189,29 +187,12 @@ public class ConversationAssembler {
             rows.remove(rows.size() - 1);
         }
         java.util.Collections.reverse(rows);
-        var page = new OlderPostPage().items(rows.stream().map(ConversationAssembler::toPost).toList());
+        var cards = postCards.cards(rows.stream().map(IdRef::id).toList());
+        var page = new OlderPostPage().items(rows.stream().map(row -> cards.get(row.id())).toList());
         if (hasOlder) {
             page.olderCursor(rows.get(0).publicId());
         }
         return page;
-    }
-
-    private static PostItem toPost(PostRow row) {
-        if (!row.visible()) {
-            return new HiddenPost()
-                .id(row.publicId())
-                .visibility(HiddenPost.VisibilityEnum.HIDDEN)
-                .postedAt(row.postedAt())
-                .replyTo(row.replyTo());
-        }
-        return new VisiblePost()
-            .id(row.publicId())
-            .visibility(VisiblePost.VisibilityEnum.VISIBLE)
-            .body(row.body())
-            .authorName(row.nickname())
-            .postedAt(row.postedAt())
-            .replyTo(row.replyTo())
-            .reactions(new VisiblePostReactions().empathy(row.empathy()));
     }
 
     // ---- 場所の候補と採用（C33） ----

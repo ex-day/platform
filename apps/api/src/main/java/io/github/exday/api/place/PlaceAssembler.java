@@ -1,6 +1,8 @@
 package io.github.exday.api.place;
 
 import io.github.exday.api.card.discovery.DiscoveryCards;
+import io.github.exday.api.estimate.PlaceEstimates;
+import io.github.exday.api.placeconversation.PlaceConversations;
 import io.github.exday.api.generated.model.AbolishedPlaceState;
 import io.github.exday.api.generated.model.ActivePlaceState;
 import io.github.exday.api.generated.model.ConversationCardPage;
@@ -14,7 +16,6 @@ import io.github.exday.api.generated.model.PlaceDetail;
 import io.github.exday.api.generated.model.PlaceDiscoveryCard;
 import io.github.exday.api.generated.model.PlaceDiscoveryGroup;
 import io.github.exday.api.generated.model.PlaceDiscoveryGroups;
-import io.github.exday.api.generated.model.PlaceEstimate;
 import io.github.exday.api.generated.model.PlaceRef;
 import io.github.exday.api.generated.model.PlaceState;
 import io.github.exday.api.generated.model.ProjectCardPage;
@@ -46,10 +47,16 @@ public class PlaceAssembler {
     private final DiscoveryCards discoveryCards;
     private final ConversationCards conversationCards;
 
-    public PlaceAssembler(PlaceQueries queries, DiscoveryCards discoveryCards, ConversationCards conversationCards) {
+    private final PlaceEstimates placeEstimates;
+    private final PlaceConversations placeConversations;
+
+    public PlaceAssembler(PlaceQueries queries, DiscoveryCards discoveryCards, ConversationCards conversationCards,
+            PlaceEstimates placeEstimates, PlaceConversations placeConversations) {
         this.queries = queries;
         this.discoveryCards = discoveryCards;
         this.conversationCards = conversationCards;
+        this.placeEstimates = placeEstimates;
+        this.placeConversations = placeConversations;
     }
 
     public PlaceDetail assemble(PlaceRow place) {
@@ -67,12 +74,12 @@ public class PlaceAssembler {
             .geometry(GeoJsonGeometries.parse(place.geoJson()))
             .breadcrumb(queries.findBreadcrumb(place.id()).stream()
                 .map(row -> new PlaceRef().id(row.publicId()).name(row.name())).toList())
-            .estimates(queries.findEstimates(place.id()).stream().map(PlaceAssembler::toEstimate).toList())
+            .estimates(placeEstimates.byPlace(List.of(place.id())).getOrDefault(place.id(), List.of()))
             .discoveries(toDiscoveryGroups(place.id()))
             .seeking(toSeeking(queries.findSeekingCandidates(place.id(), "AREA".equals(place.spatialType())), self))
             .conversations(new ConversationCardPage()
                 .items(conversationCards.cards(queries.findConversationIds(place.id())))
-                .totalCount(queries.countConversations(place.id())))
+                .totalCount(placeConversations.countByPlace(List.of(place.id())).getOrDefault(place.id(), 0)))
             .projects(new ProjectCardPage()
                 .items(queries.findProjects(place.id()).stream()
                     .map(row -> ProjectCards.toCard(row, ProjectCards.Prefer.PLACE)).toList())
@@ -116,17 +123,6 @@ public class PlaceAssembler {
             alias.setPeriod(period);
         }
         return alias;
-    }
-
-    private static PlaceEstimate toEstimate(PlaceQueries.EstimateRow row) {
-        var estimate = new PlaceEstimate()
-            .metric(row.metric())
-            .value(row.value())
-            .unit(row.unit())
-            .method(row.method())
-            .computedAt(row.computedAt());
-        estimate.setMethodVersion(row.methodVersion());
-        return estimate;
     }
 
     /**
