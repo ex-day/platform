@@ -223,6 +223,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S17（企画の一覧）の企画を取得する
+         * @description 公開の企画を、絞り込み・並べ方に合わせて一覧で返す（画面定義 docs/ui/screens/S17-project-list.md「取得用 API で返すもの」）。
+         *     「もっと見る」は、応答の `nextCursor` を `after` に渡して続きを読む。
+         *
+         *     - **見えるもの**：公開の企画だけ（DB の visible_project）。MVP では企画を閉じる機能を作らないので、公開の企画が「募集中」
+         *     - **絞り込み**：型（`type`）と作った人（`creator`）。どちらも省けば全部。地域の条件と、TOP の企画の枠からの条件の引き継ぎは、
+         *       S01 の段で決めてからこの API を拡張する（それまでは型と作った人だけ）
+         *     - **並べ方**（`sort`）：今は `new`（新しい順）だけ。「新しい声の多い順」は、集計の期間・方式を決めてから値を足す
+         *     - **全順序**：企画を作った時点の降順、同じ時点なら識別子（文字コード）の降順。新しい企画が足されても、読んでいる続きの範囲はずれない
+         *     - **カーソル**：並びのキーと、絞り込み・並べ方を含む。作ったときと違う絞り込み・並べ方で渡されたら 400（条件を変えたら最初から読む）
+         *     - **全体の数は返さない**：画面は総件数を出さず、カーソルで全部を読める。続きの有無は `nextCursor` の有無で表す。0件なら空の配列
+         *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+         *     - **返さないもの**：「企画を作る」の見せ方（一定期間内の作成数の上限）は、認証（#75）のあと
+         */
+        get: operations["listProjects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}": {
         parameters: {
             query?: never;
@@ -1390,6 +1421,46 @@ export interface components {
             matchedBy: "candidate" | "area";
         };
         /**
+         * @description 企画を作った人の種類（運営／ユーザー）
+         * @enum {string}
+         */
+        ProjectCreatorKind: "operator" | "user";
+        /**
+         * @description 企画の一覧の並べ方。new は新しい順。「新しい声の多い順」は、集計の期間・方式を決めてから値を足す
+         * @default new
+         * @enum {string}
+         */
+        ProjectListSort: "new";
+        /**
+         * @description 企画の一覧の続きを読むカーソル。並びのキーと、作ったときの絞り込み・並べ方を含む。画面は中身を解釈せず、そのまま `after` に渡す。
+         *     違う絞り込み・並べ方で渡されたら 400
+         */
+        ProjectListCursor: string;
+        /** @description 企画の一覧（並びは listProjects の全順序）。続きがあれば `nextCursor` を返す。全体の数は返さない */
+        ProjectListPage: {
+            items: components["schemas"]["ProjectListCard"][];
+            nextCursor?: components["schemas"]["ProjectListCursor"];
+        };
+        /**
+         * @description 一覧の企画カード（C29）。押すと企画のページ（S15）。S03・S13 の ProjectCard（ある Discovery・場所との関わりを持つ）とは別の形。
+         *     ユーザーの企画は、画面が「[ニックネーム] さんの企画」と出し、ex-day の認定に見せない
+         */
+        ProjectListCard: {
+            id: components["schemas"]["PublicId"];
+            title: string;
+            /** @description 呼びかけ。なければ返さない */
+            callText?: string;
+            type: components["schemas"]["ProjectType"];
+            /** @enum {string} */
+            creatorKind: "operator" | "user";
+            /** @description 作った人の今のニックネーム（表示のたびに引く。Issue */
+            creatorName: string;
+            /** @description 企画の項目の数（S15 の並びの位置の数と同じ。指す先が見えない項目も数える） */
+            itemCount: number;
+            /** @description 企画をきっかけにした公開の会話の数（S15 の triggeredConversations の全体の数と同じ範囲） */
+            triggeredConversationCount: number;
+        };
+        /**
          * @description 企画の型（コース・番付・まとめ・記憶）。順番・順位を出すのはコース・番付だけ
          * @enum {string}
          */
@@ -1810,6 +1881,38 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: {
+                /** @description 企画の型で絞る。省けばすべて */
+                type?: components["schemas"]["ProjectType"];
+                /** @description 作った人の種類で絞る（運営／ユーザー）。省けばすべて */
+                creator?: components["schemas"]["ProjectCreatorKind"];
+                /** @description 並べ方。今は new（新しい順）だけ */
+                sort?: components["schemas"]["ProjectListSort"];
+                /** @description カーソル（前の応答の nextCursor）。これより後の企画を返す */
+                after?: components["schemas"]["ProjectListCursor"];
+                /** @description 返す数（暫定の既定値20） */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 企画の一覧 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectListPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
     };
     getProject: {

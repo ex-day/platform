@@ -141,10 +141,6 @@ public class ProjectQueries {
          LIMIT :limit
         """;
 
-    private static final String COUNT_TRIGGERED_CONVERSATIONS = """
-        SELECT count(*) FROM visible_conversation c WHERE c.entry_project_id = :projectId AND NOT c.is_project_own
-        """;
-
     /** 企画をきっかけにした会話の上限（OpenAPI の ConversationCardPage の maxItems）。 */
     static final int TRIGGERED_LIMIT = 10;
 
@@ -320,13 +316,6 @@ public class ProjectQueries {
             .param("limit", TRIGGERED_LIMIT)
             .query(Long.class)
             .list();
-    }
-
-    public int countTriggeredConversations(long projectId) {
-        return jdbcClient.sql(COUNT_TRIGGERED_CONVERSATIONS)
-            .param("projectId", projectId)
-            .query(Integer.class)
-            .single();
     }
 
     private static List<String> strings(Array array) throws SQLException {

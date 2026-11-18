@@ -3,6 +3,7 @@ package io.github.exday.api;
 import io.github.exday.api.conversation.ConversationNotFoundException;
 import io.github.exday.api.discovery.DiscoveryNotFoundException;
 import io.github.exday.api.project.ProjectNotFoundException;
+import io.github.exday.api.projectlist.InvalidProjectListCursorException;
 import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.generated.model.SectionKey;
 import jakarta.validation.ConstraintViolationException;
@@ -53,6 +54,12 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     public ProblemDetail projectNotFound(ProjectNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
             "企画がない、または見られない（非公開）。またはカーソルがこの企画のものでない。");
+    }
+
+    @ExceptionHandler(InvalidProjectListCursorException.class)
+    public ProblemDetail invalidProjectListCursor(InvalidProjectListCursorException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+            "カーソルが、この絞り込み・並べ方で作ったものではない。条件を変えたら最初から読む。");
     }
 
     @Override

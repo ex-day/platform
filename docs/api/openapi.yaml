@@ -7,9 +7,9 @@ info:
     画面が必要とする取得用の API の約束事。Issue #89 で S01・S03 の閲覧用として作り、
     Issue #135（根本整理）で、DB V2（docs/ex-day_db_design.md v0.2）に合わせて画面ごとに作り直している。
 
-    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）・S15（企画のページ）は v0.2 の形
-      （DB V2・画面定義の書き直しに合わせた）。S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す
-      （それまで API の実装は動かない）。S17 は、順に足す
+    - **作り直しの状況**：S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）・S15（企画のページ）・S17（企画の一覧）は
+      v0.2 の形（DB V2・画面定義の書き直しに合わせた）。S01（`/discovery-sections`）は v0.1 の形のままで、S01 の段で作り直す
+      （それまで API の実装は動かない）
     - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
       制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
@@ -61,6 +61,8 @@ tags:
     description: 会話のページ
   - name: S15
     description: 企画のページ
+  - name: S17
+    description: 企画の一覧
 paths:
   /discovery-sections:
     get:
@@ -321,6 +323,61 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+  /projects:
+    get:
+      tags: [S17]
+      operationId: listProjects
+      summary: S17（企画の一覧）の企画を取得する
+      description: |
+        公開の企画を、絞り込み・並べ方に合わせて一覧で返す（画面定義 docs/ui/screens/S17-project-list.md「取得用 API で返すもの」）。
+        「もっと見る」は、応答の `nextCursor` を `after` に渡して続きを読む。
+
+        - **見えるもの**：公開の企画だけ（DB の visible_project）。MVP では企画を閉じる機能を作らないので、公開の企画が「募集中」
+        - **絞り込み**：型（`type`）と作った人（`creator`）。どちらも省けば全部。地域の条件と、TOP の企画の枠からの条件の引き継ぎは、
+          S01 の段で決めてからこの API を拡張する（それまでは型と作った人だけ）
+        - **並べ方**（`sort`）：今は `new`（新しい順）だけ。「新しい声の多い順」は、集計の期間・方式を決めてから値を足す
+        - **全順序**：企画を作った時点の降順、同じ時点なら識別子（文字コード）の降順。新しい企画が足されても、読んでいる続きの範囲はずれない
+        - **カーソル**：並びのキーと、絞り込み・並べ方を含む。作ったときと違う絞り込み・並べ方で渡されたら 400（条件を変えたら最初から読む）
+        - **全体の数は返さない**：画面は総件数を出さず、カーソルで全部を読める。続きの有無は `nextCursor` の有無で表す。0件なら空の配列
+        - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+        - **返さないもの**：「企画を作る」の見せ方（一定期間内の作成数の上限）は、認証（#75）のあと
+      parameters:
+        - name: type
+          in: query
+          required: false
+          description: 企画の型で絞る。省けばすべて
+          schema: { $ref: '#/components/schemas/ProjectType' }
+        - name: creator
+          in: query
+          required: false
+          description: 作った人の種類で絞る（運営／ユーザー）。省けばすべて
+          schema: { $ref: '#/components/schemas/ProjectCreatorKind' }
+        - name: sort
+          in: query
+          required: false
+          description: 並べ方。今は new（新しい順）だけ
+          schema: { $ref: '#/components/schemas/ProjectListSort' }
+        - name: after
+          in: query
+          required: false
+          description: カーソル（前の応答の nextCursor）。これより後の企画を返す
+          schema: { $ref: '#/components/schemas/ProjectListCursor' }
+        - name: limit
+          in: query
+          required: false
+          description: 返す数（暫定の既定値20）
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        '200':
+          description: 企画の一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectListPage' }
+              examples:
+                all:
+                  $ref: '#/components/examples/ProjectListAll'
+        '400':
+          $ref: '#/components/responses/BadRequest'
   /projects/{projectId}:
     get:
       tags: [S15]
@@ -1933,6 +1990,63 @@ components:
           type: string
           enum: [candidate, area]
           description: candidate はこの場所が候補の場所、area は新しい場所の案の位置がこのエリアに入る
+    # ---- S17 企画の一覧 ----
+    ProjectCreatorKind:
+      type: string
+      enum: [operator, user]
+      description: 企画を作った人の種類（運営／ユーザー）
+    ProjectListSort:
+      type: string
+      enum: [new]
+      default: new
+      description: 企画の一覧の並べ方。new は新しい順。「新しい声の多い順」は、集計の期間・方式を決めてから値を足す
+    ProjectListCursor:
+      type: string
+      description: |
+        企画の一覧の続きを読むカーソル。並びのキーと、作ったときの絞り込み・並べ方を含む。画面は中身を解釈せず、そのまま `after` に渡す。
+        違う絞り込み・並べ方で渡されたら 400
+      pattern: '^n[acrlm][aou][0-9A-Za-z]{12}$'
+      minLength: 15
+      maxLength: 15
+    ProjectListPage:
+      type: object
+      description: 企画の一覧（並びは listProjects の全順序）。続きがあれば `nextCursor` を返す。全体の数は返さない
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/ProjectListCard' }
+        nextCursor: { $ref: '#/components/schemas/ProjectListCursor' }
+    ProjectListCard:
+      type: object
+      description: |
+        一覧の企画カード（C29）。押すと企画のページ（S15）。S03・S13 の ProjectCard（ある Discovery・場所との関わりを持つ）とは別の形。
+        ユーザーの企画は、画面が「[ニックネーム] さんの企画」と出し、ex-day の認定に見せない
+      additionalProperties: false
+      required: [id, title, type, creatorKind, creatorName, itemCount, triggeredConversationCount]
+      properties:
+        id: { $ref: '#/components/schemas/PublicId' }
+        title: { type: string, minLength: 1 }
+        callText: { type: string, minLength: 1, description: 呼びかけ。なければ返さない }
+        type: { $ref: '#/components/schemas/ProjectType' }
+        creatorKind:
+          type: string
+          enum: [operator, user]
+        creatorName:
+          type: string
+          minLength: 1
+          description: 作った人の今のニックネーム（表示のたびに引く。Issue #74）
+        itemCount:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 企画の項目の数（S15 の並びの位置の数と同じ。指す先が見えない項目も数える）
+        triggeredConversationCount:
+          type: integer
+          minimum: 0
+          description: 企画をきっかけにした公開の会話の数（S15 の triggeredConversations の全体の数と同じ範囲）
     # ---- S15 企画のページ ----
     ProjectType:
       type: string
@@ -2560,3 +2674,23 @@ components:
               lastPostedAt: '2026-04-13T08:00:00+09:00'
               places: []
           totalCount: 1
+    ProjectListAll:
+      summary: 公開の企画の新しい順（サンプルデータ。絞り込みなし）
+      value:
+        items:
+          - id: 33cd351db748
+            title: 港の見える散歩コース
+            callText: おすすめの寄り道があれば教えてください
+            type: course
+            creatorKind: user
+            creatorName: はまっこ
+            itemCount: 2
+            triggeredConversationCount: 0
+          - id: 3b99200e12f7
+            title: 鶴見の急坂番付（推定）
+            callText: みんなの知ってる急坂はどこ？
+            type: ranking
+            creatorKind: operator
+            creatorName: ex-day 運営
+            itemCount: 4
+            triggeredConversationCount: 1
