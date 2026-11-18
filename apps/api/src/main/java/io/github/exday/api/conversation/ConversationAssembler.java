@@ -3,6 +3,7 @@ package io.github.exday.api.conversation;
 import io.github.exday.api.card.discovery.DiscoveryCards;
 import io.github.exday.api.card.finding.FindingCards;
 import io.github.exday.api.conversation.ConversationQueries.CandidateRow;
+import io.github.exday.api.conversation.ConversationQueries.FindingVersion;
 import io.github.exday.api.conversation.ConversationQueries.ConversationRow;
 import io.github.exday.api.conversation.ConversationQueries.IdRef;
 import io.github.exday.api.conversation.ConversationQueries.Key;
@@ -305,7 +306,7 @@ public class ConversationAssembler {
     }
 
     private static QuestionItem toQuestion(QuestionRow row, Map<Long, AnswerPostRef> postRefs,
-            Map<Long, AnswerFindingRef> findingRefs) {
+            Map<FindingVersion, AnswerFindingRef> findingRefs) {
         var item = new QuestionItem()
             .id(row.publicId())
             .content(row.content())
@@ -322,7 +323,7 @@ public class ConversationAssembler {
 
     /** 場所の採用を先に見る。回答の参照先が見せられなくても、回答（採用）はそのまま返す。 */
     private static Optional<QuestionAnswer> toAnswer(QuestionRow row, Map<Long, AnswerPostRef> postRefs,
-            Map<Long, AnswerFindingRef> findingRefs) {
+            Map<FindingVersion, AnswerFindingRef> findingRefs) {
         if (row.placeAnswerStatus() != null) {
             return Optional.of(new PlaceQuestionAnswer()
                 .kind(PlaceQuestionAnswer.KindEnum.PLACE)
@@ -344,7 +345,8 @@ public class ConversationAssembler {
             .kind(FindingQuestionAnswer.KindEnum.FINDING)
             .status(adoptionStatus(row.otherAnswerStatus()))
             .adoptedBy(actor(row.otherAnswerActor()))
-            .finding(findingRefs.getOrDefault(row.answerFindingId(), unavailable())));
+            .finding(findingRefs.getOrDefault(new FindingVersion(row.answerFindingId(), row.answerFindingVersion()),
+                unavailable())));
     }
 
     /** 回答の Post：属する会話が公開なら識別子（Post が非公開でも）。 */
@@ -359,33 +361,35 @@ public class ConversationAssembler {
 
     /**
      * 回答のわかってきたこと：採用した版（属するわかってきたことの公開）と、案内する先（統合先。決められなければ自身）の
-     * 両方が公開できるときだけ、採用した版の内容と案内先を返す。キーは回答のわかってきたこと。
+     * 両方が公開できるときだけ、採用した版の内容と案内先を返す。キーは採用した版（同じわかってきたことでも、
+     * 問いごとに採用した版が違えば別の参照になる）。採用した版の内容は、採用された組だけを読む。
      */
-    private Map<Long, AnswerFindingRef> answerFindings(List<QuestionRow> rows) {
-        var answers = rows.stream().filter(row -> row.answerFindingId() != null && row.placeAnswerStatus() == null)
-            .toList();
-        if (answers.isEmpty()) {
+    private Map<FindingVersion, AnswerFindingRef> answerFindings(List<QuestionRow> rows) {
+        var adopted = rows.stream()
+            .filter(row -> row.answerFindingId() != null && row.placeAnswerStatus() == null)
+            .map(row -> new FindingVersion(row.answerFindingId(), row.answerFindingVersion()))
+            .distinct().toList();
+        if (adopted.isEmpty()) {
             return Map.of();
         }
-        var ids = answers.stream().map(QuestionRow::answerFindingId).distinct().toList();
+        var ids = adopted.stream().map(FindingVersion::findingId).distinct().toList();
         var resolutions = mergeChains.findings(ids);
-        var targets = ids.stream().map(id -> guideTarget(resolutions.get(id), id)).toList();
-        var lookup = new ArrayList<Long>(ids);
-        lookup.addAll(targets);
-        var visible = queries.findVisibleFindings(lookup.stream().distinct().toList()).stream()
+        var lookup = new LinkedHashSet<Long>(ids);
+        ids.forEach(id -> lookup.add(guideTarget(resolutions.get(id), id)));
+        var visible = queries.findVisibleFindings(List.copyOf(lookup)).stream()
             .collect(Collectors.toMap(OwnedRef::id, Function.identity()));
-        var versions = queries.findFindingVersions(ids).stream()
-            .collect(Collectors.toMap(v -> v.findingId() + ":" + v.version(), ConversationQueries.VersionRow::content));
-        var refs = new java.util.HashMap<Long, AnswerFindingRef>();
-        for (var row : answers) {
-            long id = row.answerFindingId();
-            long target = guideTarget(resolutions.get(id), id);
-            var text = versions.get(id + ":" + row.answerFindingVersion());
-            if (!visible.containsKey(id) || !visible.containsKey(target) || text == null) {
+        var contents = queries.findFindingVersions(adopted).stream()
+            .collect(Collectors.toMap(v -> new FindingVersion(v.findingId(), v.version()),
+                ConversationQueries.VersionRow::content));
+        var refs = new java.util.HashMap<FindingVersion, AnswerFindingRef>();
+        for (var key : adopted) {
+            long target = guideTarget(resolutions.get(key.findingId()), key.findingId());
+            var text = contents.get(key);
+            if (!visible.containsKey(key.findingId()) || !visible.containsKey(target) || text == null) {
                 continue;
             }
             var guide = visible.get(target);
-            refs.put(id, new AvailableAnswerFindingRef()
+            refs.put(key, new AvailableAnswerFindingRef()
                 .state(AvailableAnswerFindingRef.StateEnum.AVAILABLE)
                 .id(guide.publicId())
                 .conversationId(guide.conversationPublicId())
@@ -458,14 +462,14 @@ public class ConversationAssembler {
         var origins = queries.findOriginDiscoveryIds(conversationId);
         var finals = mergeChains.discoveries(origins).values().stream()
             .filter(Resolution::resolved).map(Resolution::finalId).distinct().toList();
+        // カードにできるもの（公開で、関わる場所がある）を成立の新しい順に読んで数え、カードは上限の分だけ作る
         var rows = queries.findVisibleDiscoveries(finals);
-        var cards = discoveryCards.cards(rows.stream()
+        var shown = rows.stream().limit(ConversationQueries.DISCOVERY_LIMIT).toList();
+        var cards = discoveryCards.cards(shown.stream()
             .map(row -> new DiscoveryCards.DiscoveryRow(row.id(), row.publicId(), row.title(), row.summary()))
             .toList());
-        List<DiscoverySummary> items = rows.stream().map(row -> cards.get(row.id())).filter(Objects::nonNull).toList();
-        return new DiscoverySummaryPage()
-            .items(items.stream().limit(ConversationQueries.DISCOVERY_LIMIT).toList())
-            .totalCount(items.size());
+        List<DiscoverySummary> items = shown.stream().map(row -> cards.get(row.id())).filter(Objects::nonNull).toList();
+        return new DiscoverySummaryPage().items(items).totalCount(rows.size());
     }
 
     // ---- この会話が届くところ ----

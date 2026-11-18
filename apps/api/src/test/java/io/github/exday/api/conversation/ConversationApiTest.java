@@ -416,6 +416,57 @@ class ConversationApiTest extends DbApiTestSupport {
         assertThat(walkAnswer()).containsEntry("finding", Map.of("state", "unavailable"));
     }
 
+    @Test
+    void 同じわかってきたことの違う版を問いごとに採用していればそれぞれ採用した版の内容を返す() {
+        jdbc.sql("""
+                INSERT INTO finding_version (finding_id, version, content, analysis_version)
+                SELECT id, 2, '散歩の価値（版2）', 'test' FROM finding WHERE public_id = :id
+                """).param("id", sid("finding:walk-value")).update();
+        jdbc.sql("UPDATE finding SET current_version = 2 WHERE public_id = :id").param("id", sid("finding:walk-value")).update();
+        long decision = operatorDecision("ANSWER_ADOPT");
+        jdbc.sql("""
+                INSERT INTO open_question (public_id, conversation_id, content, kind, analysis_version, created_at)
+                SELECT 'walkQuestio' || v, c.id, '問い ' || v, 'WHY', 'test', timestamptz '2026-04-08 00:00+09' + make_interval(hours => v)
+                  FROM conversation c, generate_series(1, 2) AS v WHERE c.public_id = :c
+                """).param("c", sid("conv:walk")).update();
+        jdbc.sql("""
+                INSERT INTO question_answer (question_id, answer_finding_id, answer_finding_version, actor_kind, created_decision_id)
+                SELECT q.id, f.id, CAST(right(q.public_id, 1) AS integer), 'RULE_OR_OPERATOR', :decision
+                  FROM open_question q, finding f WHERE q.public_id LIKE 'walkQuestio_' AND f.public_id = :f
+                """).param("decision", decision).param("f", sid("finding:walk-value")).update();
+        var answered = list(map(conversation("conv:walk").get("questions")).get("answered"));
+        assertThat(answered).extracting(q -> (Object) q.get("id")).containsExactly("walkQuestio1", "walkQuestio2");
+        assertThat(map(map(answered.get(0).get("answer")).get("finding")))
+            .containsEntry("text", "桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる");
+        assertThat(map(map(answered.get(1).get("answer")).get("finding"))).containsEntry("text", "散歩の価値（版2）");
+    }
+
+    @Test
+    void 生まれた発見は場所のあるものを成立の新しい順に10件と全体の数を返す() {
+        long decision = operatorDecision("OPERATOR_REGISTER");
+        jdbc.sql("""
+                WITH d AS (
+                    INSERT INTO discovery (public_id, title, established_at)
+                    SELECT 'walkDisc' || lpad(i::text, 4, '0'), '散歩の発見 ' || i,
+                           timestamptz '2026-05-01 00:00+09' + make_interval(days => i)
+                      FROM generate_series(1, 12) AS i
+                    RETURNING id, public_id
+                ), o AS (
+                    INSERT INTO discovery_origin (discovery_id, kind, conversation_id, decision_id)
+                    SELECT d.id, 'CONVERSATION', c.id, :decision FROM d, conversation c WHERE c.public_id = :c
+                )
+                INSERT INTO discovery_place (discovery_id, place_id, role, created_decision_id)
+                SELECT d.id, p.id, 'EXPERIENCE', :decision FROM d, place p
+                 WHERE p.public_id = :p AND d.public_id <> 'walkDisc0012'
+                """).param("decision", decision).param("c", sid("conv:walk")).param("p", sid("place:yamashita")).update();
+        var discoveries = map(conversation("conv:walk").get("discoveries"));
+        // 関わる場所のない1件（カードにできない）は数えない。散歩の Discovery と11件で12件
+        assertThat(discoveries).containsEntry("totalCount", 12);
+        assertThat(list(discoveries.get("items"))).extracting(d -> (Object) d.get("id"))
+            .containsExactly("walkDisc0011", "walkDisc0010", "walkDisc0009", "walkDisc0008", "walkDisc0007",
+                "walkDisc0006", "walkDisc0005", "walkDisc0004", "walkDisc0003", "walkDisc0002");
+    }
+
     private Map<String, Object> walkAnswer() {
         var answered = list(map(conversation("conv:walk").get("questions")).get("answered"));
         return map(answered.get(0).get("answer"));

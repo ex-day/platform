@@ -204,7 +204,7 @@ public class ConversationQueries {
         """;
 
     private static final String FIND_FINDING_VERSIONS = """
-        SELECT finding_id, version, content FROM finding_version WHERE finding_id IN (:ids)
+        SELECT finding_id, version, content FROM finding_version WHERE (finding_id, version) IN (:pairs)
         """;
 
     private static final String FIND_VISIBLE_QUESTIONS = """
@@ -252,10 +252,12 @@ public class ConversationQueries {
         SELECT DISTINCT o.discovery_id FROM discovery_origin o WHERE o.conversation_id = :conversationId
         """;
 
+    // カードにできる Discovery：公開で、関わる場所がある（DiscoveryCards の出す位置の場所が1件以上になる条件）
     private static final String FIND_VISIBLE_DISCOVERIES = """
         SELECT d.id, d.public_id, d.title, d.summary
           FROM visible_discovery d
          WHERE d.id IN (:ids)
+           AND EXISTS (SELECT 1 FROM discovery_place dp WHERE dp.discovery_id = d.id AND dp.status = 'ACTIVE')
          ORDER BY d.established_at DESC, d.public_id COLLATE "C"
         """;
 
@@ -333,6 +335,9 @@ public class ConversationQueries {
     record IdRef(long id, String publicId) {}
 
     record OwnedRef(long id, String publicId, long conversationId, String conversationPublicId) {}
+
+    /** 回答として採用したわかってきたことの版（わかってきたことと版の番号の組）。 */
+    record FindingVersion(long findingId, int version) {}
 
     record VersionRow(long findingId, int version, String content) {}
 
@@ -485,12 +490,13 @@ public class ConversationQueries {
             .list();
     }
 
-    public List<VersionRow> findFindingVersions(Collection<Long> findingIds) {
-        if (findingIds.isEmpty()) {
+    /** 回答として採用された（わかってきたこと, 版）の組の内容だけを、まとめて読む。 */
+    public List<VersionRow> findFindingVersions(Collection<FindingVersion> adopted) {
+        if (adopted.isEmpty()) {
             return List.of();
         }
         return jdbcClient.sql(FIND_FINDING_VERSIONS)
-            .param("ids", List.copyOf(findingIds))
+            .param("pairs", adopted.stream().map(v -> new Object[] {v.findingId(), v.version()}).toList())
             .query((rs, rowNum) -> new VersionRow(rs.getLong("finding_id"), rs.getInt("version"), rs.getString("content")))
             .list();
     }
