@@ -2,10 +2,8 @@ package io.github.exday.api.discovery;
 
 import io.github.exday.api.context.EvaluationContextProvider;
 import io.github.exday.api.discovery.DiscoveryDetailQueries.DiscoveryRow;
-import io.github.exday.api.discovery.DiscoveryDetailQueries.FindingRow;
 import io.github.exday.api.discovery.DiscoveryDetailQueries.PlaceRow;
 import io.github.exday.api.discovery.DiscoveryDetailQueries.ValueRow;
-import io.github.exday.api.generated.model.BackedTheoryFinding;
 import io.github.exday.api.generated.model.ConditionDescription;
 import io.github.exday.api.generated.model.ConversationCardPage;
 import io.github.exday.api.generated.model.DiscoveryCapabilities;
@@ -26,16 +24,14 @@ import io.github.exday.api.generated.model.Season;
 import io.github.exday.api.generated.model.SpatialType;
 import io.github.exday.api.card.conversation.ConversationCards;
 import io.github.exday.api.card.discovery.DiscoveryCards;
+import io.github.exday.api.card.finding.FindingCards;
 import io.github.exday.api.geometry.GeoJsonGeometries;
 import io.github.exday.api.card.project.ProjectCards;
-import io.github.exday.api.generated.model.UnbackedTheoryFinding;
-import io.github.exday.api.generated.model.UnbackedTheoryFindingReactions;
-import io.github.exday.api.generated.model.ValueFinding;
-import io.github.exday.api.generated.model.ValueFindingReactions;
 import io.github.exday.api.generated.model.ValueItem;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -54,13 +50,15 @@ public class DiscoveryDetailAssembler {
     private final DiscoveryDetailQueries queries;
     private final ConversationCards conversationCards;
     private final DiscoveryCards discoveryCards;
+    private final FindingCards findingCards;
     private final EvaluationContextProvider contextProvider;
 
     public DiscoveryDetailAssembler(DiscoveryDetailQueries queries, ConversationCards conversationCards,
-            DiscoveryCards discoveryCards, EvaluationContextProvider contextProvider) {
+            DiscoveryCards discoveryCards, FindingCards findingCards, EvaluationContextProvider contextProvider) {
         this.queries = queries;
         this.conversationCards = conversationCards;
         this.discoveryCards = discoveryCards;
+        this.findingCards = findingCards;
         this.contextProvider = contextProvider;
     }
 
@@ -105,7 +103,7 @@ public class DiscoveryDetailAssembler {
                 .agree(reactionCounts.getOrDefault("AGREE", 0))
                 .wantToGo(reactionCounts.getOrDefault("WANT_TO_GO", 0)))
             .places(placeRows.stream().map(row -> toPlaceItem(row, displayIds.contains(row.publicId()))).toList())
-            .findings(queries.findFindings(discovery.id()).stream().map(DiscoveryDetailAssembler::toFinding).toList())
+            .findings(findings(discovery.id()))
             .originConversations(originConversationIds.stream().map(cards::get).filter(java.util.Objects::nonNull).toList())
             .startedConversations(new ConversationCardPage()
                 .items(startedConversationIds.stream().map(cards::get).filter(java.util.Objects::nonNull).toList())
@@ -225,31 +223,10 @@ public class DiscoveryDetailAssembler {
                 : DiscoveryOrigin.EstablishedByEnum.HUMAN);
     }
 
-    /** わかってきたことの3つの形（価値・裏付けのない説・裏付けのある説）。 */
-    static FindingItem toFinding(FindingRow row) {
-        if ("VALUE".equals(row.kind())) {
-            return new ValueFinding()
-                .id(row.publicId())
-                .kind(ValueFinding.KindEnum.VALUE)
-                .text(row.content())
-                .unconfirmed(row.unconfirmed())
-                .reactions(new ValueFindingReactions().agree(row.agree()).wantToGo(row.wantToGo()));
-        }
-        if (row.backed()) {
-            return new BackedTheoryFinding()
-                .id(row.publicId())
-                .kind(BackedTheoryFinding.KindEnum.THEORY)
-                .text(row.content())
-                .backing(BackedTheoryFinding.BackingEnum.BACKED)
-                .unconfirmed(row.unconfirmed());
-        }
-        return new UnbackedTheoryFinding()
-            .id(row.publicId())
-            .kind(UnbackedTheoryFinding.KindEnum.THEORY)
-            .text(row.content())
-            .backing(UnbackedTheoryFinding.BackingEnum.UNBACKED)
-            .unconfirmed(row.unconfirmed())
-            .reactions(new UnbackedTheoryFindingReactions().maybe(row.maybe()));
+    private List<FindingItem> findings(long discoveryId) {
+        var ids = queries.findFindingIds(discoveryId);
+        var cards = findingCards.cards(ids);
+        return ids.stream().map(cards::get).filter(Objects::nonNull).toList();
     }
 
     private DiscoveryRelations toRelations(long discoveryId) {

@@ -1,5 +1,6 @@
 package io.github.exday.api;
 
+import io.github.exday.api.conversation.ConversationNotFoundException;
 import io.github.exday.api.discovery.DiscoveryNotFoundException;
 import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.generated.model.SectionKey;
@@ -19,7 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 /**
  * すべてのエンドポイントのエラーを RFC 9457（problem+json）で返す。
  *
- * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery、ない場所は仕様に合わせて 404。
+ * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery・会話、ない場所は仕様に合わせて 404。
  */
 @RestControllerAdvice
 public class ApiErrors extends ResponseEntityExceptionHandler {
@@ -39,6 +40,12 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PlaceNotFoundException.class)
     public ProblemDetail placeNotFound(PlaceNotFoundException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "場所がない。");
+    }
+
+    @ExceptionHandler(ConversationNotFoundException.class)
+    public ProblemDetail conversationNotFound(ConversationNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
+            "会話がない、または見られない（非公開）。またはカーソルがこの会話のものでない。");
     }
 
     @Override

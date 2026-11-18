@@ -228,12 +228,14 @@ INSERT INTO claim (post_id, content, analysis_version) VALUES
     (pg_temp.pid('walk-3'), '汽車道は線路の跡を歩ける', 'sample-analysis-1');
 -- Finding と最初の版は同じ文で作る（finding.current_version の外部キーは遅延の制約）
 WITH f AS (
-    INSERT INTO finding (public_id, conversation_id, kind, analysis_version)
-    VALUES (pg_temp.sid('finding:walk-value'), pg_temp.cid('walk'), 'VALUE', 'sample-analysis-1')
+    INSERT INTO finding (public_id, conversation_id, kind, analysis_version, created_at, updated_at)
+    VALUES (pg_temp.sid('finding:walk-value'), pg_temp.cid('walk'), 'VALUE', 'sample-analysis-1',
+            '2026-04-06 03:00+09', '2026-04-06 03:00+09')
     RETURNING id
 )
-INSERT INTO finding_version (finding_id, version, content, unconfirmed, analysis_version)
-SELECT id, 1, '桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる', false, 'sample-analysis-1' FROM f;
+INSERT INTO finding_version (finding_id, version, content, unconfirmed, analysis_version, created_at)
+SELECT id, 1, '桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる', false, 'sample-analysis-1',
+       timestamptz '2026-04-06 03:00+09' FROM f;
 INSERT INTO finding_version_claim (finding_id, version, claim_id)
 SELECT f.id, 1, c.id FROM finding f, claim c
  WHERE f.public_id = pg_temp.sid('finding:walk-value') AND c.post_id IN (pg_temp.pid('walk-1'), pg_temp.pid('walk-3'));

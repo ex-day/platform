@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import io.github.exday.api.card.project.ProjectCards;
+import io.github.exday.api.merge.MergeChains;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -30,27 +31,8 @@ public class DiscoveryDetailQueries {
          WHERE d.public_id = :publicId
         """;
 
-    // 統合先をたどる（循環は統合の処理で作らないが、念のため通った Discovery を2度通らない）。最後の統合先を返す。
-    // 最後の Discovery からさらに統合の関係が出ている（循環している、または深さの上限で止まった）ときは、
-    // 最後の統合先を決められないので has_next を true にし、統合先を返さない（F12 で循環を作らないようにする）。
-    private static final String FIND_FINAL_MERGE_TARGET = """
-        WITH RECURSIVE chain (id, depth, path) AS (
-            SELECT CAST(:discoveryId AS bigint), 0, ARRAY[CAST(:discoveryId AS bigint)]
-            UNION ALL
-            SELECT r.to_discovery_id, c.depth + 1, c.path || r.to_discovery_id
-              FROM chain c
-              JOIN discovery_relation r
-                ON r.from_discovery_id = c.id AND r.kind = :merged AND r.status = :active
-             WHERE NOT r.to_discovery_id = ANY (c.path)
-               AND c.depth < :maxDepth
-        )
-        SELECT c.depth, v.public_id, v.title,
-               EXISTS (SELECT 1 FROM discovery_relation n
-                        WHERE n.from_discovery_id = c.id AND n.kind = :merged AND n.status = :active) AS has_next
-          FROM chain c
-          LEFT JOIN visible_discovery v ON v.id = c.id
-         ORDER BY c.depth DESC
-         LIMIT 1
+    private static final String FIND_VISIBLE_DISCOVERY = """
+        SELECT public_id, title FROM visible_discovery WHERE id = :id
         """;
 
     private static final String FIND_PLACES = """
@@ -98,22 +80,16 @@ public class DiscoveryDetailQueries {
         """;
 
     // わかってきたこと：もとになった会話と、この発見から始まった会話の、有効な Finding の今の版。公開の会話のものだけ
-    private static final String FIND_FINDINGS = """
-        SELECT f.public_id, f.kind, v.content, v.backed, v.unconfirmed,
-               count(r.id) FILTER (WHERE r.kind = :agree) AS agree,
-               count(r.id) FILTER (WHERE r.kind = :wantToGo) AS want_to_go,
-               count(r.id) FILTER (WHERE r.kind = :maybe) AS maybe
+    // この Discovery に関わるわかってきたこと：由来の会話と、この Discovery から始まった会話の、有効なもの。中身は FindingCards
+    private static final String FIND_FINDING_IDS = """
+        SELECT f.id
           FROM visible_finding f
-          JOIN finding_version v ON v.finding_id = f.id AND v.version = f.current_version
-          LEFT JOIN reaction r ON r.finding_id = f.id
          WHERE f.status = :active
            AND (f.conversation_id IN (SELECT o.conversation_id FROM discovery_origin o
                                        WHERE o.discovery_id = :discoveryId AND o.conversation_id IS NOT NULL)
                 OR f.conversation_id IN (SELECT c.id FROM conversation c WHERE c.entry_discovery_id = :discoveryId))
-         GROUP BY f.id, f.public_id, f.kind, v.content, v.backed, v.unconfirmed, f.created_at
          ORDER BY f.created_at, f.id
         """;
-
     private static final String FIND_ORIGIN_CONVERSATION_IDS = """
         SELECT c.id
           FROM visible_conversation c
@@ -199,9 +175,6 @@ public class DiscoveryDetailQueries {
 
     record OriginRow(String kind, Long conversationId, String method) {}
 
-    record FindingRow(String publicId, String kind, String content, boolean backed, boolean unconfirmed,
-            int agree, int wantToGo, int maybe) {}
-
 
     record RelationRow(String kind, boolean outgoing, long otherId, String otherPublicId, String otherTitle,
             String otherSummary) {}
@@ -209,18 +182,17 @@ public class DiscoveryDetailQueries {
     /** 一覧の区画の最大件数（OpenAPI の maxItems。固定）。 */
     static final int LIST_LIMIT = 10;
 
-    /** 統合をたどる深さの上限。 */
-    private static final int MAX_MERGE_DEPTH = 20;
-
     /** GeoJSON の座標の小数の桁数（7桁でおよそ 1cm）。 */
     private static final int GEOJSON_DECIMALS = 7;
 
     private static final String ACTIVE = "ACTIVE";
 
     private final JdbcClient jdbcClient;
+    private final MergeChains mergeChains;
 
-    public DiscoveryDetailQueries(JdbcClient jdbcClient) {
+    public DiscoveryDetailQueries(JdbcClient jdbcClient, MergeChains mergeChains) {
         this.jdbcClient = jdbcClient;
+        this.mergeChains = mergeChains;
     }
 
     public Optional<DiscoveryRow> findDiscovery(String publicId) {
@@ -231,15 +203,18 @@ public class DiscoveryDetailQueries {
             .optional();
     }
 
+    /** 最後の統合先（決まりは {@link MergeChains}）。統合先が見えなければ、識別子と名前を返さない。 */
     public MergeRow findFinalMergeTarget(long discoveryId) {
-        return jdbcClient.sql(FIND_FINAL_MERGE_TARGET)
-            .param("discoveryId", discoveryId)
-            .param("merged", "MERGED")
-            .param("active", ACTIVE)
-            .param("maxDepth", MAX_MERGE_DEPTH)
-            .query((rs, rowNum) -> new MergeRow(
-                rs.getInt("depth"), rs.getString("public_id"), rs.getString("title"), rs.getBoolean("has_next")))
-            .single();
+        var resolution = mergeChains.discoveries(List.of(discoveryId)).get(discoveryId);
+        if (resolution.depth() == 0) {
+            return new MergeRow(0, null, null, false);
+        }
+        var target = jdbcClient.sql(FIND_VISIBLE_DISCOVERY)
+            .param("id", resolution.finalId())
+            .query((rs, rowNum) -> new String[] {rs.getString("public_id"), rs.getString("title")})
+            .optional();
+        return new MergeRow(resolution.depth(), target.map(t -> t[0]).orElse(null), target.map(t -> t[1]).orElse(null),
+            !resolution.resolved());
     }
 
     /** 関わる場所を Discovery ごとにまとめて返す（順番、識別子の順）。 */
@@ -295,17 +270,11 @@ public class DiscoveryDetailQueries {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
-    public List<FindingRow> findFindings(long discoveryId) {
-        return jdbcClient.sql(FIND_FINDINGS)
+    public List<Long> findFindingIds(long discoveryId) {
+        return jdbcClient.sql(FIND_FINDING_IDS)
             .param("discoveryId", discoveryId)
             .param("active", ACTIVE)
-            .param("agree", "AGREE")
-            .param("wantToGo", "WANT_TO_GO")
-            .param("maybe", "MAYBE")
-            .query((rs, rowNum) -> new FindingRow(
-                rs.getString("public_id"), rs.getString("kind"), rs.getString("content"),
-                rs.getBoolean("backed"), rs.getBoolean("unconfirmed"),
-                rs.getInt("agree"), rs.getInt("want_to_go"), rs.getInt("maybe")))
+            .query(Long.class)
             .list();
     }
 

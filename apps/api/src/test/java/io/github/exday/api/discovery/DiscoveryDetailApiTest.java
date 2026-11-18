@@ -64,7 +64,12 @@ class DiscoveryDetailApiTest extends DiscoveryDetailTestSupport {
         assertThat(findings).hasSize(1);
         assertThat(findings.get(0)).containsEntry("kind", "value").doesNotContainKey("backing")
             .containsEntry("unconfirmed", false)
+            .containsEntry("version", 1)
             .containsEntry("reactions", Map.of("agree", 1, "wantToGo", 0));
+        // できた時点と今の版になった時点（版が1なら同じ。S14 と共用の FindingItem）
+        assertThat(java.time.OffsetDateTime.parse((String) findings.get(0).get("createdAt")).toInstant())
+            .isEqualTo(java.time.OffsetDateTime.parse("2026-04-06T03:00:00+09:00").toInstant());
+        assertThat(findings.get(0).get("updatedAt")).isEqualTo(findings.get(0).get("createdAt"));
 
         // もとになった会話：非公開の返信は数えない（公開の Post 3件 − 最初の Post）
         var origin = (List<Map<String, Object>>) body.get("originConversations");
