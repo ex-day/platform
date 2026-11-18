@@ -24,6 +24,7 @@ public class ProjectListQueries {
          LIMIT :limit
         """;
 
+    // 条件はつなげて WHERE に足す。どれも先頭に空白を置き、前の条件の名前とくっつかないようにする
     private static final String BY_TYPE = " AND pr.type = :type";
     private static final String BY_CREATOR = " AND pr.creator_kind = :creatorKind";
     private static final String AFTER_KEY = """
@@ -48,7 +49,7 @@ public class ProjectListQueries {
     /** 条件に合う公開の企画を、キーより後から最大 {@code limit} 件。{@code type}・{@code creatorKind} は DB の値か null。 */
     public List<ProjectRow> findProjects(String type, String creatorKind, Key after, int limit) {
         var conditions = (type == null ? "" : BY_TYPE) + (creatorKind == null ? "" : BY_CREATOR)
-            + (after == null ? "" : AFTER_KEY);
+            + (after == null ? "" : " " + AFTER_KEY);
         var spec = jdbcClient.sql(FIND_PROJECTS.formatted(conditions)).param("limit", limit);
         if (type != null) {
             spec = spec.param("type", type);
