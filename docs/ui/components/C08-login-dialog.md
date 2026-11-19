@@ -26,5 +26,5 @@
 - ダイアログを閉じ、呼び出し元へ戻る
 
 ## 検討事項
-- 利用する認証サービスおよび認証プロバイダは別途検討する
+- 認証サービスは Amazon Cognito（Essentials）、ログイン方法は「Google で続ける」「メールで続ける」に決定済み（[DEC-0016](../../decisions/DEC-0016-auth-cognito-and-user-identity.md)）。Google は ex-day のボタンから Cognito の画面を飛ばして直接送り、メールは Cognito のログインの画面（managed login）へ送る。表示項目の詳しい定義は、認証を作る段で書き直す
 - 認証後の遷移・処理は呼び出し元の機能に従う
