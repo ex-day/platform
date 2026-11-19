@@ -43,13 +43,6 @@ jobs:
       - name: npm run build
         run: npm run build
 
-      # ブラウザテスト（e2e）。API の代わりに e2e/mock-api.mjs を使い、build 済みの画面を next start で動かす
-      - name: Playwright のブラウザを入れる
-        run: npx playwright install --with-deps chromium
-
-      - name: npm run test:e2e
-        run: npm run test:e2e
-
       - name: API の型が openapi.yaml とずれていないか確かめる
         run: |
           npm run gen:api
@@ -57,3 +50,35 @@ jobs:
             echo "::error file=apps/web/src/lib/api/schema.d.ts::src/lib/api/schema.d.ts が docs/api/openapi.yaml とずれています。apps/web で npm run gen:api を実行し、作り直した schema.d.ts をコミットしてください。"
             exit 1
           fi
+
+  # ブラウザテスト（e2e）。API の代わりに e2e/mock-api.mjs を使い、build した画面を next start で動かす。
+  # Playwright 1.56 は ubuntu 26.04 の Chromium に対応していないため、この job だけ ubuntu-24.04 で動かす
+  e2e:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: apps/web/.nvmrc
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      - name: npm run build
+        run: npm run build
+
+      - name: Playwright のブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: npm run test:e2e
+        run: npm run test:e2e

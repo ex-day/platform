@@ -84,4 +84,4 @@ npx playwright install chromium   # 初回だけ
 npm run test:e2e
 ```
 
-CI（`.github/workflows/web-build.yml`）でも build のあとに実行する。
+CI（`.github/workflows/web-build.yml` の `e2e` の job。Playwright 1.56 が ubuntu 26.04 に対応していないため ubuntu-24.04 で動かす）でも実行する。
