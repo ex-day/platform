@@ -1,6 +1,6 @@
 // see docs/ui/screens/S01-top.md, docs/ui/wireframe/screens/S01/*.png
 //
-// S01(Discovery提案)。API のデータで表示する(Issue #113)。セクション(C11)はブラウザ側で取る。
+// S01(TOP)。API のデータで表示する(Issue #113、#135)。枠(C11)はブラウザ側で GET /top から取る。
 // - 「もっと見る」(S02への移動)とヘッダーの検索は、今回は外す(#89)。
 // - モックのデータの S01(比較用バー付き)は /mock に残した。
 import { Header } from "@/components/C01-header/Header";

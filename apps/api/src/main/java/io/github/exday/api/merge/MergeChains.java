@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
- * 統合をたどって、最後の統合先を決める（Discovery・わかってきたこと・問い）。どの画面でも同じ決まりにする。
+ * 統合をたどって、最後の統合先を決める（Discovery・わかってきたこと・問い・場所）。どの画面でも同じ決まりにする。
  *
  * <p>決まり：統合の関係を {@link #MAX_DEPTH} 段までたどる。すでに通ったものには戻らない。
  * 最後のものからさらに統合の関係が出ている（循環している、または深さの上限で止まった）ときは、
@@ -83,6 +83,24 @@ public class MergeChains {
          ORDER BY c.start_id, c.depth DESC
         """;
 
+    private static final String PLACE = """
+        WITH RECURSIVE chain (start_id, id, depth, path) AS (
+            SELECT p.id, p.id, 0, ARRAY[p.id] FROM place p WHERE p.id IN (:ids)
+            UNION ALL
+            SELECT c.start_id, p.merged_into_place_id, c.depth + 1, c.path || p.merged_into_place_id
+              FROM chain c
+              JOIN place p ON p.id = c.id
+             WHERE p.merged_into_place_id IS NOT NULL
+               AND NOT p.merged_into_place_id = ANY (c.path)
+               AND c.depth < :maxDepth
+        )
+        SELECT DISTINCT ON (c.start_id) c.start_id, c.id AS final_id, c.depth,
+               p.merged_into_place_id IS NOT NULL AS has_next
+          FROM chain c
+          JOIN place p ON p.id = c.id
+         ORDER BY c.start_id, c.depth DESC
+        """;
+
     private final JdbcClient jdbcClient;
 
     public MergeChains(JdbcClient jdbcClient) {
@@ -102,6 +120,11 @@ public class MergeChains {
     /** 問いの統合（merged_into_question_id）をたどる。 */
     public Map<Long, Resolution> questions(Collection<Long> ids) {
         return resolve(QUESTION, ids);
+    }
+
+    /** 場所の統合（merged_into_place_id）をたどる。 */
+    public Map<Long, Resolution> places(Collection<Long> ids) {
+        return resolve(PLACE, ids);
     }
 
     private Map<Long, Resolution> resolve(String sql, Collection<Long> ids) {

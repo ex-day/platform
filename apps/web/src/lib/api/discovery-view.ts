@@ -55,15 +55,19 @@ export function toDiscoverySummary(summary: Schemas["DiscoverySummary"]): Relate
   };
 }
 
-/** S01 のカード(v0.1 の DiscoveryCard)。S01 の段で DiscoverySummary にそろえる */
-export function toRelatedSummary(card: Schemas["DiscoveryCard"]): RelatedDiscoverySummary {
+/** 見本の表示(運営の登録を由来に持つ Discovery。どの枠に出ても付ける。S01) */
+export const EXAMPLE_LABEL = "ex-day の発見（見本）";
+
+/**
+ * S01 の TOP の Discovery のカード(TopDiscoveryCard)を、カード(C03)の props にする。
+ * 場所を見出しにする(起点にいちばん近い場所)。value を渡せば、いま・この時期の価値の説明を出す
+ */
+export function toTopDiscoveryCard(card: Schemas["TopDiscoveryCard"], value?: string): RelatedDiscoverySummary {
   return {
-    id: card.id,
-    title: card.title,
-    subject: card.subject,
-    value: card.value,
-    picture: card.picture?.alt,
-    pictureUrl: card.picture?.url,
-    place: { text: card.place.name },
+    id: card.discovery.id,
+    title: card.discovery.title,
+    subject: card.isExample ? EXAMPLE_LABEL : "",
+    value: value ?? card.discovery.summary,
+    place: { text: card.nearestPlace.name },
   };
 }

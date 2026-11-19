@@ -1,5 +1,6 @@
 package io.github.exday.api.projectlist;
 
+import io.github.exday.api.card.project.ProjectListCards.ProjectRow;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -13,10 +14,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ProjectListQueries {
 
-    // 項目の数は、指す先が見えない項目も位置として数える（S15 の並びと同じ）
+    // 項目の数・会話の数は企画カード（ProjectListCards）が数える
     private static final String FIND_PROJECTS = """
-        SELECT pr.id, pr.public_id, pr.title, pr.call_text, pr.type, pr.creator_kind, up.nickname,
-               (SELECT count(*) FROM project_item pi WHERE pi.project_id = pr.id) AS item_count
+        SELECT pr.id, pr.public_id, pr.title, pr.call_text, pr.type, pr.creator_kind, up.nickname
           FROM visible_project pr
           JOIN user_profile up ON up.user_id = pr.creator_user_id
          WHERE true %s
@@ -34,9 +34,6 @@ public class ProjectListQueries {
     private static final String FIND_KEY = """
         SELECT pr.created_at FROM project pr WHERE pr.public_id = :publicId
         """;
-
-    record ProjectRow(long id, String publicId, String title, String callText, String type, String creatorKind,
-            String creatorName, int itemCount) {}
 
     record Key(OffsetDateTime at, String publicId) {}
 
@@ -62,7 +59,7 @@ public class ProjectListQueries {
         }
         return spec.query((rs, rowNum) -> new ProjectRow(rs.getLong("id"), rs.getString("public_id"),
                 rs.getString("title"), rs.getString("call_text"), rs.getString("type"), rs.getString("creator_kind"),
-                rs.getString("nickname"), rs.getInt("item_count")))
+                rs.getString("nickname")))
             .list();
     }
 

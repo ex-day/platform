@@ -2,7 +2,7 @@
 
 ex-day の API サーバー（Spring Boot、Java 25、Gradle Kotlin DSL）の土台。Issue [ex-day/platform#99](https://github.com/ex-day/platform/issues/99) で作った。
 
-S01 のセクション一覧と、各セクションの推薦カード、S03 の Discovery 詳細とみんなの声を返す API を実装している。
+画面ごとの取得用の API（S01 の TOP、S03 の Discovery のページ、S13 の場所のページ、S14 の会話のページ、S15 の企画のページ、S17 の企画の一覧）を実装している。
 
 ## 使う技術
 
@@ -115,18 +115,16 @@ API のインターフェース（Spring の interface）と、モデル（DTO�
 
 `io.github.exday.api` を仮に使っている。別の案があれば PR で提案してほしい。
 
-## セクションの推薦カード
+## TOP（S01）
 
-`GET /api/v1/discovery-sections/{sectionKey}/discoveries?limit=8` でカードを取得する。
-`sectionKey` は `nearby` または `season`、`limit` は 1〜20（省略時は8）。
-未知の key は404、不正な limit は400を `application/problem+json` で返す。
+`GET /api/v1/top?from={場所の識別子}` で TOP の全部の枠を返す（約束事は OpenAPI の `getTop`、決まりは `docs/ui/screens/S01-top.md` の「取得用 API で返すもの（案）」）。実装は `top` パッケージ。
 
-- `nearby`：設定の場所から `exday.recommendation.nearby-radius-meters` メートル以内（既定3000、正の値）の代表の場所を持ち、季節が一致・通年・季節条件なしの Value。
-- `season`：今の季節と一致する Value。距離の上限は設けない。
-- 成立済み・公開中の Discovery だけが対象。同じ Discovery の異なる Value は別カードとして返す。
-- 仮の評価として季節一致を優先し、その中で代表の場所への距離順に並べてから limit を適用する。同点は公開ID順で固定する。評価は `DiscoveryRecommendation` に分離している。
+- 起点は場所の識別子で受け、座標は受けない。`from` を省くと既定の起点（`exday.top.default-origin-place-id`、環境変数 `EXDAY_TOP_DEFAULT_ORIGIN_PLACE_ID`。既定はサンプルデータの桜木町駅）。始める地域の外かどうかは `exday.top.start-area-place-id`（`EXDAY_TOP_START_AREA_PLACE_ID`。既定は横浜市）で決める。ない場所は 404、形が合わなければ 400。
+- 「近く」は起点の場所の形で分ける（POINT・ROUTE は形から直線 3km、AREA は区域と交わるもの）。近くの場所からは、起点自身と、起点を含む上位の場所（関係を親へたどったもの、形が起点を覆う区域）を除く。
+- 枠は優先の順に作り、全体の予算 50件を枠の順に配る。1つの Discovery・場所は先に出た枠にだけ出す。
+- 「今」の季節は `exday.dev.clock.now` で固定できる（テストでは春・秋に固定する）。
 
-DB を使う API テストは `db/Dockerfile` とマイグレーション・サンプルデータを使い、春／秋、距離制限、公開状態、カードの内容とエラー応答を検証する。
+DB を使う API テスト（`TopApiTest`・`TopAutumnApiTest`・`TopOutsideStartAreaApiTest`）は、地点・区域・経路の起点、上位の場所の除外、見本の表示と重ならないこと、声のある発見の数、始める地域の外のお知らせ、統合された起点、エラー応答を確かめる。
 
 ## Discovery 詳細
 
