@@ -4,6 +4,43 @@
  */
 
 export interface paths {
+    "/top": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * S01（TOP）の全部の枠を取得する（F01（TOP の枠））
+         * @description TOP の枠を1回で返す（画面定義 docs/ui/screens/S01-top.md「取得用 API で返すもの（案）」）。
+         *
+         *     - **起点**：`from` の場所。省くと既定の起点（始める地域の中の場所。アプリの設定）。座標は受けない（DEC-0022 決定5）。
+         *       統合された場所なら統合先をたどって起点にする。ない場所なら 404。起点の位置は、経路なら始点、それ以外は面の上の1点
+         *     - **近く**：起点の位置から直線で 3km 以内（暫定。面・経路はいちばん近い点までの距離）。TOP の枠の中身を選ぶための決まりで、
+         *       小さな地図（S12・F06）の条件とは別。**近くの場所**（このあたりの数字・声を待っている）からは、起点の位置を面に含む場所
+         *       （起点が中にいる区・市・県・エリア）を除く（距離が0になり、「近くの場所」として並ぶのを避ける）
+         *     - **見えるもの**：公開のものだけ（DB の visible_*）。統合された側の Discovery は出さない
+         *     - **枠**：`sections` に、中身のある枠だけを F01 の優先の順で返す（お知らせ → いま・この時期 → 近くの発見 → 企画 → 番付 →
+         *       見本 → 探しています → 声を待っている）。画面は並べ替えない。同じ `kind` の枠は1回だけ。中身のない枠は返さない
+         *     - **重ねない**：1つの Discovery・場所は1つの枠にだけ出す（先の枠に置く）
+         *     - **件数**：枠の順に、各枠へ「枠の上限」と「全体の予算 50 の残り」の小さいほうを配る。配られた数を超えて当てはまるものがあれば
+         *       `hasMore` を true にする（全体の予算で切られた枠も含む）。1件も配られない枠は返さない。全体の数は返さない
+         *     - **並び**：枠ごとの意味に合った全順序（各枠の説明）。同じ順位は識別子（文字コード）の順。日付などを種にした固定の並びは約束しない。
+         *       詳細・S12 から戻ったときの状態は、Web が取得済みの応答とスクロール位置を保って戻す（DEC-0022 決定4）
+         *     - **見本**：運営の登録を由来に持つ Discovery も、条件に合えばどの枠にも出し、`isExample` で見本と分かるようにする
+         *     - **読み取りの一貫性**：1つの読み取り専用のトランザクション（REPEATABLE READ）の中で読む（apps/api/AGENTS.md）
+         *     - **返さないもの**：小さな地図の帯の形（F06 のあと）、ログインしている人の興味のある地域（認証 #75 のあと）、許可済みの現在地からの起点
+         */
+        get: operations["getTop"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/discovery-sections": {
         parameters: {
             query?: never;
@@ -12,8 +49,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * S01 に出すセクションの一覧を取得する（F01（discovery-sections））
-         * @description どのセクションをどの順で出すかは API が決める。中身（カード）は含めず、セクションごとに
+         * （v0.1。/top に置き換える）S01 に出すセクションの一覧を取得する
+         * @deprecated
+         * @description **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
+         *
+         *     どのセクションをどの順で出すかは API が決める。中身（カード）は含めず、セクションごとに
          *     /discovery-sections/{sectionKey}/discoveries で取る。
          *
          *     - 今の提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
@@ -39,8 +79,11 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * S01 の1つのセクションのカード（C05（discovery-section）の中身）を取得する
-         * @description セクションは推薦の候補を絞り込む条件であり、並び順ではない。どのセクションも、候補を推薦順（推薦度の高い順）で返す。
+         * （v0.1。/top に置き換える）S01 の1つのセクションのカードを取得する
+         * @deprecated
+         * @description **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
+         *
+         *     セクションは推薦の候補を絞り込む条件であり、並び順ではない。どのセクションも、候補を推薦順（推薦度の高い順）で返す。
          *
          *     - nearby：いる場所の周辺にある Discovery の、推薦する Value（季節が一致、または通年・条件なし）を候補とする。
          *       季節違いの Value は候補にしない。
@@ -816,8 +859,8 @@ export interface components {
             related: components["schemas"]["DiscoverySummary"][];
         };
         /**
-         * @description Discovery のカード（C03）に出す要約。S03 の関係する Discovery、S13 のここでの発見、S14 のこの会話から生まれた発見で使う。
-         *     S01 の DiscoveryCard（v0.1 の形）は、S01 の段でこの形にそろえる
+         * @description Discovery のカード（C03）に出す要約。S01 の TOP の枠（TopDiscoveryCard の中）、S03 の関係する Discovery、S13 のここでの発見、
+         *     S14 のこの会話から生まれた発見で使う
          */
         DiscoverySummary: {
             id: components["schemas"]["PublicId"];
@@ -1420,6 +1463,211 @@ export interface components {
              */
             matchedBy: "candidate" | "area";
         };
+        /** @description TOP（S01）の全部の枠。起点・小さな地図・このあたりの数字は枠の並びの外（画面の決まった場所に出す） */
+        TopPage: {
+            /**
+             * Format: date-time
+             * @description 枠を選ぶのに使った「今」（Asia/Tokyo）
+             */
+            now: string;
+            season: components["schemas"]["CurrentSeason"];
+            origin: components["schemas"]["TopOrigin"];
+            smallMap: components["schemas"]["TopSmallMap"];
+            areaCounts: components["schemas"]["TopAreaCounts"];
+            /** @description 中身のある枠だけを F01 の優先の順で。同じ kind の枠は1回だけ（重ならないことは説明で約束する）。items の合計は50件以下 */
+            sections: components["schemas"]["TopSection"][];
+        };
+        /** @description 起点。画面は「[起点]から、往復2時間で寄れるところ」など、起点の名前を必ず添える */
+        TopOrigin: {
+            place: components["schemas"]["PlaceRef"];
+            /**
+             * @description requested は `from` で受けた場所（統合先をたどったもの）、default は既定の起点（始める地域の中の場所。アプリの設定）
+             * @enum {string}
+             */
+            source: "requested" | "default";
+            /** @description 起点の行政の祖先に始める地域の場所がなければ true（始める地域の外のお知らせを出す） */
+            outsideStartArea: boolean;
+            /**
+             * @description 最も近い行政の祖先（区、なければ市）。いま・この時期の「同じ行政の地域」の段に使う。たどれなければ返さない。
+             *     たどり方：場所どうしの関係（ADMINISTRATIVE・CONTAINS）を親へたどり、種類が「市区町村」の近い親。
+             *     たどれる親がなければ、起点の位置を面に含む「市区町村」の場所のうち面の小さいもの
+             */
+            adminArea?: components["schemas"]["PlaceRef"];
+        };
+        /**
+         * @description 小さな地図の条件。押すと S12 を `from`＝起点、`t`＝minutes、`to` を省いて（往復）開く（S01「小さな地図と S12 の条件」）。
+         *     帯の形（そこで何分過ごせるか）は F06 ができてから足す。そのときに、計算の起点の駅、計算できない状態、起点から駅までの移動を
+         *     含まないことなどの注意も足す
+         */
+        TopSmallMap: {
+            /** @description 使える時間（分）。TOP の既定は 120（S12 の範囲は 30〜480分・15分刻みの案） */
+            minutes: number;
+            /**
+             * @description 終点の条件。TOP の小さな地図は往復だけ（S12 で `to` を省く）
+             * @enum {string}
+             */
+            trip: "round_trip";
+        };
+        /**
+         * @description このあたりの数字（「このあたり：場所 [N]・声のある発見 [N]」）。どちらも近く（直線 3km 以内）で数える。
+         *     **声のある発見**：公開の Discovery のうち、由来に公開の会話（visible_conversation）または公開の Post（visible_post）に届くものを持つもの。
+         *     由来がいくつあっても1件。運営の登録だけを由来に持つものは数えない（運営の登録に加えて公開の会話・Post の由来も持つものは数える）。
+         *     非公開の会話・Post だけを由来に持つものは数えない。この定義は数字にだけ使い、枠の対象を狭めない
+         */
+        TopAreaCounts: {
+            /** @description 近くの場所（ACTIVE。起点の位置を面に含む場所を除く）の数。起点自身を含む */
+            placeCount: number;
+            /** @description 近くの場所を持つ声のある発見の数 */
+            voicedDiscoveryCount: number;
+        };
+        /**
+         * @description TOP の枠。`kind` で判別する
+         *     - outside_start_area：始める地域の外のお知らせ（起点が始める地域の外のときだけ）
+         *     - seasonal：いま・この時期
+         *     - nearby_discoveries：近くの発見
+         *     - projects：企画
+         *     - estimates：番付（推定）
+         *     - examples：ex-day の発見（見本）
+         *     - seeking：探しています
+         *     - awaiting_voices：声を待っている
+         */
+        TopSection: components["schemas"]["OutsideStartAreaSection"] | components["schemas"]["SeasonalSection"] | components["schemas"]["NearbyDiscoverySection"] | components["schemas"]["TopProjectSection"] | components["schemas"]["EstimateSection"] | components["schemas"]["ExampleSection"] | components["schemas"]["TopSeekingSection"] | components["schemas"]["AwaitingVoicesSection"];
+        /**
+         * @description TOP の Discovery のカード（C03）。場所を見出しにして出す（「小机城址：春は…」）。見出しは nearestPlace。
+         *     `isExample` が true なら、どの枠に出ても「ex-day の発見（見本）」と分かるように出す
+         */
+        TopDiscoveryCard: {
+            discovery: components["schemas"]["DiscoverySummary"];
+            /** @description この Discovery が関わる（関係が有効な）場所のうち、起点の位置にいちばん近い場所（同じ距離なら場所の識別子の順） */
+            nearestPlace: components["schemas"]["PlaceRef"];
+            /** @description 起点の位置から nearestPlace までの直線の距離（メートル、四捨五入）。面・経路はいちばん近い点まで */
+            distanceMeters: number;
+            /** @description 由来に運営の登録（OPERATOR）を持つ。見本の表示を付ける（品質や正しさの区別ではない） */
+            isExample: boolean;
+        };
+        /**
+         * @description 始める地域の外のお知らせ。画面は「このあたりはまだ発見が少ない」と書き、nearestDiscovery を寄り道の入口として出す（DEC-0022 決定3）。
+         *     nearestDiscovery は、公開の Discovery のうち起点にいちばん近いもの（同じ距離なら Discovery の識別子の順）。公開の Discovery がなければ枠を返さない
+         */
+        OutsideStartAreaSection: {
+            /** @enum {string} */
+            kind: "outside_start_area";
+            nearestDiscovery: components["schemas"]["TopDiscoveryCard"];
+        };
+        /**
+         * @description いま・この時期。季節の条件が「今」の季節に合う Value（通年は含めない）を持つ公開の Discovery。広げ方：
+         *     1. 近く（直線 3km 以内）：距離の順に、配られた数まで
+         *     2. 同じ行政の地域（origin.adminArea の中）：足りなければ、1 で出したものを除いて距離の順に補う。adminArea がなければ飛ばす
+         *     3. 全国：1・2 で1件もなければ、全国から距離の順に2件まで（画面は「今の時期ならこんな発見も」を出す）
+         *     並びは段の順、段の中は距離の順（同じ距離なら Discovery の識別子の順）
+         */
+        SeasonalSection: {
+            /** @enum {string} */
+            kind: "seasonal";
+            items: components["schemas"]["SeasonalDiscoveryCard"][];
+            hasMore: boolean;
+        };
+        SeasonalDiscoveryCard: {
+            card: components["schemas"]["TopDiscoveryCard"];
+            /** @description 今の季節に合う Value。複数あれば作った時点の古いもの（同じなら Value の識別子の順） */
+            value: components["schemas"]["TopSeasonalValue"];
+            /**
+             * @description どの段で見つけたか（近く／同じ行政の地域／全国）
+             * @enum {string}
+             */
+            scope: "nearby" | "admin_area" | "nationwide";
+        };
+        /** @description 今成立する価値（カードに添える短い説明） */
+        TopSeasonalValue: {
+            id: components["schemas"]["PublicId"];
+            description: string;
+        };
+        /** @description 近くの発見。近くの場所を持つ公開の Discovery（由来を問わない）。距離の順（同じ距離なら Discovery の識別子の順） */
+        NearbyDiscoverySection: {
+            /** @enum {string} */
+            kind: "nearby_discoveries";
+            items: components["schemas"]["TopDiscoveryCard"][];
+            hasMore: boolean;
+        };
+        /**
+         * @description 企画。公開の企画を、作った時点の新しい順（同じなら識別子の降順。S17 の new と同じ）。地域では絞らない（暫定）。
+         *     「もっと見る」は条件なしで S17。「こんな番付、作ってみませんか？」は画面が出す
+         */
+        TopProjectSection: {
+            /** @enum {string} */
+            kind: "projects";
+            items: components["schemas"]["ProjectListCard"][];
+            hasMore: boolean;
+        };
+        /**
+         * @description 番付（推定）。近くの場所の推定の値を、指標ごとにまとめる。指標は名前（metric）の順に2つまで、指標の中は値の大きい順に3件まで
+         *     （同じ値なら場所の識別子の順）。配る数は items の合計で数える。画面は「推定」と出どころ（method）を必ず添え、ex-day の認定に見せない
+         */
+        EstimateSection: {
+            /** @enum {string} */
+            kind: "estimates";
+            groups: components["schemas"]["EstimateGroup"][];
+            /** @description 出していない場所・指標があれば true */
+            hasMore: boolean;
+        };
+        EstimateGroup: {
+            /** @description PlaceEstimate の metric と同じ。グループごとに違う値 */
+            metric: string;
+            items: components["schemas"]["EstimatedPlace"][];
+        };
+        EstimatedPlace: {
+            place: components["schemas"]["PlaceRef"];
+            estimate: components["schemas"]["PlaceEstimate"];
+        };
+        /**
+         * @description ex-day の発見（見本）。運営の登録を由来に持つ公開の Discovery のうち、先の枠に出なかったもの。
+         *     起点から近い順（同じ距離なら Discovery の識別子の順）。近くになければ、遠いもの（始める地域のもの）が続く。items の isExample はすべて true
+         */
+        ExampleSection: {
+            /** @enum {string} */
+            kind: "examples";
+            items: components["schemas"]["TopDiscoveryCard"][];
+            hasMore: boolean;
+        };
+        /**
+         * @description 探しています（C30）。場所が決まっていない話を、公開の会話ごとに1件。対象は次のどちらかを持つ会話：
+         *     答えの出ていない「どこ」の問い（有効で、回答が採用中・再検討中でない。S14 の問いの区画と同じ決まり）、
+         *     または会話の場所が採用中・再検討中でなく、検討中の場所の候補。
+         *     並び：近くに検討中の候補を持つ会話を先に、その中は最も近い候補の距離の順（nearestCandidateDistanceMeters）。近くに候補のない会話は、会話の作った時点の新しい順。
+         *     同じなら会話の識別子の順
+         */
+        TopSeekingSection: {
+            /** @enum {string} */
+            kind: "seeking";
+            items: components["schemas"]["TopSeekingCard"][];
+            hasMore: boolean;
+        };
+        /**
+         * @description 探していますの1件分（会話ごと）。押すと会話のページ（S14）。問いの対象の会話は questions を、候補の対象の会話は candidates を
+         *     少なくとも1件持つ
+         */
+        TopSeekingCard: {
+            conversation: components["schemas"]["ConversationCard"];
+            /** @description 答えの出ていない「どこ」の問い。作った時点の古い順に3件まで（同じなら問いの識別子の順）。なければ空 */
+            questions: components["schemas"]["QuestionRef"][];
+            /**
+             * @description 検討中の場所の候補（会話の候補と、答えの出ていない問いの候補）。起点の位置に近い順に3件まで（位置のない新しい場所の案は後ろ。
+             *     同じなら候補の識別子の順）。なければ空
+             */
+            candidates: components["schemas"]["SeekingCandidate"][];
+            /** @description 近く（直線 3km 以内）に候補があるとき、いちばん近い候補までの距離（メートル）。なければ返さない */
+            nearestCandidateDistanceMeters?: number;
+        };
+        /**
+         * @description 声を待っている。近くの ACTIVE な場所（起点の位置を面に含む場所と、起点自身を除く）で、公開の会話（会話と場所の採用した紐付き）も公開の Discovery（関係が有効なもの）もないもの。
+         *     種類では除かない。距離の順（同じ距離なら場所の識別子の順）。画面は「この場所の昔を、知っていますか？」を添える
+         */
+        AwaitingVoicesSection: {
+            /** @enum {string} */
+            kind: "awaiting_voices";
+            items: components["schemas"]["NearbyPlace"][];
+            hasMore: boolean;
+        };
         /**
          * @description 企画を作った人の種類（運営／ユーザー）
          * @enum {string}
@@ -1687,6 +1935,31 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getTop: {
+        parameters: {
+            query?: {
+                /** @description 起点の場所の識別子。省けば既定の起点。形が合わなければ 400 */
+                from?: components["schemas"]["PublicId"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description TOP の枠 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getDiscoverySections: {
         parameters: {
             query?: never;
