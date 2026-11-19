@@ -32,6 +32,7 @@ import io.github.exday.api.geometry.GeoJsonGeometries;
 import io.github.exday.api.merge.MergeChains;
 import io.github.exday.api.merge.MergeChains.Resolution;
 import io.github.exday.api.placeconversation.PlaceConversations;
+import io.github.exday.api.projectconversation.TriggeredConversations;
 import io.github.exday.api.project.ProjectQueries.ChangeItemRow;
 import io.github.exday.api.project.ProjectQueries.ItemRow;
 import io.github.exday.api.project.ProjectQueries.PlaceRow;
@@ -71,10 +72,11 @@ public class ProjectAssembler {
     private final PostCards postCards;
     private final PlaceEstimates placeEstimates;
     private final PlaceConversations placeConversations;
+    private final TriggeredConversations triggeredConversations;
 
     public ProjectAssembler(ProjectQueries queries, MergeChains mergeChains, DiscoveryCards discoveryCards,
             ConversationCards conversationCards, PostCards postCards, PlaceEstimates placeEstimates,
-            PlaceConversations placeConversations) {
+            PlaceConversations placeConversations, TriggeredConversations triggeredConversations) {
         this.queries = queries;
         this.mergeChains = mergeChains;
         this.discoveryCards = discoveryCards;
@@ -82,6 +84,7 @@ public class ProjectAssembler {
         this.postCards = postCards;
         this.placeEstimates = placeEstimates;
         this.placeConversations = placeConversations;
+        this.triggeredConversations = triggeredConversations;
     }
 
     public ProjectDetail assemble(ProjectRow project, int timelineLimit) {
@@ -300,6 +303,6 @@ public class ProjectAssembler {
         var ids = queries.findTriggeredConversationIds(projectId);
         var cards = conversationCards.cardsById(ids);
         List<ConversationCard> items = ids.stream().map(cards::get).filter(Objects::nonNull).toList();
-        return new ConversationCardPage().items(items).totalCount(queries.countTriggeredConversations(projectId));
+        return new ConversationCardPage().items(items).totalCount(triggeredConversations.countByProject(List.of(projectId)).getOrDefault(projectId, 0));
     }
 }
