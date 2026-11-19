@@ -137,8 +137,12 @@ class TopApiTest extends TopTestSupport {
         var body = okJson("/top?from=" + sid("place:ooka"));
         // 大岡川を覆う市区町村は横浜市だけ（中区・西区の境をまたぐ）
         assertThat(((Map<String, Object>) body.get("origin")).get("adminArea")).isEqualTo(ref("place:yokohama", "横浜市"));
+        // 近くで足りない分を、同じ行政の地域（横浜市）の中から補う（小机城址は 3km の外だが横浜市の中）
         var seasonal = items(section(body, "seasonal"));
-        assertThat(discoveryIds(section(body, "seasonal"))).containsExactly(sid("disc:ooka-sakura"), sid("disc:roses"));
+        assertThat(discoveryIds(section(body, "seasonal")))
+            .containsExactly(sid("disc:ooka-sakura"), sid("disc:roses"), sid("disc:kozukue"));
+        assertThat(seasonal.stream().map(item -> item.get("scope")).toList())
+            .containsExactly("nearby", "nearby", "admin_area");
         assertThat((Map<String, Object>) seasonal.get(0).get("card")).containsEntry("distanceMeters", 0);
         assertThat(placeIds(section(body, "awaiting_voices"))).doesNotContain(sid("place:ooka"), sid("place:yokohama"),
             sid("place:kanagawa"));
@@ -190,7 +194,7 @@ class TopApiTest extends TopTestSupport {
     @Test
     void 非公開と統合された側のDiscoveryは出さない() {
         jdbc.sql("UPDATE discovery SET visibility = 'HIDDEN' WHERE public_id = :id").param("id", sid("disc:roses")).update();
-        merge("kozukue", "ooka-sakura");
+        merge("disc:kozukue", "disc:ooka-sakura");
         var body = okJson("/top");
         assertThat(discoveryIds(section(body, "seasonal"))).containsExactly(sid("disc:ooka-sakura"));
         assertThat(kinds(body)).doesNotContain("examples");
