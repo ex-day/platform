@@ -43,6 +43,13 @@ jobs:
       - name: npm run build
         run: npm run build
 
+      # ブラウザテスト（e2e）。API の代わりに e2e/mock-api.mjs を使い、build 済みの画面を next start で動かす
+      - name: Playwright のブラウザを入れる
+        run: npx playwright install --with-deps chromium
+
+      - name: npm run test:e2e
+        run: npm run test:e2e
+
       - name: API の型が openapi.yaml とずれていないか確かめる
         run: |
           npm run gen:api

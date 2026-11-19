@@ -42,6 +42,7 @@ S01（`/`）の枠（C11）は、ブラウザ側（Client Component）で API �
 
 - 中継は `src/app/api/` の Route Handler と `src/lib/api/relay.ts`。画面が使う API だけを置き、API 全体は公開しない。API の状態コードと本文はそのまま返し、API に届かない場合は 502 を返す。
 - ブラウザ側の呼び出しは `src/lib/api/browser-client.ts`（同じ OpenAPI の型を使う）。
+- 戻る・進むで TOP に来たときは、取得済みの応答・選択中のタブ・スクロール位置をセッションストレージから戻し、取り直さない（DEC-0022 決定4。リンク・再読み込みでは取り直す）。
 - API は DB V2 の形（`GET /top`）にしたが、画面はまだ作り直しておらず、Discovery のカードで出せる枠（お知らせ・いま・この時期・近くの発見・見本）だけを今のコンポーネントに当てはめて出す。企画・番付・探しています・声を待っている・小さな地図・このあたりの数字は、S01 の画面を作り直すときに足す。
 - モックのデータの S01（比較用バー付き）は `/mock` に残している。
 
@@ -72,3 +73,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## ブラウザテスト（e2e）
+
+Playwright で、S01 の TOP から詳細へ移って戻ったときの動き（取り直さないこと・選択中のタブ・スクロール位置）を確かめる（`e2e/top-restore.spec.ts`。Issue #135、PR #158）。API の代わりに `e2e/mock-api.mjs` を起動するので、API・DB は要らない。
+
+```bash
+npm run build
+npx playwright install chromium   # 初回だけ
+npm run test:e2e
+```
+
+CI（`.github/workflows/web-build.yml`）でも build のあとに実行する。

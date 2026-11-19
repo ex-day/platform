@@ -7,10 +7,21 @@
 //   企画・番付・探しています・声を待っている、小さな地図・このあたりの数字は、S01 の画面を作り直すときに足す。
 // - 枠の順は API が決めたまま(画面で並べ替えない)。PC は縦に並べ、モバイルはタブにする。
 // - PC とモバイルの判断は、ここの画面幅(PC_MEDIA_QUERY)の1か所だけで行う。
-// - 一度取った応答は、この画面を開いている間は持っておき、タブを戻しても取り直さない(DEC-0022 決定4)。
+// - 戻ったときに見失わないようにする(DEC-0022 決定4、C11 の「S03 から戻ったときに選択タブとタブ内の位置を復元する」):
+//   取得した TOP の応答・選択中のタブ・スクロール位置を、このタブのセッションストレージに持つ。ブラウザの戻る・進む
+//   (popstate、またはページの読み込みの種類が back_forward)で TOP に来たときは、取り直さずにそれを戻す。
+//   それ以外(リンクで開く、再読み込み)は取り直して上書きする。持つのはこのタブのセッションの間だけ(期限は設けない)。
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { DiscoverySection } from "@/components/C05-discovery-section/DiscoverySection";
 import { Loading } from "@/components/C09-loading/Loading";
 import { browserApiClient, type TopPage, type TopSection } from "@/lib/api/browser-client";
@@ -22,7 +33,50 @@ import type { RelatedDiscoverySummary } from "@/lib/mock-data/discovery";
 const PC_MEDIA_QUERY = "(min-width: 768px)";
 
 type Layout = "pc" | "mobile";
-type ShownSection = { key: TopSection["kind"]; title: string; items: RelatedDiscoverySummary[] };
+type SectionKey = TopSection["kind"];
+type SavedTop = { page: TopPage; activeKey?: SectionKey; scrollY: number };
+
+/** セッションストレージのキー。TOP の URL(起点の指定を含む)ごとに持つ */
+const STORAGE_PREFIX = "exday:top:";
+
+// 戻る・進むで来たか。popstate は Next.js が TOP を描き直すより先に届くので、ここで覚えておく
+let cameByHistoryTraversal = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    cameByHistoryTraversal = true;
+  });
+  // 別の文書から戻ってきた(ページごと読み直された)とき
+  const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  cameByHistoryTraversal = navigation?.type === "back_forward";
+}
+
+/** 戻る・進むで来たなら、持っておいた TOP を返す(サーバー側では何もしない) */
+function restoreOnTraversal(): SavedTop | undefined {
+  if (typeof window === "undefined" || !cameByHistoryTraversal) return undefined;
+  return loadSaved();
+}
+
+function storageKey(): string {
+  return STORAGE_PREFIX + window.location.pathname + window.location.search;
+}
+
+function loadSaved(): SavedTop | undefined {
+  try {
+    const raw = window.sessionStorage.getItem(storageKey());
+    return raw ? (JSON.parse(raw) as SavedTop) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function save(saved: SavedTop) {
+  try {
+    window.sessionStorage.setItem(storageKey(), JSON.stringify(saved));
+  } catch {
+    // 保存できない(容量・プライベートブラウズ等)ときは、戻ったときに取り直すだけ
+  }
+}
+type ShownSection = { key: SectionKey; title: string; items: RelatedDiscoverySummary[] };
 
 function subscribeLayout(onChange: () => void) {
   const mql = window.matchMedia(PC_MEDIA_QUERY);
@@ -102,21 +156,69 @@ function SectionBody({ section }: { section: ShownSection }) {
 
 export function DiscoverySections() {
   const layout = useLayout();
-  const [page, setPage] = useState<TopPage | "error">();
-  const [activeKey, setActiveKey] = useState<TopSection["kind"]>();
+  // 戻る・進むで来たときに戻すもの(最初の描画で1回だけ読む)
+  const [restored] = useState(restoreOnTraversal);
+  const [page, setPage] = useState<TopPage | "error" | undefined>(restored?.page);
+  const [activeKey, setActiveKey] = useState<SectionKey | undefined>(restored?.activeKey);
   // 取りに行ったか。開発時の StrictMode で effect が2回動いても、2回取らないようにする
   const requested = useRef(false);
+  // 戻ったときに戻すスクロール位置(描いたあとに1回だけ使う)
+  const pendingScrollY = useRef<number | undefined>(restored?.scrollY);
+  const scrollY = useRef(restored?.scrollY ?? 0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  function load() {
+    void fetchTop().then((result) => {
+      setPage(result);
+      if (result !== "error") save({ page: result, scrollY: 0 });
+    });
+  }
 
   useEffect(() => {
     if (requested.current) return;
     requested.current = true;
-    void fetchTop().then(setPage);
-  }, []);
+    // 次に TOP へ来たときの判断のために戻す
+    cameByHistoryTraversal = false;
+    if (restored) return;
+    void fetchTop().then((result) => {
+      setPage(result);
+      if (result !== "error") save({ page: result, scrollY: 0 });
+    });
+  }, [restored]);
+
+  // 描き終えたら、戻したスクロール位置へ動かす
+  useLayoutEffect(() => {
+    if (!layout || !page || page === "error" || pendingScrollY.current === undefined) return;
+    const y = pendingScrollY.current;
+    pendingScrollY.current = undefined;
+    window.scrollTo(0, y);
+  }, [layout, page]);
+
+  // スクロール位置と選択中のタブを、取得済みの応答と一緒に持つ
+  useEffect(() => {
+    if (!page || page === "error") return;
+    let frame = 0;
+    const persist = () => save({ page, activeKey, scrollY: scrollY.current });
+    const onScroll = () => {
+      if (pendingScrollY.current !== undefined) return;
+      scrollY.current = window.scrollY;
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        persist();
+      });
+    };
+    persist();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [page, activeKey]);
 
   function retry() {
     setPage(undefined);
-    void fetchTop().then(setPage);
+    load();
   }
 
   if (page === "error") return <Notice onRetry={retry}>TOP の発見を読み込めませんでした。</Notice>;
