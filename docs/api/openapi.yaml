@@ -9,7 +9,7 @@ info:
 
     - **作り直しの状況**：S01（TOP）・S03（Discovery のページ）・S13（場所のページ）・S14（会話のページ）・S15（企画のページ）・
       S17（企画の一覧）を v0.2 の形（DB V2・画面定義の書き直しに合わせた）にした。v0.1 の S01 の `/discovery-sections` は
-      `/top` に置き換える（S01 の3段目で消す。それまで deprecated として残す）
+      `/top` に置き換えて消した（PR #158）
     - **型と制約を約束事に書く**（2026-11-17 の人の判断、PR #152 のレビュー）：画面は OpenAPI から TypeScript の型を作るので、
       制約や型を付けられるところは設計の段から付ける。識別子の形（PublicId）、数の下限・配列の上限、`additionalProperties: false`、
       形の違うものは `oneOf` で分け、各分岐の判別の項目（`type`・`status` 等）を1つの値に制限する（GeoJSON の Geometry、
@@ -54,7 +54,7 @@ servers:
 security: []  # 閲覧用のため認証なし（認証は #75 で決める）
 tags:
   - name: S01
-    description: TOP（`/top`。v0.1 の `/discovery-sections` は deprecated）
+    description: TOP
   - name: S03
     description: Discovery のページ
   - name: S13
@@ -113,75 +113,6 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
-  /discovery-sections:
-    get:
-      tags: [S01]
-      operationId: getDiscoverySections
-      deprecated: true
-      summary: （v0.1。/top に置き換える）S01 に出すセクションの一覧を取得する
-      description: |
-        **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
-
-        どのセクションをどの順で出すかは API が決める。中身（カード）は含めず、セクションごとに
-        /discovery-sections/{sectionKey}/discoveries で取る。
-
-        - 今の提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
-          未ログインのため、興味（Subject）を使う軸は扱わない。
-        - 一覧と中身を分けるのは、セクションごとに別々に読み込めるようにするため（モバイルは開いたタブの分だけ取る、
-          PC は各セクションを並行して取る）。画面はセクションごとに読み込み中（C09（loading））を出す。
-          あわせて、続きの読み込み（無限スクロール）や S02 への「もっと見る」、ログイン後の興味のセクションを足しやすくする。
-      responses:
-        '200':
-          description: セクションの一覧（表示する順）
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/DiscoverySectionList' }
-              examples:
-                sakuragicho-april:
-                  $ref: '#/components/examples/SectionListSakuragichoApril'
-  /discovery-sections/{sectionKey}/discoveries:
-    get:
-      tags: [S01]
-      operationId: getDiscoverySectionItems
-      deprecated: true
-      summary: （v0.1。/top に置き換える）S01 の1つのセクションのカードを取得する
-      description: |
-        **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
-
-        セクションは推薦の候補を絞り込む条件であり、並び順ではない。どのセクションも、候補を推薦順（推薦度の高い順）で返す。
-
-        - nearby：いる場所の周辺にある Discovery の、推薦する Value（季節が一致、または通年・条件なし）を候補とする。
-          季節違いの Value は候補にしない。
-        - season：「今」の季節と一致する Value を候補とする。今は通年・条件なしの Value は候補にしない。
-          季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。
-        - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
-        - 1件のカードは、Discovery と、推薦の対象になった Value（valueId）の組。同じ Discovery が別の Value を伴って複数現れてよい。
-        - 「周辺」の範囲と推薦度の評価ロジックは約束事に含めない（冒頭の「並び順は推薦順」を参照）。
-
-        続きの読み込みの単位（cursor 方式にするか等）は、S01 の無限スクロールを試すときに決める。今は limit までを返す。
-      parameters:
-        - $ref: '#/components/parameters/SectionKey'
-        - name: limit
-          in: query
-          required: false
-          description: 最大件数
-          schema: { type: integer, minimum: 1, maximum: 20, default: 8 }
-      responses:
-        '200':
-          description: セクションのカード
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/DiscoverySectionItems' }
-              examples:
-                nearby-sakuragicho-april:
-                  $ref: '#/components/examples/SectionItemsNearbySakuragichoApril'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: セクションがない（一覧にない key を指定した）
-          content:
-            application/problem+json:
-              schema: { $ref: '#/components/schemas/Problem' }
   /discoveries/{discoveryId}:
     get:
       tags: [S03]
@@ -502,12 +433,6 @@ paths:
           $ref: '#/components/responses/NotFound'
 components:
   parameters:
-    SectionKey:
-      name: sectionKey
-      in: path
-      required: true
-      description: セクションの key（/discovery-sections で返したもの）
-      schema: { $ref: '#/components/schemas/SectionKey' }
     PlaceId:
       name: placeId
       in: path
@@ -582,76 +507,6 @@ components:
       type: string
       enum: [spring, summer, autumn, winter, all_year]
       description: Value の条件としての季節（DEC-0002。春・夏・秋・冬・通年）
-    # ---- v0.1 の S01（/discovery-sections）。S01 の3段目で消す ----
-    SectionKey:
-      type: string
-      enum: [nearby, season]
-      description: 提案の軸。nearby は「この近く」、season は「今の時期」。軸が増えたら値を足す
-    DiscoverySectionList:
-      type: object
-      required: [context, sections]
-      properties:
-        context: { $ref: '#/components/schemas/EvaluationContext' }
-        sections:
-          type: array
-          description: 表示する順
-          items: { $ref: '#/components/schemas/DiscoverySection' }
-    DiscoverySection:
-      type: object
-      required: [key, title]
-      properties:
-        key: { $ref: '#/components/schemas/SectionKey' }
-        title:
-          type: string
-          description: セクションの表示名（PC の見出し、モバイルのタブ）
-    DiscoverySectionItems:
-      type: object
-      required: [context, key, items]
-      properties:
-        context: { $ref: '#/components/schemas/EvaluationContext' }
-        key: { $ref: '#/components/schemas/SectionKey' }
-        items:
-          type: array
-          description: 推薦順（推薦度の高い順）。0件のこともある（見せ方は画面で決める）
-          items: { $ref: '#/components/schemas/RecommendedDiscoveryCard' }
-    RecommendedDiscoveryCard:
-      description: 推薦の候補としてのカード。Discovery と、推薦の対象になった Value の組
-      allOf:
-        - $ref: '#/components/schemas/DiscoveryCard'
-        - type: object
-          required: [valueId]
-          properties:
-            valueId:
-              type: string
-              description: 推薦の対象になった Value。同じ Discovery が複数現れる場合の区別にもなる
-    DiscoveryCard:
-      type: object
-      description: C03（discovery-card）。Discovery と、代表して見せる Value の要約
-      required: [id, title, subject, value, place]
-      properties:
-        id: { type: string }
-        title: { type: string }
-        subject:
-          type: string
-          description: 何についての価値か（例：桜並木、散策）
-        value:
-          type: string
-          description: 代表して見せる Value の短い説明
-        picture: { $ref: '#/components/schemas/Image' }
-        place: { $ref: '#/components/schemas/PlaceSummary' }
-    PlaceSummary:
-      type: object
-      description: 場所。地図は埋め込まず、テキストで表示する
-      required: [name]
-      properties:
-        name: { type: string, description: 例：大岡川（桜木町駅〜蒔田） }
-    Image:
-      type: object
-      description: 画像。今回のサンプルは権利の問題を避けるため仮の画像
-      required: [url, alt]
-      properties:
-        url: { type: string, format: uri-reference }
-        alt: { type: string }
     PublicId:
       type: string
       description: |
@@ -2671,15 +2526,15 @@ components:
         instance: { type: string, format: uri-reference }
   examples:
     TopSakuragichoApril:
-      summary: 既定の起点（桜木町駅）、2026年4月（サンプルデータをもとにした例。探しています・声を待っているの中身と距離は3段目で実際の応答に合わせる）
+      summary: 既定の起点（桜木町駅）、2026年4月（サンプルデータでの応答。TopApiTest で確かめている）
       value:
-        now: '2026-04-11T10:00:00+09:00'
+        now: '2026-04-20T10:00:00+09:00'
         season: spring
         origin:
           place: { id: 160663e75a0b, name: 桜木町駅 }
           source: default
           outsideStartArea: false
-          adminArea: { id: 69c0f38b475b, name: 横浜市中区 }
+          adminArea: { id: bbb62341217f, name: 横浜市西区 }
         smallMap:
           minutes: 120
           trip: round_trip
@@ -2753,43 +2608,32 @@ components:
                 distanceMeters: 7579
                 isExample: true
             hasMore: false
+          - kind: seeking
+            items:
+              - conversation:
+                  id: 27ff2eaa2d81
+                  firstPost: visible
+                  excerpt: 昔、横浜駅の近くに水車のあるそば屋があったはず。どこだったか覚えている人いますか？
+                  starterName: そば好き
+                  replyCount: 1
+                  startedAt: '2026-04-15T21:00:00+09:00'
+                  lastPostedAt: '2026-04-15T22:00:00+09:00'
+                  places: []
+                questions:
+                  - { id: f005c3218f8a, content: 水車のあるそば屋はどこにあったか }
+                candidates:
+                  - { id: c6b95c4eb6c7, kind: proposal, name: 水車のあるそば屋（横浜駅西口のあたり） }
+                nearestCandidateDistanceMeters: 1983
+            hasMore: false
           - kind: awaiting_voices
             items:
               - place: { id: 3dd20cfbaf06, name: 石川町駅 }
                 kinds: [駅]
               - place: { id: 6a7e64edcbc1, name: 横浜駅 }
                 kinds: [駅]
+              - place: { id: c459bf94e165, name: 氷川丸 }
+                kinds: [船]
             hasMore: false
-    SectionListSakuragichoApril:
-      summary: 「4月2日の15時、桜木町駅の前にいる」ことにした場合
-      value:
-        context:
-          now: '2026-04-02T15:00:00+09:00'
-          season: spring
-          location: { name: 桜木町駅, lat: 35.4509, lng: 139.6309 }
-          clockSource: fixed
-          locationSource: fixed
-        sections:
-          - { key: nearby, title: この近く }
-          - { key: season, title: 今の時期 }
-    SectionItemsNearbySakuragichoApril:
-      summary: 「この近く」（4月2日の15時、桜木町駅の前）
-      value:
-        context:
-          now: '2026-04-02T15:00:00+09:00'
-          season: spring
-          location: { name: 桜木町駅, lat: 35.4509, lng: 139.6309 }
-          clockSource: fixed
-          locationSource: fixed
-        key: nearby
-        items:
-          - id: FMI7GE306Hqw
-            valueId: cbff44a80f3d
-            title: 大岡川の桜と風景の変化
-            subject: 桜並木
-            value: 川沿いに続く桜並木を、水面越しに眺められる
-            picture: { url: /images/sample/placeholder-sakura.svg, alt: 仮の画像（大岡川の桜並木） }
-            place: { name: 大岡川（桜木町駅〜蒔田） }
     DiscoveryWalkApril:
       summary: 汽車道を通って、桜木町から山下公園へ（4月2日の15時、桜木町駅の前にいる場合。サンプルデータ）
       value:

@@ -12,6 +12,5 @@ export function browserApiClient() {
   return createClient<paths>({ baseUrl: RELAY_BASE_PATH, cache: "no-store" });
 }
 
-export type DiscoverySectionList = components["schemas"]["DiscoverySectionList"];
-export type DiscoverySectionItems = components["schemas"]["DiscoverySectionItems"];
-export type SectionKey = components["schemas"]["SectionKey"];
+export type TopPage = components["schemas"]["TopPage"];
+export type TopSection = components["schemas"]["TopSection"];

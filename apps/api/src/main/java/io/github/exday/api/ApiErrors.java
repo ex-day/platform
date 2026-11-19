@@ -5,24 +5,18 @@ import io.github.exday.api.discovery.DiscoveryNotFoundException;
 import io.github.exday.api.project.ProjectNotFoundException;
 import io.github.exday.api.projectlist.InvalidProjectListCursorException;
 import io.github.exday.api.place.PlaceNotFoundException;
-import io.github.exday.api.generated.model.SectionKey;
+import io.github.exday.api.top.TopOriginNotFoundException;
 import jakarta.validation.ConstraintViolationException;
-import org.springframework.beans.TypeMismatchException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
  * すべてのエンドポイントのエラーを RFC 9457（problem+json）で返す。
  *
- * <p>MVC の入力エラーは 400。未知のセクションと、ない・見られない Discovery・会話・企画、ない場所は仕様に合わせて 404。
+ * <p>MVC の入力エラーは 400。ない・見られない Discovery・会話・企画、ない場所・TOP の起点は仕様に合わせて 404。
  */
 @RestControllerAdvice
 public class ApiErrors extends ResponseEntityExceptionHandler {
@@ -62,15 +56,8 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
             "カーソルが、この絞り込み・並べ方で作ったものではない。条件を変えたら最初から読む。");
     }
 
-    @Override
-    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex,
-            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        if (ex instanceof MethodArgumentTypeMismatchException mismatch
-                && mismatch.getRequiredType() == SectionKey.class) {
-            var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,
-                "The requested discovery section does not exist.");
-            return handleExceptionInternal(ex, problem, headers, HttpStatus.NOT_FOUND, request);
-        }
-        return super.handleTypeMismatch(ex, headers, status, request);
+    @ExceptionHandler(TopOriginNotFoundException.class)
+    public ProblemDetail topOriginNotFound(TopOriginNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "起点の場所がない。");
     }
 }

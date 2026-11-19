@@ -1,5 +1,7 @@
 package io.github.exday.api.conversation;
 
+import io.github.exday.api.openquestion.QuestionAnswers;
+
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -303,7 +305,8 @@ public class ConversationQueries {
 
     private static final int GEOJSON_DECIMALS = 7;
     private static final String ACTIVE = "ACTIVE";
-    private static final List<String> ACTIVE_ADOPTION = List.of("ADOPTED", "RECONSIDERING");
+    // 採用が有効な状態は、問いの答えの決まり（QuestionAnswers）と同じものを使う
+    private static final List<String> ACTIVE_ADOPTION = QuestionAnswers.ACTIVE_ADOPTION;
 
     record ConversationRow(long id, String publicId, OffsetDateTime createdAt, int publicPostCount,
             Long entryPlaceId, Long entryDiscoveryId, Long entryProjectId, boolean projectOwn) {}

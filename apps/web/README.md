@@ -32,17 +32,17 @@ S03（`/discoveries/[id]`）は API（`apps/api`）のデータで表示する�
 - API の呼び出しは `src/lib/api/`（`client.ts`・`discovery.ts`）、API の型からコンポーネントの props への変換は `src/lib/api/discovery-view.ts` に置く。
 - モックのデータの S03（表現案の比較用バー付き）は `/mock/discoveries/[id]`（例：`/mock/discoveries/sample-1`）に残している。
 
-### S01 をブラウザ側から取る（Issue #113）
+### S01 をブラウザ側から取る（Issue #113、#135）
 
-S01（`/`）のセクション（C11）は、ブラウザ側（Client Component）で API から取る。ブラウザは API を直接呼ばず、画面と同じオリジンの中継（Route Handler）を通す。中継先は上の `EXDAY_API_BASE_URL` を実行時に読む（ビルドし直さずに変えられる）。
+S01（`/`）の枠（C11）は、ブラウザ側（Client Component）で API から取る。ブラウザは API を直接呼ばず、画面と同じオリジンの中継（Route Handler）を通す。中継先は上の `EXDAY_API_BASE_URL` を実行時に読む（ビルドし直さずに変えられる）。
 
 | 画面側の中継 | 中継先の API |
 | --- | --- |
-| `GET /api/discovery-sections` | `GET /discovery-sections` |
-| `GET /api/discovery-sections/{sectionKey}/discoveries` | `GET /discovery-sections/{sectionKey}/discoveries` |
+| `GET /api/top` | `GET /top` |
 
 - 中継は `src/app/api/` の Route Handler と `src/lib/api/relay.ts`。画面が使う API だけを置き、API 全体は公開しない。API の状態コードと本文はそのまま返し、API に届かない場合は 502 を返す。
 - ブラウザ側の呼び出しは `src/lib/api/browser-client.ts`（同じ OpenAPI の型を使う）。
+- API は DB V2 の形（`GET /top`）にしたが、画面はまだ作り直しておらず、Discovery のカードで出せる枠（お知らせ・いま・この時期・近くの発見・見本）だけを今のコンポーネントに当てはめて出す。企画・番付・探しています・声を待っている・小さな地図・このあたりの数字は、S01 の画面を作り直すときに足す。
 - モックのデータの S01（比較用バー付き）は `/mock` に残している。
 
 ## Docker で動かす（Issue #114）

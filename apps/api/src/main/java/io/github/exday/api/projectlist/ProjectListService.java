@@ -1,12 +1,10 @@
 package io.github.exday.api.projectlist;
 
+import io.github.exday.api.card.project.ProjectListCards;
 import io.github.exday.api.generated.model.ProjectCreatorKind;
-import io.github.exday.api.generated.model.ProjectListCard;
 import io.github.exday.api.generated.model.ProjectListPage;
 import io.github.exday.api.generated.model.ProjectListSort;
 import io.github.exday.api.generated.model.ProjectType;
-import io.github.exday.api.projectconversation.TriggeredConversations;
-import io.github.exday.api.projectlist.ProjectListQueries.ProjectRow;
 import java.util.ArrayList;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
@@ -20,11 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectListService {
 
     private final ProjectListQueries queries;
-    private final TriggeredConversations triggeredConversations;
+    private final ProjectListCards cards;
 
-    public ProjectListService(ProjectListQueries queries, TriggeredConversations triggeredConversations) {
+    public ProjectListService(ProjectListQueries queries, ProjectListCards cards) {
         this.queries = queries;
-        this.triggeredConversations = triggeredConversations;
+        this.cards = cards;
     }
 
     /** カーソルが条件に合わない、または並びのキーの企画がなければ {@link InvalidProjectListCursorException}。 */
@@ -44,21 +42,7 @@ public class ProjectListService {
         if (hasNext) {
             rows.remove(rows.size() - 1);
         }
-        var counts = triggeredConversations.countByProject(rows.stream().map(ProjectRow::id).toList());
-        var page = new ProjectListPage().items(rows.stream().map(row -> {
-            var card = new ProjectListCard()
-                .id(row.publicId())
-                .title(row.title())
-                .type(ProjectType.fromValue(row.type().toLowerCase(Locale.ROOT)))
-                .creatorKind(ProjectListCard.CreatorKindEnum.fromValue(row.creatorKind().toLowerCase(Locale.ROOT)))
-                .creatorName(row.creatorName())
-                .itemCount(row.itemCount())
-                .triggeredConversationCount(counts.getOrDefault(row.id(), 0));
-            if (!row.callText().isEmpty()) {
-                card.callText(row.callText());
-            }
-            return card;
-        }).toList());
+        var page = new ProjectListPage().items(cards.cards(rows));
         if (hasNext) {
             page.nextCursor(new ProjectListCursor(sort, type, creator, rows.get(rows.size() - 1).publicId()).encode());
         }

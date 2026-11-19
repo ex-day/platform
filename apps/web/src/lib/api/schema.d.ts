@@ -45,69 +45,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/discovery-sections": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * （v0.1。/top に置き換える）S01 に出すセクションの一覧を取得する
-         * @deprecated
-         * @description **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
-         *
-         *     どのセクションをどの順で出すかは API が決める。中身（カード）は含めず、セクションごとに
-         *     /discovery-sections/{sectionKey}/discoveries で取る。
-         *
-         *     - 今の提案の軸は「この近く」（nearby）と「今の時期」（season）の2つ（#89 の決定）。
-         *       未ログインのため、興味（Subject）を使う軸は扱わない。
-         *     - 一覧と中身を分けるのは、セクションごとに別々に読み込めるようにするため（モバイルは開いたタブの分だけ取る、
-         *       PC は各セクションを並行して取る）。画面はセクションごとに読み込み中（C09（loading））を出す。
-         *       あわせて、続きの読み込み（無限スクロール）や S02 への「もっと見る」、ログイン後の興味のセクションを足しやすくする。
-         */
-        get: operations["getDiscoverySections"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/discovery-sections/{sectionKey}/discoveries": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * （v0.1。/top に置き換える）S01 の1つのセクションのカードを取得する
-         * @deprecated
-         * @description **v0.1 の形。S01 の3段目（実装）で /top に置き換えて消す**（PR #158）。
-         *
-         *     セクションは推薦の候補を絞り込む条件であり、並び順ではない。どのセクションも、候補を推薦順（推薦度の高い順）で返す。
-         *
-         *     - nearby：いる場所の周辺にある Discovery の、推薦する Value（季節が一致、または通年・条件なし）を候補とする。
-         *       季節違いの Value は候補にしない。
-         *     - season：「今」の季節と一致する Value を候補とする。今は通年・条件なしの Value は候補にしない。
-         *       季節は「今」の月から決める（3〜5月が春、など一般的な解釈）。
-         *     - 対象は成立状態が ESTABLISHED かつ公開状態が PUBLIC の Discovery。
-         *     - 1件のカードは、Discovery と、推薦の対象になった Value（valueId）の組。同じ Discovery が別の Value を伴って複数現れてよい。
-         *     - 「周辺」の範囲と推薦度の評価ロジックは約束事に含めない（冒頭の「並び順は推薦順」を参照）。
-         *
-         *     続きの読み込みの単位（cursor 方式にするか等）は、S01 の無限スクロールを試すときに決める。今は limit までを返す。
-         */
-        get: operations["getDiscoverySectionItems"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/discoveries/{discoveryId}": {
         parameters: {
             query?: never;
@@ -394,54 +331,6 @@ export interface components {
          * @enum {string}
          */
         Season: "spring" | "summer" | "autumn" | "winter" | "all_year";
-        /**
-         * @description 提案の軸。nearby は「この近く」、season は「今の時期」。軸が増えたら値を足す
-         * @enum {string}
-         */
-        SectionKey: "nearby" | "season";
-        DiscoverySectionList: {
-            context: components["schemas"]["EvaluationContext"];
-            /** @description 表示する順 */
-            sections: components["schemas"]["DiscoverySection"][];
-        };
-        DiscoverySection: {
-            key: components["schemas"]["SectionKey"];
-            /** @description セクションの表示名（PC の見出し、モバイルのタブ） */
-            title: string;
-        };
-        DiscoverySectionItems: {
-            context: components["schemas"]["EvaluationContext"];
-            key: components["schemas"]["SectionKey"];
-            /** @description 推薦順（推薦度の高い順）。0件のこともある（見せ方は画面で決める） */
-            items: components["schemas"]["RecommendedDiscoveryCard"][];
-        };
-        /** @description 推薦の候補としてのカード。Discovery と、推薦の対象になった Value の組 */
-        RecommendedDiscoveryCard: components["schemas"]["DiscoveryCard"] & {
-            /** @description 推薦の対象になった Value。同じ Discovery が複数現れる場合の区別にもなる */
-            valueId: string;
-        };
-        /** @description C03（discovery-card）。Discovery と、代表して見せる Value の要約 */
-        DiscoveryCard: {
-            id: string;
-            title: string;
-            /** @description 何についての価値か（例：桜並木、散策） */
-            subject: string;
-            /** @description 代表して見せる Value の短い説明 */
-            value: string;
-            picture?: components["schemas"]["Image"];
-            place: components["schemas"]["PlaceSummary"];
-        };
-        /** @description 場所。地図は埋め込まず、テキストで表示する */
-        PlaceSummary: {
-            /** @description 例：大岡川（桜木町駅〜蒔田） */
-            name: string;
-        };
-        /** @description 画像。今回のサンプルは権利の問題を避けるため仮の画像 */
-        Image: {
-            /** Format: uri-reference */
-            url: string;
-            alt: string;
-        };
         /**
          * @description 画面・URL に出す識別子（英数字12文字。DB 設計 2.1節）。中身を解釈しない文字列として扱う。
          *     内部の連番は出さない
@@ -1926,8 +1815,6 @@ export interface components {
         };
     };
     parameters: {
-        /** @description セクションの key（/discovery-sections で返したもの） */
-        SectionKey: components["schemas"]["SectionKey"];
         /** @description 場所の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         PlaceId: components["schemas"]["PublicId"];
         /** @description 会話の識別子（画面・URL に出すもの）。形が合わなければ 400 */
@@ -1966,62 +1853,6 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
-        };
-    };
-    getDiscoverySections: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description セクションの一覧（表示する順） */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscoverySectionList"];
-                };
-            };
-        };
-    };
-    getDiscoverySectionItems: {
-        parameters: {
-            query?: {
-                /** @description 最大件数 */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description セクションの key（/discovery-sections で返したもの） */
-                sectionKey: components["parameters"]["SectionKey"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description セクションのカード */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscoverySectionItems"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            /** @description セクションがない（一覧にない key を指定した） */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
         };
     };
     getDiscovery: {
