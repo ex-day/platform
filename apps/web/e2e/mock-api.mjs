@@ -1,7 +1,11 @@
 // ブラウザテスト(e2e)用の API の代わり。GET /api/v1/top だけを返す(Issue #135、PR #158)。
 // - TOP の枠を、スクロールできる程度のカードの数で作る(本物の API・DB は使わない)。
-// - Discovery の詳細(/api/v1/discoveries/{id})は 404 を返す。戻る動きを確かめるのに、詳細の中身は要らないため。
+// - Discovery の詳細(/api/v1/discoveries/{id})は、どの識別子にも同じ中身(./discovery-detail.json)を返す。
+//   中身は OpenAPI の例 DiscoveryWalkApril を写したもの(詳細の画面がヘッダーごと描かれれば足りる)。
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
+
+const discoveryDetail = readFileSync(new URL("./discovery-detail.json", import.meta.url), "utf8");
 
 const PORT = Number(process.env.MOCK_API_PORT ?? 4010);
 
@@ -52,6 +56,11 @@ createServer((request, response) => {
   if (request.method === "GET" && url.pathname === "/api/v1/top") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify(top));
+    return;
+  }
+  if (request.method === "GET" && /^\/api\/v1\/discoveries\/[0-9A-Za-z]{12}$/.test(url.pathname)) {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(discoveryDetail);
     return;
   }
   response.writeHead(404, { "content-type": "application/problem+json" });

@@ -1,0 +1,198 @@
+{
+  "id": "b0919799718c",
+  "title": "汽車道を通って、桜木町から山下公園へ海沿いの散歩",
+  "summary": "桜木町駅から汽車道を渡り、海を見ながら山下公園まで歩ける。線路の跡を歩けるのも楽しい。",
+  "merge": {
+    "status": "none"
+  },
+  "capabilities": {
+    "canStartConversation": true,
+    "canReact": true
+  },
+  "context": {
+    "now": "2026-04-02T15:00:00+09:00",
+    "season": "spring",
+    "location": {
+      "name": "桜木町駅",
+      "lat": 35.4509,
+      "lng": 139.6309
+    },
+    "clockSource": "fixed",
+    "locationSource": "fixed"
+  },
+  "displayPlaces": [
+    {
+      "id": "160663e75a0b",
+      "name": "桜木町駅"
+    }
+  ],
+  "aspects": [
+    "散歩"
+  ],
+  "recommendations": [
+    {
+      "id": "4c55b60ff100",
+      "description": "海を見ながら歩ける、ちょうどいい長さの散歩道",
+      "conditions": [
+        {
+          "axis": "season",
+          "label": "季節",
+          "text": "通年",
+          "seasons": [
+            "all_year"
+          ]
+        }
+      ]
+    }
+  ],
+  "otherValues": [],
+  "origins": [
+    {
+      "kind": "conversation",
+      "establishedBy": "auto"
+    }
+  ],
+  "reactions": {
+    "agree": 1,
+    "wantToGo": 1
+  },
+  "places": [
+    {
+      "place": {
+        "id": "160663e75a0b",
+        "name": "桜木町駅"
+      },
+      "spatialType": "point",
+      "kinds": [
+        "駅"
+      ],
+      "role": "START",
+      "order": 1,
+      "isDisplayPlace": true,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          139.6308,
+          35.4509
+        ]
+      }
+    },
+    {
+      "place": {
+        "id": "743e09f2520a",
+        "name": "汽車道"
+      },
+      "spatialType": "route",
+      "kinds": [
+        "遊歩道"
+      ],
+      "role": "VIA",
+      "order": 2,
+      "isDisplayPlace": false,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            139.6318,
+            35.4518
+          ],
+          [
+            139.6345,
+            35.4545
+          ],
+          [
+            139.637,
+            35.4552
+          ]
+        ]
+      }
+    },
+    {
+      "place": {
+        "id": "74a63aeb68dd",
+        "name": "山下公園"
+      },
+      "spatialType": "point",
+      "kinds": [
+        "公園"
+      ],
+      "role": "END",
+      "order": 3,
+      "isDisplayPlace": false,
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          139.6505,
+          35.4462
+        ]
+      }
+    }
+  ],
+  "detourFrom": {
+    "id": "160663e75a0b",
+    "name": "桜木町駅"
+  },
+  "findings": [
+    {
+      "id": "5c1c7654c027",
+      "kind": "value",
+      "text": "桜木町から汽車道を通って山下公園まで、海を見ながら散歩できる",
+      "version": 1,
+      "createdAt": "2026-04-06T03:00:00+09:00",
+      "updatedAt": "2026-04-06T03:00:00+09:00",
+      "unconfirmed": false,
+      "reactions": {
+        "agree": 1,
+        "wantToGo": 0
+      }
+    }
+  ],
+  "originConversations": [
+    {
+      "id": "9eae53a6f40b",
+      "firstPost": "visible",
+      "excerpt": "桜木町から山下公園まで散歩したよ！海が見えて気持ちよかった",
+      "starterName": "港の散歩人",
+      "replyCount": 2,
+      "startedAt": "2026-04-05T10:00:00+09:00",
+      "lastPostedAt": "2026-04-05T12:30:00+09:00",
+      "places": [
+        {
+          "id": "160663e75a0b",
+          "name": "桜木町駅"
+        },
+        {
+          "id": "743e09f2520a",
+          "name": "汽車道"
+        },
+        {
+          "id": "74a63aeb68dd",
+          "name": "山下公園"
+        }
+      ]
+    }
+  ],
+  "startedConversations": {
+    "items": [],
+    "totalCount": 0
+  },
+  "projects": {
+    "items": [
+      {
+        "id": "33cd351db748",
+        "title": "港の見える散歩コース",
+        "type": "course",
+        "creatorKind": "user",
+        "creatorName": "はまっこ",
+        "matchedBy": "discovery",
+        "position": 1
+      }
+    ],
+    "totalCount": 1
+  },
+  "relations": {
+    "derivedFrom": [],
+    "derivedTo": [],
+    "related": []
+  }
+}

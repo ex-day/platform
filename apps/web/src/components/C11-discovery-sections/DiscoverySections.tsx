@@ -39,39 +39,47 @@ type SavedTop = { page: TopPage; activeKey?: SectionKey; scrollY: number };
 /** セッションストレージのキー。TOP の URL(起点の指定を含む)ごとに持つ */
 const STORAGE_PREFIX = "exday:top:";
 
-// 戻る・進むで来たか。popstate は Next.js が TOP を描き直すより先に届くので、ここで覚えておく
-let cameByHistoryTraversal = false;
+function pathAndSearch(url: URL | Location): string {
+  return url.pathname + url.search;
+}
+
+// 戻る・進むで移った先の URL(pathname と search)。popstate は Next.js が描き直すより先に届くので、ここで覚えておく。
+// 移った先に紐付けるので、TOP 以外への戻る・進むのあとにリンクで TOP を開いても、戻る・進むで来たとは見なさない
+let traversalTarget: string | undefined;
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
-    cameByHistoryTraversal = true;
+    traversalTarget = pathAndSearch(window.location);
   });
-  // 別の文書から戻ってきた(ページごと読み直された)とき
+  // 別の文書から戻ってきた(ページごと読み直された)ときは、その文書の URL
   const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-  cameByHistoryTraversal = navigation?.type === "back_forward";
+  if (navigation?.type === "back_forward") traversalTarget = pathAndSearch(new URL(navigation.name));
 }
 
-/** 戻る・進むで来たなら、持っておいた TOP を返す(サーバー側では何もしない) */
-function restoreOnTraversal(): SavedTop | undefined {
-  if (typeof window === "undefined" || !cameByHistoryTraversal) return undefined;
-  return loadSaved();
+/**
+ * この TOP(topUrl)へ戻る・進むで来たなら、持っておいた TOP を返す(サーバー側では何もしない)。
+ * 今の URL は window.location から読まない(リンクで移るときは、描き始めた時点ではまだ前の URL のため)
+ */
+function restoreOnTraversal(topUrl: string): SavedTop | undefined {
+  if (typeof window === "undefined" || traversalTarget !== topUrl) return undefined;
+  return loadSaved(topUrl);
 }
 
-function storageKey(): string {
-  return STORAGE_PREFIX + window.location.pathname + window.location.search;
+function storageKey(topUrl: string): string {
+  return STORAGE_PREFIX + topUrl;
 }
 
-function loadSaved(): SavedTop | undefined {
+function loadSaved(topUrl: string): SavedTop | undefined {
   try {
-    const raw = window.sessionStorage.getItem(storageKey());
+    const raw = window.sessionStorage.getItem(storageKey(topUrl));
     return raw ? (JSON.parse(raw) as SavedTop) : undefined;
   } catch {
     return undefined;
   }
 }
 
-function save(saved: SavedTop) {
+function save(topUrl: string, saved: SavedTop) {
   try {
-    window.sessionStorage.setItem(storageKey(), JSON.stringify(saved));
+    window.sessionStorage.setItem(storageKey(topUrl), JSON.stringify(saved));
   } catch {
     // 保存できない(容量・プライベートブラウズ等)ときは、戻ったときに取り直すだけ
   }
@@ -154,10 +162,11 @@ function SectionBody({ section }: { section: ShownSection }) {
   );
 }
 
-export function DiscoverySections() {
+/** topUrl は、この TOP の URL(pathname と search)。起点の指定(?from=)を画面で扱うときは、それを含めて渡す */
+export function DiscoverySections({ topUrl = "/" }: { topUrl?: string }) {
   const layout = useLayout();
   // 戻る・進むで来たときに戻すもの(最初の描画で1回だけ読む)
-  const [restored] = useState(restoreOnTraversal);
+  const [restored] = useState(() => restoreOnTraversal(topUrl));
   const [page, setPage] = useState<TopPage | "error" | undefined>(restored?.page);
   const [activeKey, setActiveKey] = useState<SectionKey | undefined>(restored?.activeKey);
   // 取りに行ったか。開発時の StrictMode で effect が2回動いても、2回取らないようにする
@@ -170,21 +179,21 @@ export function DiscoverySections() {
   function load() {
     void fetchTop().then((result) => {
       setPage(result);
-      if (result !== "error") save({ page: result, scrollY: 0 });
+      if (result !== "error") save(topUrl, { page: result, scrollY: 0 });
     });
   }
 
   useEffect(() => {
     if (requested.current) return;
     requested.current = true;
-    // 次に TOP へ来たときの判断のために戻す
-    cameByHistoryTraversal = false;
+    // 次に TOP へ来たときの判断のために消す
+    traversalTarget = undefined;
     if (restored) return;
     void fetchTop().then((result) => {
       setPage(result);
-      if (result !== "error") save({ page: result, scrollY: 0 });
+      if (result !== "error") save(topUrl, { page: result, scrollY: 0 });
     });
-  }, [restored]);
+  }, [restored, topUrl]);
 
   // 描き終えたら、戻したスクロール位置へ動かす
   useLayoutEffect(() => {
@@ -198,7 +207,7 @@ export function DiscoverySections() {
   useEffect(() => {
     if (!page || page === "error") return;
     let frame = 0;
-    const persist = () => save({ page, activeKey, scrollY: scrollY.current });
+    const persist = () => save(topUrl, { page, activeKey, scrollY: scrollY.current });
     const onScroll = () => {
       if (pendingScrollY.current !== undefined) return;
       scrollY.current = window.scrollY;
@@ -214,7 +223,7 @@ export function DiscoverySections() {
       window.removeEventListener("scroll", onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [page, activeKey]);
+  }, [page, activeKey, topUrl]);
 
   function retry() {
     setPage(undefined);

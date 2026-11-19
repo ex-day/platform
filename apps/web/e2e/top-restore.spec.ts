@@ -71,3 +71,26 @@ test("PC：詳細から戻ると、取り直さずにスクロール位置が戻
   await expect(page.getByRole("heading", { name: "近くの発見", exact: true })).toBeVisible();
   expect(requests.count).toBe(2);
 });
+
+test("戻る・進むで TOP 以外へ移ったあと、リンクで TOP を開いたときは取り直す", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const requests = countTopRequests(page);
+  await page.goto("/");
+  await page.getByRole("tab", { name: "近くの発見" }).click();
+
+  // 1. TOP から詳細へ
+  await page.getByRole("tabpanel").getByRole("link", { name: /近くの発見 2/ }).click();
+  await expect(page).toHaveURL(/\/discoveries\/n00000000002$/);
+  // 2. 戻るで TOP へ(取り直さない)
+  await page.goBack();
+  await expect(page.getByRole("tab", { name: "近くの発見" })).toHaveAttribute("aria-selected", "true");
+  expect(requests.count).toBe(1);
+  // 3. 進むで詳細へ(TOP は描かれない)
+  await page.goForward();
+  await expect(page).toHaveURL(/\/discoveries\/n00000000002$/);
+  // 4. ヘッダーのリンクで TOP を開く(戻る・進むではないので取り直し、タブも初めに戻る)
+  await page.getByRole("link", { name: "ex-day", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("tab", { name: "いま・この時期" })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => requests.count).toBe(2);
+});
