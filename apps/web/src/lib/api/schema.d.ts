@@ -289,6 +289,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/detour/reach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 選んだ駅から、寄れる場所と「そこで何分過ごせるか」を取得する（F06 寄り道の到達圏）
+         * @description F06 の結果を返す（機能の定義 docs/ui/functions/F06-detour-reach.md）。S12（寄り道）・C35（TOP の小さな地図）・S02 の移動時間が使う。
+         *     S12 の寄り道先のまとまり・場所の上の Discovery は、この結果に場所の情報を重ねて作る（S12 の取得用 API の段で決める）。
+         *
+         *     - **入力**：移動を始める駅（`from`。必須）・使える時間（`t`。分）・終わり方（`to`）。使える時間は、選んだ駅に着いた時点から数える。
+         *       現在地・場所から選んだ駅までの移動、到着の駅から先の移動は含めない。座標は受けない（DEC-0022 決定5）
+         *     - **終わり方**：`to` を省くと移動を始める駅へ戻る（既定）。`to=none` は寄り道先で終わる。`to=<駅の識別子>` は別の駅へ向かう
+         *     - **計算**：鉄道（表定速度、乗るたびの待ち、乗換10分の固定）と、寄り道先の駅と場所の間の徒歩（片道15分まで）。時刻表は使わない。
+         *       誤差は「行けない」側に寄せる（DEC-0013 決定1）。MVP ではバスを扱わない
+         *     - **場所で過ごせる時間** ＝ 使える時間 − 行き（移動を始める駅 → 寄り道先）− 帰り（寄り道先 → 終わり）。15分以上の場所だけを返す
+         *     - **経由した駅は返さない**（DEC-0014 決定2。駅を経由するか、場所へ直接届くかを約束の外に置く）。利用者に見せる行き方（`access`）は、あるときだけ返す
+         *     - **見えるもの**：ACTIVE の場所だけ。Discovery の公開・非公開とは関係しない（場所は公開の対象。DEC-0020）
+         *     - **並び**：過ごせる時間の長い順、同じなら場所の識別子の順。`limit` 件を超えたら `hasMore`（全体の数は返さない）。
+         *       S12 の並べ方の種類（`sort`）は、S12 の取得用 API の段で決める
+         *     - **計算の決まりの値**（待ち・乗換・歩きの速さ・15分の下限・帯）はアプリの設定で持つ。既定は F06「設定で持つ値」
+         */
+        get: operations["getDetourReach"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 駅を名前で探す（寄り道の移動を始める駅・到着の駅を選ぶ）
+         * @description 駅の名前での検索（S12 の駅の選び方。F06「駅の選び方」）。駅は種類が駅の場所で、1つの駅の場所は乗換できる駅のまとまり1つ。
+         *     同じ名前の駅を見分けられるように、路線と事業者を返す。
+         *
+         *     - **当てはまり方**：名前が `q` と同じ → `q` で始まる → `q` を含む、の順。同じ順位の中は名前の読みの順、同じなら識別子の順
+         *     - 駅の名前の「駅」は付けても付けなくてもよい（「新横浜」「新横浜駅」）
+         *     - ACTIVE の駅だけ
+         */
+        get: operations["searchStations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/places/{placeId}/nearby-stations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 場所のまわりの駅を取得する（移動を始める駅・到着の駅の候補）
+         * @description 場所のページの「ここから寄り道」などで、駅を選ぶための候補を出す（F06「駅の選び方」）。F06 の入力の決まりではなく、画面の補助。
+         *     距離の順は候補の表示だけに使い、自動で決めたり「おすすめ」としたりしない。
+         *
+         *     - **距離**：場所の形と駅の形の最短の直線の距離（メートル、四捨五入）。場所が駅なら、その駅を距離 0 で先頭に含める
+         *     - 直線で 5km 以内の ACTIVE の駅を、距離の順（同じなら識別子の順）に `limit` 件まで。5km 以内に駅がなければ空
+         *     - 統合された場所は 404 にせず、統合先のまわりの駅を返す（S13 と同じく統合をたどる）
+         */
+        get: operations["getPlaceNearbyStations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stations/nearby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 現在地のまわりの駅を取得する（移動を始める駅の候補）
+         * @description 現在地から寄り道を調べるときに、移動を始める駅の候補を出す（F06「駅の選び方」）。**座標を URL に出さないため、本文で受ける**
+         *     （DEC-0022 決定5）。読み取りだけで、何も書き込まない。
+         *
+         *     - 座標は保存しない。API のアクセスのログ・エラーのログに本文を残さない
+         *     - 直線で 5km 以内の ACTIVE の駅を、距離の順（同じなら識別子の順）に `limit` 件まで。5km 以内に駅がなければ空
+         *     - 距離の順は候補の表示だけに使い、自動で決めたり「おすすめ」としたりしない
+         */
+        post: operations["findStationsNearLocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -388,6 +496,120 @@ export interface components {
          *     エリアは Polygon・MultiPolygon。座標は API の本文でだけ返し、URL には出さない（DEC-0022）
          */
         Geometry: components["schemas"]["PointGeometry"] | components["schemas"]["LineStringGeometry"] | components["schemas"]["MultiLineStringGeometry"] | components["schemas"]["PolygonGeometry"] | components["schemas"]["MultiPolygonGeometry"];
+        /** @description 駅（種類が駅の場所。1つの駅の場所は乗換できる駅のまとまり1つ）。同じ名前の駅を見分けるために路線を返す */
+        Station: {
+            place: components["schemas"]["PlaceRef"];
+            /** @description この駅を通る路線（事業者・路線の名前の順）。分からなければ空 */
+            lines: components["schemas"]["StationLine"][];
+        };
+        StationLine: {
+            /** @description 事業者（例：JR東日本、横浜市交通局） */
+            operator: string;
+            /** @description 路線の名前（例：横浜線） */
+            name: string;
+        };
+        StationList: {
+            items: components["schemas"]["Station"][];
+        };
+        NearbyStation: {
+            station: components["schemas"]["Station"];
+            /** @description 直線の距離（メートル、四捨五入）。候補の表示の補助で、歩きの時間ではない */
+            distanceMeters: number;
+        };
+        NearbyStationList: {
+            items: components["schemas"]["NearbyStation"][];
+        };
+        /** @description 現在地（WGS84）。保存しない */
+        StationsNearLocationRequest: {
+            latitude: number;
+            longitude: number;
+            /** @default 5 */
+            limit: number;
+        };
+        /**
+         * @description 終わり方。`kind` で判別する
+         *     - return：移動を始める駅へ戻る（`to` を省いたとき）
+         *     - stop：寄り道先で終わる（`to=none`）
+         *     - station：別の駅へ向かう（`to=<駅>`）
+         */
+        DetourEnd: components["schemas"]["ReturnDetourEnd"] | components["schemas"]["StopDetourEnd"] | components["schemas"]["StationDetourEnd"];
+        ReturnDetourEnd: {
+            /** @enum {string} */
+            kind: "return";
+        };
+        StopDetourEnd: {
+            /** @enum {string} */
+            kind: "stop";
+        };
+        StationDetourEnd: {
+            /** @enum {string} */
+            kind: "station";
+            station: components["schemas"]["Station"];
+        };
+        /**
+         * @description 寄り道の到達圏。`kind` で判別する
+         *     - reachable：計算できた（寄れる場所が0件のときも、こちらで空の一覧）
+         *     - not_enough_time：別の駅へ向かうときに、使える時間が寄り道をしないで着く時間より短い
+         */
+        DetourReach: components["schemas"]["ReachableDetourReach"] | components["schemas"]["NotEnoughTimeDetourReach"];
+        /** @description 計算に使った条件（入力を確かめた結果）。画面は「新横浜駅から計算します。現在地・選んだ場所から新横浜駅までの移動時間は含みません」を添える */
+        DetourCondition: {
+            from: components["schemas"]["Station"];
+            minutes: number;
+            end: components["schemas"]["DetourEnd"];
+        };
+        ReachableDetourReach: {
+            /** @enum {string} */
+            kind: "reachable";
+            condition: components["schemas"]["DetourCondition"];
+            /** @description 寄り道をしないで終わりに着く時間（分）。戻る・寄り道先で終わるときは 0、別の駅へ向かうときは移動を始める駅 → 到着の駅 */
+            directMinutes: number;
+            /** @description 地図の帯。過ごせる時間の下限の小さい順（15・30・60・120分以上。設定の値）。形が空の帯は返さない */
+            bands: components["schemas"]["DetourBand"][];
+            /** @description 寄れる場所。過ごせる時間の長い順、同じなら場所の識別子の順 */
+            places: components["schemas"]["DetourPlace"][];
+            /** @description limit を超えて寄れる場所があれば true */
+            hasMore: boolean;
+        };
+        NotEnoughTimeDetourReach: {
+            /** @enum {string} */
+            kind: "not_enough_time";
+            condition: components["schemas"]["DetourCondition"];
+            /** @description 寄り道をしないで到着の駅に着く時間（分）。使える時間はこれより短い */
+            directMinutes: number;
+        };
+        DetourBand: {
+            /** @description この帯の中では、少なくともこの分数を過ごせる */
+            minStayMinutes: number;
+            geometry: components["schemas"]["MultiPolygonGeometry"];
+        };
+        DetourPlace: {
+            place: components["schemas"]["PlaceRef"];
+            /** @description 場所の種類（S13 の場所の見出しと同じ） */
+            kinds: string[];
+            /** @description 地図に出す代表点（地点はその点、エリアは面の上の1点、経路は始点） */
+            position: components["schemas"]["PointGeometry"];
+            /** @description そこで何分過ごせるか（場所で使える時間の合計。15分以上） */
+            stayMinutes: number;
+            /** @description 移動を始める駅からこの場所まで（分。徒歩を含む） */
+            outboundMinutes: number;
+            /** @description この場所から終わりまで（分。徒歩を含む）。寄り道先で終わるときは 0 */
+            returnMinutes: number;
+            /** @description 利用者に見せる行き方（あるときだけ）。計算の中で経由した駅の約束ではない */
+            access?: components["schemas"]["DetourAccess"];
+        };
+        /** @description 「新横浜駅から徒歩約8分」。MVP では徒歩だけ */
+        DetourAccess: {
+            station: components["schemas"]["PlaceRef"];
+            /**
+             * @description 手段。MVP では徒歩だけ（バスは扱わない）
+             * @enum {string}
+             */
+            mode: "walk";
+            minutes: number;
+            /** @description 自動の目安なら true（画面で「目安」と出す）。行き方（公式・運営等）の分数なら false */
+            estimated: boolean;
+        };
         DiscoveryDetail: {
             id: components["schemas"]["PublicId"];
             title: string;
@@ -2083,6 +2305,114 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getDetourReach: {
+        parameters: {
+            query: {
+                /** @description 移動を始める駅（種類が駅の場所の識別子）。ない場所なら 404、駅でない場所なら 400 */
+                from: components["schemas"]["PublicId"];
+                /** @description 使える時間（分）。30〜480分・15分刻み（S12）。合わなければ 400 */
+                t: number;
+                /** @description 終わり方。省くと移動を始める駅へ戻る。`none` は寄り道先で終わる。駅の識別子は、その駅へ向かう（ない場所なら 404、駅でない場所なら 400） */
+                to?: string;
+                /** @description 返す場所の数の上限 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 寄り道の到達圏 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetourReach"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    searchStations: {
+        parameters: {
+            query: {
+                /** @description 探す文字（前後の空白は除く） */
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当てはまる駅 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StationList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    getPlaceNearbyStations: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description 場所の識別子（画面・URL に出すもの）。形が合わなければ 400 */
+                placeId: components["parameters"]["PlaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description まわりの駅 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbyStationList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    findStationsNearLocation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StationsNearLocationRequest"];
+            };
+        };
+        responses: {
+            /** @description まわりの駅 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NearbyStationList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
         };
     };
 }
