@@ -162,6 +162,21 @@
 - 採用されていない場所（新しい場所の案）は `place` に入れない。案は `place_candidate` の列に持つ（3.8節）
 - 場所の重複の統合・廃止は、MVP では運営が SQL で行い、判断の記録を足す（S13、MVP スコープ 5節）
 
+### 3.2.1 駅・行き方・到達点（DB V3。F06）
+
+寄り道の到達圏（F06）のための表。設計は [F06「データの形」](ui/functions/F06-detour-reach.md)、DEC-0013 決定2・4・5。`db/migration/V3__add_station_and_place_access.sql` で作った（PR #165）。
+
+| 表 | 主な列 | 制約・備考 |
+|---|---|---|
+| `reach.line` | `operator`、`name` | 路線。一意（`operator`, `name`）。表定速度等は到達圏のグラフの段（#163 のあと）で足す |
+| `reach.station` | `place_id`（駅の場所）、`line_id`、`name`（N02 の駅名）、`geom`（点か線） | 計算の中の駅（路線ごとの駅1行）。一意（`line_id`, `place_id`）。駅の場所の種類が「駅」であることは取り込みの処理で守る |
+| `reach.station_source` | `station_id`、`dataset_year`、`station_code`、`group_code` | N02 の年度ごとの対応。主キー（`station_id`, `dataset_year`）、一意（`dataset_year`, `station_code`） |
+| `place_arrival_point` | `place_id`、`geom`（点）、`kind`（CONFIRMED_ENTRANCE／ESTIMATED）、`mode`（WALK／CAR／BUS）、`source` | 到達点。1つの場所に0以上 |
+| `place_access` | `place_id`、`station_place_id`、`mode`（WALK／BUS／TAXI／OTHER）、`minutes`、`arrival_point_id`、`original_text`・`note`、`source`、`verification`、`source_url`・`retrieved_on`・`verified_at`、`status`（ACTIVE／INVALID／EXTRACTION_FAILED）、`created_decision_id` | 行き方。直さずに足していく。着く先は同じ場所の到達点だけ（複合の外部キー）。人が確かめたものは `verified_at` を持つ（CHECK）。判断の記録を必ず持つ。MVP の F06 は徒歩だけを参照する |
+
+- `reach` のスキーマは、ドメインの表と分けた計算のデータ（論理設計 14節）。グラフ（`reach.node`・`reach.edge`）・版（`reach.build`）・駅から場所への歩き（`reach.place_walk`）は、歩きのデータと更新の手順を #163 で決めてから作る
+- 制約の確認：[db/check/v3_checks.sql](../db/check/README.md)
+
 ### 3.3 会話と Post（4.3・4.4節）
 
 | 表 | 主な列 | 制約・備考 |
