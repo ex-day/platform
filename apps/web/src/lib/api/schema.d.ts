@@ -309,11 +309,41 @@ export interface paths {
          *     - **場所で過ごせる時間** ＝ 使える時間 − 行き（移動を始める駅 → 寄り道先）− 帰り（寄り道先 → 終わり）。15分以上の場所だけを返す
          *     - **経由した駅は返さない**（DEC-0014 決定2。駅を経由するか、場所へ直接届くかを約束の外に置く）。利用者に見せる行き方（`access`）は、あるときだけ返す
          *     - **見えるもの**：ACTIVE の場所だけ。Discovery の公開・非公開とは関係しない（場所は公開の対象。DEC-0020）
-         *     - **並び**：過ごせる時間の長い順、同じなら場所の識別子の順。`limit` 件を超えたら `hasMore`（全体の数は返さない）。
-         *       S12 の並べ方の種類（`sort`）は、S12 の取得用 API の段で決める
+         *     - **並び**：過ごせる時間の長い順、同じなら場所の識別子（文字コード）の順（全順序）。S12 の並べ方の種類（`sort`）は、S12 の取得用 API の段で決める
+         *     - **ページ**：この応答は、条件・寄り道をしないで着く時間・地図の帯と、寄れる場所の最初のページを返す。続きがあれば `nextCursor` を返し、
+         *       続きは getDetourReachPlaces で読む（帯・条件はページで変わらないので、最初の応答だけで返す）。1ページの上限だけを持ち、
+         *       寄れる場所の全体を件数で打ち切らない。全体の数は返さない（PR #165 のレビュー、2026-11-20）
+         *     - **地図の帯**は寄れる場所から作らず、到達圏の全体から作る。続きのページを読んでも変わらない。画面は、地図の旗を今のページの場所だけに立てる（S12）
          *     - **計算の決まりの値**（待ち・乗換・歩きの速さ・15分の下限・帯）はアプリの設定で持つ。既定は F06「設定で持つ値」
          */
         get: operations["getDetourReach"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/detour/reach/places": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 寄り道の到達圏の、寄れる場所の続きを取得する（F06）
+         * @description getDetourReach の `nextCursor`（または前のページの `nextCursor`）を `after` に渡して、寄れる場所の続きを読む。
+         *     地図の帯・条件は返さない（最初の応答のものを使う）。並び・計算・見えるものは getDetourReach と同じ。
+         *
+         *     - **条件**：`from`・`t`・`to` は最初と同じ値を渡す。カーソルを作ったときと違えば 400（条件を変えたら getDetourReach から読み直す）
+         *     - **カーソル**：到達圏データの版・計算の決まりの値・条件・並びのキーを含む。読んでいる間に版や計算の決まりの値が切り替わっていたら 400
+         *       （重複・欠落を出さないため。画面は getDetourReach から読み直す。既存の一覧と同じ扱い）
+         *     - **前のページ**：API は「前へ」を持たない。画面が読んだページのカーソルを覚えて、もう一度読む
+         *     - 時間が足りない（not_enough_time）ときは最初の応答に続きがないので、この API を呼ぶことはない（呼べば 400）
+         */
+        get: operations["getDetourReachPlaces"];
         put?: never;
         post?: never;
         delete?: never;
@@ -566,10 +596,8 @@ export interface components {
             directMinutes: number;
             /** @description 地図の帯。過ごせる時間の下限の小さい順（15・30・60・120分以上。設定の値）。形が空の帯は返さない */
             bands: components["schemas"]["DetourBand"][];
-            /** @description 寄れる場所。過ごせる時間の長い順、同じなら場所の識別子の順 */
-            places: components["schemas"]["DetourPlace"][];
-            /** @description limit を超えて寄れる場所があれば true */
-            hasMore: boolean;
+            /** @description 寄れる場所の最初のページ。続きは getDetourReachPlaces */
+            places: components["schemas"]["DetourPlacePage"];
         };
         NotEnoughTimeDetourReach: {
             /** @enum {string} */
@@ -578,6 +606,19 @@ export interface components {
             /** @description 寄り道をしないで到着の駅に着く時間（分）。使える時間はこれより短い */
             directMinutes: number;
         };
+        /**
+         * @description 寄れる場所の1ページ。過ごせる時間の長い順、同じなら場所の識別子の順。続きがあれば `nextCursor` を返す（getDetourReachPlaces の `after` に渡す）。
+         *     全体の数は返さない。0件なら空の配列。ページの間で場所が統合されると同じ場所が重ねて出ることがあり、画面は場所の識別子で重複を除く
+         */
+        DetourPlacePage: {
+            items: components["schemas"]["DetourPlace"][];
+            nextCursor?: components["schemas"]["DetourPlaceCursor"];
+        };
+        /**
+         * @description 寄れる場所の続きを読むカーソル。到達圏データの版・計算の決まりの値・条件（from・t・to）・並びのキー（過ごせる時間・場所の識別子）を含む。
+         *     画面は中身を解釈せず、そのまま `after` に渡す。読めない値、条件の違う値、版や計算の決まりの値が切り替わった後の値は 400
+         */
+        DetourPlaceCursor: string;
         DetourBand: {
             /** @description この帯の中では、少なくともこの分数を過ごせる */
             minStayMinutes: number;
@@ -2045,6 +2086,14 @@ export interface components {
         ProjectId: components["schemas"]["PublicId"];
         /** @description Discovery の識別子（画面・URL に出すもの）。形が合わなければ 400 */
         DiscoveryId: components["schemas"]["PublicId"];
+        /** @description 移動を始める駅（種類が駅の場所の識別子）。ない場所なら 404、駅でない場所なら 400 */
+        DetourFrom: components["schemas"]["PublicId"];
+        /** @description 使える時間（分）。30〜480分・15分刻み（S12）。合わなければ 400 */
+        DetourMinutes: number;
+        /** @description 終わり方。省くと移動を始める駅へ戻る。`none` は寄り道先で終わる。駅の識別子は、その駅へ向かう（ない場所なら 404、駅でない場所なら 400） */
+        DetourTo: string;
+        /** @description 1ページの寄れる場所の数（既存の一覧と同じ既定20・最大50）。S12 の地図の旗は今のページの場所だけに立てるので、地図に出す数もこれで決まる */
+        DetourPlaceLimit: number;
     };
     requestBodies: never;
     headers: never;
@@ -2311,13 +2360,13 @@ export interface operations {
         parameters: {
             query: {
                 /** @description 移動を始める駅（種類が駅の場所の識別子）。ない場所なら 404、駅でない場所なら 400 */
-                from: components["schemas"]["PublicId"];
+                from: components["parameters"]["DetourFrom"];
                 /** @description 使える時間（分）。30〜480分・15分刻み（S12）。合わなければ 400 */
-                t: number;
+                t: components["parameters"]["DetourMinutes"];
                 /** @description 終わり方。省くと移動を始める駅へ戻る。`none` は寄り道先で終わる。駅の識別子は、その駅へ向かう（ない場所なら 404、駅でない場所なら 400） */
-                to?: string;
-                /** @description 返す場所の数の上限 */
-                limit?: number;
+                to?: components["parameters"]["DetourTo"];
+                /** @description 1ページの寄れる場所の数（既存の一覧と同じ既定20・最大50）。S12 の地図の旗は今のページの場所だけに立てるので、地図に出す数もこれで決まる */
+                limit?: components["parameters"]["DetourPlaceLimit"];
             };
             header?: never;
             path?: never;
@@ -2332,6 +2381,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DetourReach"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDetourReachPlaces: {
+        parameters: {
+            query: {
+                /** @description 移動を始める駅（種類が駅の場所の識別子）。ない場所なら 404、駅でない場所なら 400 */
+                from: components["parameters"]["DetourFrom"];
+                /** @description 使える時間（分）。30〜480分・15分刻み（S12）。合わなければ 400 */
+                t: components["parameters"]["DetourMinutes"];
+                /** @description 終わり方。省くと移動を始める駅へ戻る。`none` は寄り道先で終わる。駅の識別子は、その駅へ向かう（ない場所なら 404、駅でない場所なら 400） */
+                to?: components["parameters"]["DetourTo"];
+                /** @description カーソル（前の応答の nextCursor）。これより後の寄れる場所を返す */
+                after: components["schemas"]["DetourPlaceCursor"];
+                /** @description 1ページの寄れる場所の数（既存の一覧と同じ既定20・最大50）。S12 の地図の旗は今のページの場所だけに立てるので、地図に出す数もこれで決まる */
+                limit?: components["parameters"]["DetourPlaceLimit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 寄れる場所の続き */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetourPlacePage"];
                 };
             };
             400: components["responses"]["BadRequest"];
