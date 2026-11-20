@@ -34,7 +34,7 @@ CREATE TABLE reach.station (
     created_at  timestamptz NOT NULL DEFAULT now(),
     UNIQUE (line_id, place_id)
 );
-COMMENT ON TABLE reach.station IS '計算の中の駅（路線ごとの駅1行。N02 の駅）。place_id は駅の場所（乗換できるまとまり）。駅の場所の種類が「駅」であることは取り込みの処理で守る';
+COMMENT ON TABLE reach.station IS '計算の中の駅（路線ごとの駅1行。N02 の駅）。place_id は駅の場所（乗換できるまとまり）。駅の場所の種類が「駅」であることは下の制約のトリガーで守る';
 COMMENT ON COLUMN reach.station.name IS 'N02 の駅名（駅の場所の表示名とは別に持つ）';
 COMMENT ON COLUMN reach.station.geom IS 'ホームの位置（N02 は線。WGS84）';
 CREATE INDEX reach_station_place_idx ON reach.station (place_id);
@@ -77,7 +77,7 @@ CREATE TABLE place_access (
     place_id             bigint      NOT NULL REFERENCES place (id),
     station_place_id     bigint      NOT NULL REFERENCES place (id),
     mode                 text        NOT NULL CHECK (mode IN ('WALK', 'BUS', 'TAXI', 'OTHER')),
-    minutes              integer     NOT NULL CHECK (minutes > 0),
+    minutes              integer     NOT NULL CHECK (minutes >= 0),
     arrival_point_id     bigint,
     original_text        text,
     note                 text,
@@ -94,11 +94,67 @@ CREATE TABLE place_access (
     FOREIGN KEY (arrival_point_id, place_id) REFERENCES place_arrival_point (id, place_id)
 );
 COMMENT ON TABLE place_access IS '行き方（駅から場所まで）。1つの場所に何件でも。直さずに足していき、古い・誤りは status で無効にする。人が登録したものは AI の解釈で書き換えない（DEC-0013 決定2）';
-COMMENT ON COLUMN place_access.station_place_id IS '駅の場所（種類が「駅」）';
+COMMENT ON COLUMN place_access.station_place_id IS '駅の場所（種類が「駅」。下の制約のトリガーで守る）';
 COMMENT ON COLUMN place_access.mode IS '主な手段。MVP の F06 は徒歩（WALK）だけを参照する（バス等は MVP で扱わない）';
-COMMENT ON COLUMN place_access.minutes IS '合計の分数（駅を出てから着く先まで）';
+COMMENT ON COLUMN place_access.minutes IS '合計の分数（駅を出てから着く先まで）。駅直結・駅構内は 0 分（OpenAPI の DetourAccess.minutes と同じ）';
 COMMENT ON COLUMN place_access.arrival_point_id IS '着く先の到達点。なければ場所そのもの。同じ場所の到達点だけを指せる（複合の外部キー）';
 COMMENT ON COLUMN place_access.verification IS '人が確かめた／機械で取り出した・未確認。使える順番（DEC-0013 決定3）は出どころと確かめた状態から決め、列に持たない';
 COMMENT ON COLUMN place_access.created_decision_id IS '登録した判断の記録（登録したのが人か取得の処理かは判断の記録の主体で分かる）';
 CREATE INDEX place_access_place_idx ON place_access (place_id) WHERE status = 'ACTIVE';
 CREATE INDEX place_access_station_idx ON place_access (station_place_id) WHERE status = 'ACTIVE';
+
+-- ---------------------------------------------------------
+-- 駅を指す列は、種類が「駅」の場所だけを指す（PR #165 のレビュー）
+-- ---------------------------------------------------------
+-- reach.station.place_id と place_access.station_place_id は、place_kind に「駅」を持つ場所だけを指せる。
+-- 行き方は運営・ユーザー・会話・自動の取得など複数の経路から作られるので、書き込みの処理ごとに頼らず DB で守る。
+-- 種類は place_kind（1つの場所に複数）にあり外部キーで表せないため、制約のトリガーで確かめる。
+-- 取り込みで場所・種類・駅を同じトランザクションで足せるように、確かめるのは commit の時点（DEFERRABLE INITIALLY DEFERRED）。
+-- 駅を指されている場所から「駅」の種類を外すことも拒む。
+
+CREATE FUNCTION exday_is_station_place(place_id bigint) RETURNS boolean LANGUAGE sql STABLE AS $$
+    SELECT EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = $1 AND k.kind = '駅')
+$$;
+
+CREATE FUNCTION exday_check_station_place() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    target bigint;
+BEGIN
+    IF TG_TABLE_NAME = 'station' THEN
+        target := NEW.place_id;
+    ELSE
+        target := NEW.station_place_id;
+    END IF;
+    IF NOT exday_is_station_place(target) THEN
+        RAISE EXCEPTION '%.% は種類が「駅」の場所を指す（place_id = %）', TG_TABLE_NAME,
+            CASE WHEN TG_TABLE_NAME = 'station' THEN 'place_id' ELSE 'station_place_id' END, target
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+END $$;
+
+CREATE CONSTRAINT TRIGGER reach_station_place_is_station
+    AFTER INSERT OR UPDATE OF place_id ON reach.station
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION exday_check_station_place();
+
+CREATE CONSTRAINT TRIGGER place_access_station_is_station
+    AFTER INSERT OR UPDATE OF station_place_id ON place_access
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION exday_check_station_place();
+
+CREATE FUNCTION exday_check_station_kind_kept() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.kind = '駅' AND NOT exday_is_station_place(OLD.place_id)
+       AND (EXISTS (SELECT 1 FROM reach.station s WHERE s.place_id = OLD.place_id)
+            OR EXISTS (SELECT 1 FROM place_access a WHERE a.station_place_id = OLD.place_id)) THEN
+        RAISE EXCEPTION '駅として指されている場所から「駅」の種類は外せない（place_id = %）', OLD.place_id
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
+END $$;
+
+CREATE CONSTRAINT TRIGGER place_kind_station_kept
+    AFTER DELETE OR UPDATE ON place_kind
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION exday_check_station_kind_kept();

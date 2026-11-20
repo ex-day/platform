@@ -169,12 +169,14 @@
 | 表 | 主な列 | 制約・備考 |
 |---|---|---|
 | `reach.line` | `operator`、`name` | 路線。一意（`operator`, `name`）。表定速度等は到達圏のグラフの段（#163 のあと）で足す |
-| `reach.station` | `place_id`（駅の場所）、`line_id`、`name`（N02 の駅名）、`geom`（点か線） | 計算の中の駅（路線ごとの駅1行）。一意（`line_id`, `place_id`）。駅の場所の種類が「駅」であることは取り込みの処理で守る |
+| `reach.station` | `place_id`（駅の場所）、`line_id`、`name`（N02 の駅名）、`geom`（点か線） | 計算の中の駅（路線ごとの駅1行）。一意（`line_id`, `place_id`）。`place_id` は種類が「駅」の場所だけ（下の制約のトリガー） |
 | `reach.station_source` | `station_id`、`dataset_year`、`station_code`、`group_code` | N02 の年度ごとの対応。主キー（`station_id`, `dataset_year`）、一意（`dataset_year`, `station_code`） |
 | `place_arrival_point` | `place_id`、`geom`（点）、`kind`（CONFIRMED_ENTRANCE／ESTIMATED）、`mode`（WALK／CAR／BUS）、`source` | 到達点。1つの場所に0以上 |
-| `place_access` | `place_id`、`station_place_id`、`mode`（WALK／BUS／TAXI／OTHER）、`minutes`、`arrival_point_id`、`original_text`・`note`、`source`、`verification`、`source_url`・`retrieved_on`・`verified_at`、`status`（ACTIVE／INVALID／EXTRACTION_FAILED）、`created_decision_id` | 行き方。直さずに足していく。着く先は同じ場所の到達点だけ（複合の外部キー）。人が確かめたものは `verified_at` を持つ（CHECK）。判断の記録を必ず持つ。MVP の F06 は徒歩だけを参照する |
+| `place_access` | `place_id`、`station_place_id`、`mode`（WALK／BUS／TAXI／OTHER）、`minutes`、`arrival_point_id`、`original_text`・`note`、`source`、`verification`、`source_url`・`retrieved_on`・`verified_at`、`status`（ACTIVE／INVALID／EXTRACTION_FAILED）、`created_decision_id` | 行き方。直さずに足していく。着く先は同じ場所の到達点だけ（複合の外部キー）。人が確かめたものは `verified_at` を持つ（CHECK）。判断の記録を必ず持つ。`minutes` は0以上（駅直結・駅構内は0分。OpenAPI の `DetourAccess.minutes` と同じ）。`station_place_id` は種類が「駅」の場所だけ（下の制約のトリガー）。MVP の F06 は徒歩だけを参照する |
 
 - `reach` のスキーマは、ドメインの表と分けた計算のデータ（論理設計 14節）。グラフ（`reach.node`・`reach.edge`）・版（`reach.build`）・駅から場所への歩き（`reach.place_walk`）は、歩きのデータと更新の手順を #163 で決めてから作る
+- **駅を指す列は種類が「駅」の場所だけ**（PR #165 のレビュー）：`reach.station.place_id`・`place_access.station_place_id`。行き方は運営・ユーザー・会話・自動の取得など複数の経路から作られるので、書き込みの処理ごとに頼らず DB で守る。種類は `place_kind` にあり外部キーで表せないため、制約のトリガー（commit の時点で確かめる）で拒み、駅として指されている場所から「駅」の種類を外すことも拒む
+- `reach.station` は今、有効かどうか（状態・期間）を持たない。路線の一部が廃止されたときの扱い（有効なデータの年度で決める／状態か有効期間を持つ／版ごとに切り替える）は #163 の N02 の更新・廃止・名寄せで決める
 - 制約の確認：[db/check/v3_checks.sql](../db/check/README.md)
 
 ### 3.3 会話と Post（4.3・4.4節）

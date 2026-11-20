@@ -126,7 +126,7 @@ MVP では徒歩だけを扱う（バスは扱わない。下の「MVP では扱
 
 DB V2 のどの表に足すか・新しく作るかの案。表の名前・列は3段目（DB V3 のマイグレーション）で確定する。
 
-**3段目で作ったもの**（2026-11-21）：1〜3 を `db/migration/V3__add_station_and_place_access.sql` で作った（`reach.line`・`reach.station`・`reach.station_source`・`place_access`・`place_arrival_point`）。路線は `reach.line`（事業者・路線の名前）に分け、`reach.station` から指す。行き方は判断の記録（`created_decision_id`）を必ず持ち、登録したのが人か取得の処理かは判断の記録の主体で分ける。5〜7（グラフ・版・歩き）は #163 のあとの次のマイグレーションで作る。到達圏の計算のデータ（下の 1・5・6）は、ドメインの表と分けて `reach` のスキーマに置く（運用・実装のデータ。論理設計 14節）。
+**3段目で作ったもの**（2026-11-21）：1〜3 を `db/migration/V3__add_station_and_place_access.sql` で作った（`reach.line`・`reach.station`・`reach.station_source`・`place_access`・`place_arrival_point`）。路線は `reach.line`（事業者・路線の名前）に分け、`reach.station` から指す。行き方は判断の記録（`created_decision_id`）を必ず持ち、登録したのが人か取得の処理かは判断の記録の主体で分ける。駅を指す列（`reach.station.place_id`・`place_access.station_place_id`）は種類が「駅」の場所だけを DB で受け付ける（制約のトリガー）。行き方の分数は0以上（駅直結・駅構内は0分。API の `DetourAccess.minutes` と同じ）（PR #165 のレビュー）。路線の一部の廃止の扱い（`reach.station` に有効かどうかを持つか）は #163。5〜7（グラフ・版・歩き）は #163 のあとの次のマイグレーションで作る。到達圏の計算のデータ（下の 1・5・6）は、ドメインの表と分けて `reach` のスキーマに置く（運用・実装のデータ。論理設計 14節）。
 
 ### 1. 駅（DEC-0013 決定4）
 
