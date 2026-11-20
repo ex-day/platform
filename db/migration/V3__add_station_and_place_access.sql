@@ -116,16 +116,18 @@ CREATE FUNCTION exday_is_station_place(place_id bigint) RETURNS boolean LANGUAGE
     SELECT EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = $1 AND k.kind = '駅')
 $$;
 
+-- commit の時点では、行の今の値で確かめる（同じトランザクションで同じ行を何度か付け替えたとき、途中の値で拒まない）。
+-- 行がもう消えていれば確かめない
 CREATE FUNCTION exday_check_station_place() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     target bigint;
 BEGIN
     IF TG_TABLE_NAME = 'station' THEN
-        target := NEW.place_id;
+        SELECT s.place_id INTO target FROM reach.station s WHERE s.id = NEW.id;
     ELSE
-        target := NEW.station_place_id;
+        SELECT a.station_place_id INTO target FROM place_access a WHERE a.id = NEW.id;
     END IF;
-    IF NOT exday_is_station_place(target) THEN
+    IF FOUND AND NOT exday_is_station_place(target) THEN
         RAISE EXCEPTION '%.% は種類が「駅」の場所を指す（place_id = %）', TG_TABLE_NAME,
             CASE WHEN TG_TABLE_NAME = 'station' THEN 'place_id' ELSE 'station_place_id' END, target
             USING ERRCODE = 'check_violation';

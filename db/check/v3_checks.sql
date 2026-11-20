@@ -120,8 +120,11 @@ VALUES ('確認用の駅', 'POINT', ST_GeogFromText('SRID=4326;POINT(139.70 35.6
 INSERT INTO reach.station (place_id, line_id, name, geom)
 SELECT p.id, (SELECT id FROM reach.line WHERE name = '東横線'), '確認用', p.geom FROM place p WHERE p.source_record_id = 'check-station';
 INSERT INTO place_kind (place_id, kind) SELECT id, '駅' FROM place WHERE source_record_id = 'check-station';
+-- 同じトランザクションで同じ行を駅でない場所へ付け替えてから駅へ戻しても、commit の時点の値で確かめるので通る
+UPDATE place_access SET station_place_id = pg_temp.plid('kishamichi') WHERE place_id = pg_temp.plid('kozukue-castle');
+UPDATE place_access SET station_place_id = pg_temp.plid('kozukue-st') WHERE place_id = pg_temp.plid('kozukue-castle');
 SET CONSTRAINTS ALL IMMEDIATE;
-SELECT pg_temp.expect('駅を先に足しても、同じトランザクションで「駅」の種類を足せば通る',
+SELECT pg_temp.expect('駅を先に足しても、同じトランザクションで「駅」の種類を足せば通る（途中で付け替えた行も今の値で確かめる）',
     EXISTS (SELECT 1 FROM reach.station s JOIN place p ON p.id = s.place_id WHERE p.source_record_id = 'check-station'));
 
 ROLLBACK;
