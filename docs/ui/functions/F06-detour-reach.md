@@ -4,8 +4,8 @@
 
 - **番号は候補**（機能一覧）。2026-11-19 新規（[Issue #161](https://github.com/ex-day/platform/issues/161)）。**1段目（データの形と計算の決まりの案）**。人がレビューで決めたあと、2段目で OpenAPI、3段目で DB（V3）と実装を行う（S14・S15・S01 の取得用 API と同じ進め方）
 - 2026-11-20、1段目のレビュー（PR #165）を反映した。**利用者が移動を始める駅（と帰り道の到着の駅）を選び、F06 はその駅から先を、鉄道と徒歩で計算する**（人の判断）。場所から駅を自動で決める規則と、場所と駅の間の移動を引く案はやめた。**MVP ではバスを扱わない**（人の判断）
-- 計算の仕組みは MVP では pgRouting（[DEC-0014](../../decisions/DEC-0014-reach-engine-pgrouting-provisional.md) 決定1）。歩きのデータ・データの更新と切り戻し・性能と運用の決まりは [#163](https://github.com/ex-day/platform/issues/163) で決める。**歩きのデータは OSM の歩ける道にした**（2026-11-21、人の判断。poc #46 で pgRouting＋N13 と pgRouting＋OSM を同じ条件で比べた。DEC-0014 決定1）。**OpenAPI（2段目）は歩きのデータに依らずに進め、計算の実装（3段目）は歩きのデータを決めてから行う**
-- 寄り道の考え方は [DEC-0013](../../decisions/DEC-0013-detour-suggestion-in-mvp.md)、画面は [S12](../screens/S12-detour.md)、入口と URL は [DEC-0022](../../decisions/DEC-0022-top-page-and-detour-entry.md)。PoC は ex-day/poc の `reach/`（#5・#6・#23・#27・#31・#40・#42）
+- 計算の仕組みは MVP では pgRouting（[DEC-0014](../../decisions/DEC-0014-reach-engine-pgrouting-provisional.md) 決定1）。**歩きのデータは OSM の歩ける道に決めた**（2026-11-21、人の判断。poc #46 で pgRouting＋N13 と pgRouting＋OSM を同じ条件で比べた。DEC-0014 決定1）。[#163](https://github.com/ex-day/platform/issues/163) に残るのは、データの更新と切り戻しの手順、性能と運用の決まり、R5 を考える目安。**3段目は、駅・行き方・到達点の表と駅を選ぶ3つの API まで作った（PR #165）。到達圏の計算（グラフ・版・駅から場所への歩き・到達圏の2つの API）はこれから作り、#163 の残りはそれを動かして測りながら決める**
+- 寄り道の考え方は [DEC-0013](../../decisions/DEC-0013-detour-suggestion-in-mvp.md)、画面は [S12](../screens/S12-detour.md)、入口と URL は [DEC-0022](../../decisions/DEC-0022-top-page-and-detour-entry.md)。PoC は ex-day/poc の `reach/`（#5・#6・#23・#27・#31・#40・#42・#46）
 
 ## 関連概要
 
