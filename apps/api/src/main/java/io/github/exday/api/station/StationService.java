@@ -63,6 +63,11 @@ public class StationService {
         return nearby(queries.nearLocation(latitude, longitude, limit));
     }
 
+    /** 1つの駅の場所を、路線つきの駅（OpenAPI の Station）にする。寄り道の到達圏（F06）の条件に使う。 */
+    public Station station(long placeId, String publicId, String name) {
+        return stations(List.of(new StationRow(placeId, publicId, name, 0))).getFirst();
+    }
+
     /** 前後の空白を除き、末尾の「駅」を除く（「駅」だけなら「駅」のまま）。空なら 400。 */
     static String normalize(String q) {
         String trimmed = q == null ? "" : q.strip();
