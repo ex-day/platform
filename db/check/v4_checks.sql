@@ -57,10 +57,10 @@ SELECT pg_temp.expect_error('負の所要時間', $q$
     SELECT build_id, 'RIDE', line_id, source, target, -1, 1 FROM reach.edge WHERE kind = 'RIDE' LIMIT 1
 $q$, '23514');
 
--- 3. 駅から場所への歩き：片道15分まで、同じ版・駅・場所・到達点は1行（到達点のない行も1行）
-SELECT pg_temp.expect_error('15分を超える歩き', $q$
+-- 3. 駅から場所への歩き：0分以上（徒歩の行き方と比べるため、上限の15分を超える行も持てる）、同じ版・駅・場所・到達点は1行
+SELECT pg_temp.expect_error('負の歩き', $q$
     INSERT INTO reach.place_walk (build_id, station_place_id, place_id, walk_min, method)
-    SELECT build_id, station_place_id, place_id, 16, 'SAMPLE' FROM reach.place_walk LIMIT 1
+    SELECT build_id, station_place_id, place_id, -1, 'SAMPLE' FROM reach.place_walk LIMIT 1
 $q$, '23514');
 SELECT pg_temp.expect_error('同じ版・駅・場所の、到達点のない2行目', $q$
     INSERT INTO reach.place_walk (build_id, station_place_id, place_id, arrival_point_id, walk_min, method)

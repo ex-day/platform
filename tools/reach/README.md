@@ -11,6 +11,7 @@
 
 - **駅の名寄せ**：N02 の駅は、同じ路線・同じ駅名で 1km 以内のすでにある駅に結ぶ。駅のまとまり（N02 のグループ）は、結べた駅の場所か、同じ名前（「駅」を除く）で 500m 以内の種類が駅の場所に結び、なければ新しく作る（`source_dataset = 'N02'`）。年度が変わって駅コードが変わっても、駅と駅の場所は変えない。新設・廃止・名前の変更の運用は #163
 - **歩き**：OSM の歩ける道（`highway` のうち motorway 系・建設中などを除き、`foot=no`・`use_sidepath` と `foot=yes` 等の無い `access=private/no` も除く）を交差点で区切ってグラフにし、つながっている点が100未満の島を除く（PoC #46。閾値は暫定）。駅のホームの重心・場所の到達点（徒歩）・場所の代表点を、300m 以内の道の点に結び、駅ごとに片道15分までたどる。道に結べない到達点は外す（DEC-0014 決定1）
+- **徒歩の行き方がある組**は、行き方と比べるため、上限の15分を超えても道のりを持つ（上限なしの最短の道のり）。道に結べない・道がつながらない組だけ行が無い
 - **寄り道先にしない場所**：都道府県・市区町村・町丁・字・駅
 - **OSM の歩きのグラフは DB に残さない**：この処理の一時の表だけで使う（ODbL の派生のデータベースを小さくする。DEC-0014 決定1）
 - 計算の決まりの値（乗換10分・歩き15分・80m/分）は `reach_build.py` の先頭にあり、API の `exday.detour.*` と同じ値にする
@@ -24,7 +25,7 @@ export EXDAY_DSN=postgresql://exday:exday@127.0.0.1:5433/exday   # 既定は com
 # OSM：Geofabrik から取ってきて、使う範囲の highway の道を切り出す（ex-day/poc reach/osmwalk/extract_highway.py）
 python extract_highway.py ~/Downloads/kanto-261119.osm.pbf ~/Downloads/kanto-261119-5339-highway.osm.pbf
 
-# 版を作る（BUILDING → READY。失敗したら FAILED で、使っている版はそのまま）
+# 版を作る（BUILDING → READY。失敗したら FAILED で、使っている版はそのまま。鉄道のグラフが空なら失敗）
 python tools/reach/reach_build.py build --version 2026-11-19.1 \
   --n02 ~/Downloads/N02-25_GML/UTF-8 --n02-year 2025 \
   --osm ~/Downloads/kanto-261119-5339-highway.osm.pbf --bbox 139 35.3333 140 36

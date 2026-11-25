@@ -28,7 +28,7 @@ public class DetourQueries {
          WHERE p.public_id = :publicId
         """;
 
-    // 駅の場所から、鉄道で maxMinutes 分までに着ける駅の場所と、そこまでの分（待ちを含まない）
+    // 駅の場所から、鉄道で maxMinutes 分までに着ける駅の場所と、そこまでの分（待ちを含まない）。グラフは廃止した駅も通り抜ける
     private static final String STATION_TIMES = """
         SELECT s.place_id, min(d.agg_cost) AS minutes
           FROM (SELECT array_agg(sn.node_id) AS nodes
@@ -40,7 +40,10 @@ public class DetourQueries {
                  0, CAST(:maxMinutes AS double precision), directed := true) d
           JOIN reach.station_node sn ON sn.build_id = :buildId AND sn.node_id = d.node
           JOIN reach.station s ON s.id = sn.station_id
+          -- 降りる駅の候補は、いま ACTIVE で種類が駅の場所だけ（版を作ったあとに廃止した駅は、通り抜けるだけにする）
+          JOIN place p ON p.id = s.place_id AND p.status = 'ACTIVE'
          WHERE start.nodes IS NOT NULL
+           AND EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = p.id AND k.kind = '駅')
          GROUP BY s.place_id
         """;
 
@@ -77,7 +80,8 @@ public class DetourQueries {
                       pa.created_at DESC, pa.id DESC
         ),
         walk AS (
-            -- 行き方があれば、同じ駅から同じ着く先までの自動の目安と比べて長いほう。比べられなければ行き方の分数
+            -- 行き方があれば、同じ駅から同じ着く先までの自動の目安と比べて長いほう（上限を超える目安も版にあるので、長いほうが上限を
+            -- 超えれば下で外れる）。道のりを計算できない（道に結べない・つながらない）ときだけ、行き方の分数
             SELECT coalesce(acc.station_place_id, auto.station_place_id) AS station_place_id,
                    coalesce(acc.place_id, auto.place_id) AS place_id,
                    CASE WHEN acc.place_id IS NULL THEN auto.walk_min

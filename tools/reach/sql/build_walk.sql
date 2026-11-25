@@ -98,4 +98,39 @@ HAVING min(d.agg_cost + s.access_m / current_setting('reach.walk_meters_per_minu
                       + t.access_m / current_setting('reach.walk_meters_per_minute')::double precision)
        <= current_setting('reach.walk_cap_minutes')::double precision;
 
+-- ---------------------------------------------------------------------------
+-- 徒歩の行き方がある組は、上限を超えても道のりを持つ（PR #165 のレビュー）。
+-- API は「行き方と、同じ駅から同じ着く先までの自動の目安の、長いほう」を使い、それが上限を超えれば外す。上の探索は上限で
+-- 打ち切るので、上限を超える組は行が残らず「計算できない」と区別できない。行き方の着く先（なければ場所の着く先の全部）まで、
+-- 上限なしの道のりを足す。道に結べない・道がつながらない組だけ、行が無い（＝計算できない。行き方の分数を使う）
+-- ---------------------------------------------------------------------------
+CREATE TEMP TABLE access_pair AS
+SELECT DISTINCT s.place_id AS station_place_id, s.node_id AS station_node, s.access_m AS station_access_m,
+       t.place_id, t.arrival_point_id, t.node_id AS target_node, t.access_m AS target_access_m
+FROM place_access pa
+JOIN station_snap s ON s.place_id = pa.station_place_id
+JOIN target_snap t ON t.place_id = pa.place_id
+                  AND (pa.arrival_point_id IS NULL OR t.arrival_point_id = pa.arrival_point_id)
+WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK'
+  AND NOT EXISTS (SELECT 1 FROM reach.place_walk w
+                   WHERE w.build_id = current_setting('reach.build_id')::bigint
+                     AND w.station_place_id = s.place_id AND w.place_id = t.place_id
+                     AND w.arrival_point_id IS NOT DISTINCT FROM t.arrival_point_id);
+
+INSERT INTO reach.place_walk (build_id, station_place_id, place_id, arrival_point_id, walk_min, method)
+SELECT current_setting('reach.build_id')::bigint, a.station_place_id, a.place_id, a.arrival_point_id,
+       d.agg_cost + a.station_access_m / current_setting('reach.walk_meters_per_minute')::double precision
+                  + a.target_access_m / current_setting('reach.walk_meters_per_minute')::double precision,
+       'OSM_WALK'
+FROM access_pair a
+CROSS JOIN LATERAL (
+  SELECT r.agg_cost FROM pgr_dijkstra(
+    format('SELECT id, source, target, cost, reverse_cost FROM walk_edge WHERE geom && ST_Expand(%L::geometry, 0.05)',
+           ST_MakeLine((SELECT w.geom FROM walk_node w WHERE w.node_id = a.station_node),
+                       (SELECT w.geom FROM walk_node w WHERE w.node_id = a.target_node))),
+    a.station_node, a.target_node, directed := false) r
+  WHERE r.node = a.target_node
+) d
+WHERE a.station_place_id <> a.place_id;
+
 ANALYZE reach.place_walk;

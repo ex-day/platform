@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>データはサンプルデータ（db/sample/R__sample_data.sql）の手で作った版（sample.1）：
  * 根岸線 横浜〜桜木町 3分・桜木町〜石川町 2.7分、東海道線 横浜〜鶴見 10.5分、横浜線 横浜〜小机 13.5分、ブルーライン 横浜〜桜木町 4分、
- * 乗換10分、乗るたびの待ち5分。歩き：桜木町 → 汽車道2分・みなとみらい3分・大岡川5分、横浜 → みなとみらい8分、
+ * 乗換10分（待ちを含む）、行き・帰りそれぞれの最初の乗車の待ち5分。歩き：桜木町 → 汽車道2分・みなとみらい3分・大岡川5分、横浜 → みなとみらい8分、
  * 石川町 → 大岡川12分・山下公園14分・氷川丸15分、小机 → 小机城址（推定の到達点12分・代表点9分。公式の行き方は到達点まで15分）、
  * 鶴見 → 鶴見の坂A 8分・B 13分・C 12分。
  */
@@ -159,6 +159,33 @@ class DetourReachApiTest extends DbApiTestSupport {
             .filter(i -> names(List.of(i)).getFirst().equals("小机城址")).findFirst().orElseThrow();
         assertThat(castle).containsEntry("access", Map.of("station", Map.of("id", KOZUKUE, "name", "小机駅"),
             "mode", "walk", "minutes", 12, "estimated", true));
+    }
+
+    @Test
+    void 行き方と同じ到達点までの自動の目安の長いほうが上限を超えれば外す() {
+        // 公式の行き方10分、同じ到達点までの OSM の道のり18分 → 長いほうの18分が上限の15分を超えるので出さない
+        jdbc.sql("UPDATE place_access SET minutes = 10").update();
+        jdbc.sql("UPDATE reach.place_walk SET walk_min = 18 WHERE arrival_point_id IS NOT NULL").update();
+        assertThat(names(items(places(okJson("/detour/reach?from=" + YOKOHAMA + "&t=90"))))).doesNotContain("小机城址");
+
+        // 同じ到達点までの道のりを計算できない（行が無い）ときだけ、行き方の分数を使う（目安ではない）
+        jdbc.sql("DELETE FROM reach.place_walk WHERE arrival_point_id IS NOT NULL").update();
+        var castle = items(places(okJson("/detour/reach?from=" + YOKOHAMA + "&t=90"))).stream()
+            .filter(i -> names(List.of(i)).getFirst().equals("小机城址")).findFirst().orElseThrow();
+        assertThat(castle).containsEntry("access", Map.of("station", Map.of("id", KOZUKUE, "name", "小机駅"),
+            "mode", "walk", "minutes", 10, "estimated", false));
+    }
+
+    @Test
+    void 版を作ったあとに廃止した駅は降りる駅にしない() {
+        // 山下公園はサンプルでは石川町駅からだけ歩ける。石川町駅を廃止すると、グラフは通り抜けるが降りる駅にはしない
+        jdbc.sql("UPDATE place SET status = 'ABOLISHED' WHERE public_id = :id").param("id", sid("place:ishikawacho")).update();
+        var reach = okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60");
+        var items = items(places(reach));
+        assertThat(names(items)).containsExactly("汽車道", "みなとみらい", "大岡川");
+        assertThat(items).allSatisfy(i -> assertThat(i.get("access").toString()).doesNotContain(sid("place:ishikawacho")));
+        // 地図の帯は残る（桜木町駅のまわり）
+        assertThat(bandMinimums(reach)).containsExactly(15, 30);
     }
 
     @Test

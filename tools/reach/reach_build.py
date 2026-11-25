@@ -11,7 +11,8 @@
 接続先は環境変数 EXDAY_DSN（既定：compose.yaml の DB、postgresql://exday:exday@127.0.0.1:5433/exday）。
 
 - build：版（reach.build）を BUILDING で作り、N02 から駅の場所・計算の中の駅・路線と鉄道のグラフを、OSM の歩ける道から
-  駅から場所への歩きを作って、READY にする。失敗したら FAILED にする（使っている版はそのまま）
+  駅から場所への歩きを作って、READY にする。失敗したら FAILED にする（使っている版はそのまま）。鉄道のグラフが空
+  （辺かグラフに結び付いた駅の点が0）なら失敗にする
 - activate：READY（または前に使っていた RETIRED）の版を ACTIVE にし、それまでの ACTIVE を RETIRED にする（1つのトランザクション）。
   切り戻しは、前の版を activate する
 - OSM の .osm.pbf は、highway の道を切り出したもの（ex-day/poc reach/osmwalk/extract_highway.py）。OSM から作った歩きの
@@ -187,8 +188,15 @@ def build(args) -> None:
             cur.execute((SQL_DIR / "build_rail.sql").read_text(encoding="utf-8"))
             cur.execute("SELECT (SELECT count(*) FROM reach.node WHERE build_id = %s),"
                         " (SELECT count(*) FROM reach.edge WHERE build_id = %s),"
-                        " (SELECT count(DISTINCT place_id) FROM n02_group)", (build_id, build_id, ))
-            log("鉄道：点 {} 個、辺 {} 本、駅の場所 {} 件".format(*cur.fetchone()))
+                        " (SELECT count(DISTINCT place_id) FROM n02_group)", (build_id, build_id))
+            n_node, n_edge, n_place = cur.fetchone()
+            log(f"鉄道：点 {n_node} 個、辺 {n_edge} 本、駅の場所 {n_place} 件")
+            # 鉄道のグラフが空の版は READY にしない（--bbox の誤りなどで N02 が0件でも、activate すると前の版が使えなくなるため）
+            cur.execute("SELECT count(*) FROM reach.station_node WHERE build_id = %s", (build_id,))
+            n_station_node = cur.fetchone()[0]
+            if n_edge == 0 or n_station_node == 0:
+                raise RuntimeError(f"鉄道のグラフが空（辺 {n_edge} 本、グラフに結び付いた駅の点 {n_station_node} 個）。"
+                                   "N02 のフォルダ・--bbox を確かめる")
             load_osm_walk(cur, args.osm.expanduser())
             cur.execute((SQL_DIR / "build_walk.sql").read_text(encoding="utf-8"))
             cur.execute("SELECT count(*), count(DISTINCT place_id) FROM reach.place_walk WHERE build_id = %s", (build_id,))

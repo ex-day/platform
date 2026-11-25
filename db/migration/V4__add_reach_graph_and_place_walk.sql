@@ -95,12 +95,12 @@ CREATE TABLE reach.place_walk (
     station_place_id  bigint           NOT NULL REFERENCES place (id),
     place_id          bigint           NOT NULL REFERENCES place (id),
     arrival_point_id  bigint           REFERENCES place_arrival_point (id),
-    walk_min          double precision NOT NULL CHECK (walk_min >= 0 AND walk_min <= 15),
+    walk_min          double precision NOT NULL CHECK (walk_min >= 0),
     method            text             NOT NULL CHECK (method IN ('OSM_WALK', 'SAMPLE')),
     UNIQUE NULLS NOT DISTINCT (build_id, station_place_id, place_id, arrival_point_id),
     CHECK (station_place_id <> place_id)
 );
-COMMENT ON TABLE reach.place_walk IS '駅（駅の場所）から場所への歩きの道のり（分）。片道15分まで。到達点ごとに1行、到達点のない行は場所の代表点まで';
+COMMENT ON TABLE reach.place_walk IS '駅（駅の場所）から場所への歩きの道のり（分）。到達点ごとに1行、到達点のない行は場所の代表点まで。ふつうは片道の上限（15分）までだが、徒歩の行き方がある組は、行き方と比べるために上限を超えても道のりを持つ（API は上限を超える組を外す）';
 COMMENT ON COLUMN reach.place_walk.arrival_point_id IS '着く先の到達点。NULL は場所の代表点（到達点のない場所）';
 COMMENT ON COLUMN reach.place_walk.method IS 'OSM_WALK：OSM の歩ける道（DEC-0014 決定1）。SAMPLE：サンプルデータの手で置いた値';
 CREATE INDEX reach_place_walk_station_idx ON reach.place_walk (build_id, station_place_id);

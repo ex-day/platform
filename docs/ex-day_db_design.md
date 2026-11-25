@@ -185,7 +185,7 @@ DB V4（`db/migration/V4__add_reach_graph_and_place_walk.sql`。PR #165、#168�
 | `reach.speed_override` | `line_id`、`from_station`・`to_station`、`speed_kmh`、`source` | 区間ごとの表定速度の上書き（版を作るときに使う） |
 | `reach.node`・`reach.edge` | 版、路線、点（geography）／種類（RIDE／TRANSFER）・所要時間（分） | pgRouting が読むグラフ。点は路線ごとに分ける。乗車の辺は路線を持ち、乗換の辺は持たない |
 | `reach.station_node` | 版、計算の中の駅、点 | 駅（路線ごと）のホームの点 |
-| `reach.place_walk` | 版、駅の場所、場所、到達点（NULL は代表点）、`walk_min`（0〜15）、`method`（OSM_WALK／SAMPLE） | 駅から場所への歩きの道のり。同じ版・駅・場所・到達点は1行 |
+| `reach.place_walk` | 版、駅の場所、場所、到達点（NULL は代表点）、`walk_min`（0以上）、`method`（OSM_WALK／SAMPLE） | 駅から場所への歩きの道のり。ふつうは片道15分までで、徒歩の行き方がある組は、行き方と比べるために15分を超えても持つ（API は上限を超える組を外す）。同じ版・駅・場所・到達点は1行 |
 
 - 歩きのグラフそのもの（OSM の道）は、版を作る処理の中だけで使い、DB には持たない（ODbL の派生のデータベースを小さくする）
 - **駅を指す列は種類が「駅」の場所だけ**（PR #165 のレビュー）：`reach.station.place_id`・`place_access.station_place_id`。行き方は運営・ユーザー・会話・自動の取得など複数の経路から作られるので、書き込みの処理ごとに頼らず DB で守る。種類は `place_kind` にあり外部キーで表せないため、制約のトリガー（commit の時点で確かめる）で拒み、駅として指されている場所から「駅」の種類を外すことも拒む
