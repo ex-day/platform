@@ -59,13 +59,21 @@ public class StationQueries {
          LIMIT :limit
         """;
 
-    // 路線は事業者・路線の名前の順（同じ路線・同じ駅の場所は1行。DB V3 の一意の制約）
+    // 事業者・路線は一般的な呼び名で見せる（DB V5 の呼び名の表。無ければ N02 の名前）。見せる名前の順。
+    // 同じ呼び名になる路線（横浜市の1号線と3号線 → ブルーライン 等）は1つにまとめる
     private static final String LINES = """
-        SELECT s.place_id, l.operator, l.name
-          FROM reach.station s
-          JOIN reach.line l ON l.id = s.line_id
-         WHERE s.place_id IN (:placeIds)
-         ORDER BY s.place_id, l.operator COLLATE "C", l.name COLLATE "C"
+        SELECT x.place_id, x.operator, x.name
+          FROM (
+            SELECT DISTINCT s.place_id,
+                   coalesce(od.display_name, l.operator) AS operator,
+                   coalesce(ld.display_name, l.name) AS name
+              FROM reach.station s
+              JOIN reach.line l ON l.id = s.line_id
+              LEFT JOIN reach.operator_display od ON od.operator = l.operator
+              LEFT JOIN reach.line_display ld ON ld.operator = l.operator AND ld.name = l.name
+             WHERE s.place_id IN (:placeIds)
+          ) x
+         ORDER BY x.place_id, x.operator COLLATE "C", x.name COLLATE "C"
         """;
 
     private static final String PLACE_ID = """
@@ -75,7 +83,7 @@ public class StationQueries {
     /** 駅の場所。{@code distanceMeters} は名前で探したときは使わない。 */
     record StationRow(long id, String publicId, String name, int distanceMeters) {}
 
-    /** 駅を通る路線。 */
+    /** 駅を通る路線（見せる名前）。 */
     record LineRow(long placeId, String operator, String name) {}
 
     private final JdbcClient jdbcClient;

@@ -1,6 +1,8 @@
 -- tools/reach/sql/build_walk.sql
 -- OSM の歩ける道（一時の表 walk_node・walk_edge）から、版の「駅から場所への歩き」（reach.place_walk）を作る（F06「データの形」6、#168）。
--- reach_build.py が、OSM の歩ける道を一時の表に入れてから、同じ接続で流す。歩きのグラフそのものは DB に残さない。
+-- reach_build.py が、OSM の歩ける道を一時の表に入れてから、同じ接続で流す。最後に、小さな島を除いた歩きのグラフと駅の点を
+-- 版の表（reach.walk_graph・walk_node・walk_edge・walk_station。DB V5）に残す。登録した場所の分だけ歩きを作り直す
+-- reach.refresh_place_walk が使う（#163 の 2026-11-26 の人の判断：登録した場所はすぐに出す）。
 -- 設定（reach_build.py が SET する）：reach.build_id、reach.walk_cap_minutes（片道の上限）、reach.walk_meters_per_minute、
 -- reach.min_island_nodes（これより点の少ないつながりは除く）、reach.snap_meters（道の点に結ぶ距離の上限）
 -- 作り方は ex-day/poc reach/osmwalk（#46）と同じ。駅の代表点はホームの重心（DEC-0014 決定1）。
@@ -150,4 +152,25 @@ CROSS JOIN LATERAL (
 WHERE a.station_place_id <> a.place_id
   AND d.agg_cost IS NOT NULL;
 
+-- ---------------------------------------------------------------------------
+-- 歩きのグラフと駅の点を版に残す（DB V5）。辺の形は両端を結んだ線にする（探す範囲で絞るためだけに使う。大きさを抑える）
+-- ---------------------------------------------------------------------------
+INSERT INTO reach.walk_graph (build_id, walk_cap_minutes, walk_meters_per_minute, snap_meters, min_island_nodes)
+VALUES (current_setting('reach.build_id')::bigint,
+        current_setting('reach.walk_cap_minutes')::double precision,
+        current_setting('reach.walk_meters_per_minute')::double precision,
+        current_setting('reach.snap_meters')::double precision,
+        current_setting('reach.min_island_nodes')::int);
+INSERT INTO reach.walk_node (build_id, node_id, geom)
+SELECT current_setting('reach.build_id')::bigint, node_id, geom FROM walk_node;
+INSERT INTO reach.walk_edge (build_id, source, target, cost, reverse_cost, geom)
+SELECT current_setting('reach.build_id')::bigint, source, target, cost, reverse_cost,
+       ST_MakeLine(ST_StartPoint(geom), ST_EndPoint(geom))
+FROM walk_edge;
+INSERT INTO reach.walk_station (build_id, station_place_id, node_id, access_m)
+SELECT current_setting('reach.build_id')::bigint, place_id, node_id, access_m FROM station_snap;
+
 ANALYZE reach.place_walk;
+ANALYZE reach.walk_node;
+ANALYZE reach.walk_edge;
+ANALYZE reach.walk_station;

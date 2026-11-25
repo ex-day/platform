@@ -53,7 +53,7 @@ class DetourReachApiTest extends DbApiTestSupport {
         assertThat(condition.get("from")).isEqualTo(Map.of(
             "place", Map.of("id", SAKURAGICHO, "name", "桜木町駅"),
             "lines", List.of(Map.of("operator", "JR東日本", "name", "根岸線"),
-                Map.of("operator", "横浜市交通局", "name", "ブルーライン"))));
+                Map.of("operator", "横浜市営地下鉄", "name", "ブルーライン"))));
 
         var items = items(places(reach));
         // 汽車道：60 − 2 − 2。山下公園：石川町まで 2.7＋5、歩き14分 → 行き 22・帰り 22。氷川丸は 14分で下限の15分に届かない。

@@ -56,6 +56,8 @@ class SampleDataIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // 場所の歩きを作り直す処理は動かさない（制約の確認のスクリプトと混ざらないように）
+        registry.add("exday.detour.walk-refresh.enabled", () -> "false");
     }
 
     @BeforeAll
@@ -103,6 +105,11 @@ class SampleDataIntegrationTest {
     @Test
     void 到達圏の版とグラフと歩きの制約の確認が通る() throws Exception {
         runCheck("check/v4_checks.sql");
+    }
+
+    @Test
+    void 歩きのグラフと場所ごとの作り直しと呼び名の確認が通る() throws Exception {
+        runCheck("check/v5_checks.sql");
     }
 
     // db/check の SQL は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。

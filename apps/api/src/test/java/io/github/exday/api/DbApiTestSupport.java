@@ -55,6 +55,8 @@ public abstract class DbApiTestSupport {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // 場所の歩きを作り直す処理は、決まった間隔では動かさない（サンプルの入れ直しと混ざらないように。テストから直接呼ぶ）
+        registry.add("exday.detour.walk-refresh.enabled", () -> "false");
     }
 
     @Autowired protected TestRestTemplate rest;
