@@ -177,6 +177,33 @@ class DetourReachApiTest extends DbApiTestSupport {
     }
 
     @Test
+    void 版を作り始めたあとに登録した行き方は次の版まで使わない() {
+        // 桜木町駅 → 山下公園の徒歩10分の行き方を、版のあとに足す。比べる道のりが版に無いので、次の版まで使わない
+        jdbc.sql("""
+                INSERT INTO place_access (place_id, station_place_id, mode, minutes, source, verification, created_decision_id)
+                SELECT (SELECT id FROM place WHERE public_id = :place), (SELECT id FROM place WHERE public_id = :station),
+                       'WALK', 10, 'USER', 'UNVERIFIED', (SELECT created_decision_id FROM place_access LIMIT 1)
+                """)
+            .param("place", sid("place:yamashita")).param("station", SAKURAGICHO).update();
+        jdbc.sql("UPDATE place_access SET created_at = (SELECT created_at FROM reach.build) + interval '1 minute'"
+            + " WHERE place_id = (SELECT id FROM place WHERE public_id = :place)")
+            .param("place", sid("place:yamashita")).update();
+        var yamashita = items(places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60"))).stream()
+            .filter(i -> names(List.of(i)).getFirst().equals("山下公園")).findFirst().orElseThrow();
+        // 山下公園は今までどおり石川町駅からの自動の目安（16分）。桜木町駅からの10分（過ごせる 40分）にはならない
+        assertThat(yamashita).containsEntry("stayMinutes", 16);
+        @SuppressWarnings("unchecked")
+        var access = (Map<String, Object>) yamashita.get("access");
+        assertThat(access).containsEntry("station", Map.of("id", sid("place:ishikawacho"), "name", "石川町駅"));
+
+        // 次の版（版を作り始めたのが行き方より後）では使う。ここでは版の作り始めの時点を動かして確かめる
+        jdbc.sql("UPDATE reach.build SET created_at = now() + interval '1 hour'").update();
+        yamashita = items(places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60"))).stream()
+            .filter(i -> names(List.of(i)).getFirst().equals("山下公園")).findFirst().orElseThrow();
+        assertThat(yamashita).containsEntry("stayMinutes", 40);
+    }
+
+    @Test
     void 版を作ったあとに廃止した駅は降りる駅にしない() {
         // 山下公園はサンプルでは石川町駅からだけ歩ける。石川町駅を廃止すると、グラフは通り抜けるが降りる駅にはしない
         jdbc.sql("UPDATE place SET status = 'ABOLISHED' WHERE public_id = :id").param("id", sid("place:ishikawacho")).update();

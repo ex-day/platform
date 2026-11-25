@@ -102,7 +102,8 @@ HAVING min(d.agg_cost + s.access_m / current_setting('reach.walk_meters_per_minu
 -- 徒歩の行き方がある組は、上限を超えても道のりを持つ（PR #165 のレビュー）。
 -- API は「行き方と、同じ駅から同じ着く先までの自動の目安の、長いほう」を使い、それが上限を超えれば外す。上の探索は上限で
 -- 打ち切るので、上限を超える組は行が残らず「計算できない」と区別できない。行き方の着く先（なければ場所の着く先の全部）まで、
--- 上限なしの道のりを足す。道に結べない・道がつながらない組だけ、行が無い（＝計算できない。行き方の分数を使う）
+-- 上限なしの道のりを足す。道に結べない・道がつながらない組だけ、行が無い（＝計算できない。行き方の分数を使う）。
+-- 版の作成後に登録した行き方は、API が次の版まで使わない（DetourQueries。行き方の反映を版とそろえる）
 -- ---------------------------------------------------------------------------
 CREATE TEMP TABLE access_pair AS
 SELECT DISTINCT s.place_id AS station_place_id, s.node_id AS station_node, s.access_m AS station_access_m,
@@ -124,13 +125,21 @@ SELECT current_setting('reach.build_id')::bigint, a.station_place_id, a.place_id
        'OSM_WALK'
 FROM access_pair a
 CROSS JOIN LATERAL (
-  SELECT r.agg_cost FROM pgr_dijkstra(
-    format('SELECT id, source, target, cost, reverse_cost FROM walk_edge WHERE geom && ST_Expand(%L::geometry, 0.05)',
-           ST_MakeLine((SELECT w.geom FROM walk_node w WHERE w.node_id = a.station_node),
-                       (SELECT w.geom FROM walk_node w WHERE w.node_id = a.target_node))),
-    a.station_node, a.target_node, directed := false) r
-  WHERE r.node = a.target_node
+  -- まず駅と着く先を結ぶ線のまわり（約5km）の道で探し、見つからなければ道の全部で探す（範囲の外を迂回してだけ着ける組でも、
+  -- 上限を超えることを判定できるようにする。PR #165 のレビュー）。全部で探しても見つからない組だけ、道がつながらない
+  SELECT coalesce(
+    (SELECT r.agg_cost FROM pgr_dijkstra(
+       format('SELECT id, source, target, cost, reverse_cost FROM walk_edge WHERE geom && ST_Expand(%L::geometry, 0.05)',
+              ST_MakeLine((SELECT w.geom FROM walk_node w WHERE w.node_id = a.station_node),
+                          (SELECT w.geom FROM walk_node w WHERE w.node_id = a.target_node))),
+       a.station_node, a.target_node, directed := false) r
+     WHERE r.node = a.target_node),
+    (SELECT r.agg_cost FROM pgr_dijkstra(
+       'SELECT id, source, target, cost, reverse_cost FROM walk_edge',
+       a.station_node, a.target_node, directed := false) r
+     WHERE r.node = a.target_node)) AS agg_cost
 ) d
-WHERE a.station_place_id <> a.place_id;
+WHERE a.station_place_id <> a.place_id
+  AND d.agg_cost IS NOT NULL;
 
 ANALYZE reach.place_walk;

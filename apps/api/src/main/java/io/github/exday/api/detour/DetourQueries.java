@@ -65,12 +65,15 @@ public class DetourQueries {
                       CASE a.kind WHEN 'CONFIRMED_ENTRANCE' THEN 0 WHEN 'ESTIMATED' THEN 1 ELSE 2 END, w.walk_min
         ),
         acc AS (
-            -- 徒歩の行き方：使える順番（DEC-0013 決定3）でいちばん上のもの。同じ順番なら新しいもの
+            -- 徒歩の行き方：使える順番（DEC-0013 決定3）でいちばん上のもの。同じ順番なら新しいもの。
+            -- 版を作り始めたあとに登録した行き方は、次の版まで使わない（比べる道のりが版に無く、上限を守れないため。PR #165 のレビュー）。
+            -- それまでは自動の目安で出す。無効にした行き方は、すぐに使わなくなる
             SELECT DISTINCT ON (pa.station_place_id, pa.place_id)
                    pa.station_place_id, pa.place_id, pa.minutes, pa.arrival_point_id
               FROM place_access pa
               JOIN st ON st.station_place_id = pa.station_place_id
              WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK'
+               AND pa.created_at <= (SELECT b.created_at FROM reach.build b WHERE b.id = :buildId)
              ORDER BY pa.station_place_id, pa.place_id,
                       CASE WHEN pa.source = 'OPERATOR' OR (pa.source = 'OFFICIAL' AND pa.verification = 'HUMAN_VERIFIED') THEN 1
                            WHEN pa.source = 'OFFICIAL' THEN 2
