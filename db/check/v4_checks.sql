@@ -67,11 +67,15 @@ SELECT pg_temp.expect_error('同じ版・駅・場所の、到達点のない2�
     SELECT build_id, station_place_id, place_id, NULL, 5, 'SAMPLE' FROM reach.place_walk WHERE arrival_point_id IS NULL LIMIT 1
 $q$, '23505');
 
+SELECT pg_temp.expect('サンプルの版は、読んだ徒歩の行き方を記録している',
+    EXISTS (SELECT 1 FROM reach.build_access ba JOIN reach.build b ON b.id = ba.build_id WHERE b.status = 'ACTIVE'));
+
 -- 4. 版を消すと、その版のグラフ・駅の点・歩きも消える
 DELETE FROM reach.build WHERE status = 'ACTIVE';
-SELECT pg_temp.expect('版を消すとグラフ・駅の点・歩きも消える',
+SELECT pg_temp.expect('版を消すとグラフ・駅の点・歩き・読んだ行き方の記録も消える',
     NOT EXISTS (SELECT 1 FROM reach.edge) AND NOT EXISTS (SELECT 1 FROM reach.node)
-    AND NOT EXISTS (SELECT 1 FROM reach.station_node) AND NOT EXISTS (SELECT 1 FROM reach.place_walk));
+    AND NOT EXISTS (SELECT 1 FROM reach.station_node) AND NOT EXISTS (SELECT 1 FROM reach.place_walk)
+    AND NOT EXISTS (SELECT 1 FROM reach.build_access));
 
 ROLLBACK;
 \echo 'v4_checks: すべて OK（変更は ROLLBACK した）'

@@ -103,16 +103,24 @@ HAVING min(d.agg_cost + s.access_m / current_setting('reach.walk_meters_per_minu
 -- API は「行き方と、同じ駅から同じ着く先までの自動の目安の、長いほう」を使い、それが上限を超えれば外す。上の探索は上限で
 -- 打ち切るので、上限を超える組は行が残らず「計算できない」と区別できない。行き方の着く先（なければ場所の着く先の全部）まで、
 -- 上限なしの道のりを足す。道に結べない・道がつながらない組だけ、行が無い（＝計算できない。行き方の分数を使う）。
--- 版の作成後に登録した行き方は、API が次の版まで使わない（DetourQueries。行き方の反映を版とそろえる）
+-- 版を作るときに読んだ行き方は reach.build_access に記録し、API はそれだけを使う（DetourQueries。行き方の反映を版とそろえる）
 -- ---------------------------------------------------------------------------
+-- この版で読んだ徒歩の行き方を、先に版に記録する。比べる道のりは、ここに記録した行き方からだけ作り、API もこの行き方だけを使う
+-- （登録のトランザクションが版の作成と重なっても、読んだ集合と使う集合がずれない。時刻には頼らない。PR #165 のレビュー）
+INSERT INTO reach.build_access (build_id, place_access_id)
+SELECT current_setting('reach.build_id')::bigint, pa.id
+FROM place_access pa
+WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK';
+
 CREATE TEMP TABLE access_pair AS
 SELECT DISTINCT s.place_id AS station_place_id, s.node_id AS station_node, s.access_m AS station_access_m,
        t.place_id, t.arrival_point_id, t.node_id AS target_node, t.access_m AS target_access_m
-FROM place_access pa
+FROM reach.build_access ba
+JOIN place_access pa ON pa.id = ba.place_access_id
 JOIN station_snap s ON s.place_id = pa.station_place_id
 JOIN target_snap t ON t.place_id = pa.place_id
                   AND (pa.arrival_point_id IS NULL OR t.arrival_point_id = pa.arrival_point_id)
-WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK'
+WHERE ba.build_id = current_setting('reach.build_id')::bigint
   AND NOT EXISTS (SELECT 1 FROM reach.place_walk w
                    WHERE w.build_id = current_setting('reach.build_id')::bigint
                      AND w.station_place_id = s.place_id AND w.place_id = t.place_id

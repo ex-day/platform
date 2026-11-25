@@ -104,3 +104,10 @@ COMMENT ON TABLE reach.place_walk IS '駅（駅の場所）から場所への歩
 COMMENT ON COLUMN reach.place_walk.arrival_point_id IS '着く先の到達点。NULL は場所の代表点（到達点のない場所）';
 COMMENT ON COLUMN reach.place_walk.method IS 'OSM_WALK：OSM の歩ける道（DEC-0014 決定1）。SAMPLE：サンプルデータの手で置いた値';
 CREATE INDEX reach_place_walk_station_idx ON reach.place_walk (build_id, station_place_id);
+
+CREATE TABLE reach.build_access (
+    build_id          bigint NOT NULL REFERENCES reach.build (id) ON DELETE CASCADE,
+    place_access_id   bigint NOT NULL REFERENCES place_access (id),
+    PRIMARY KEY (build_id, place_access_id)
+);
+COMMENT ON TABLE reach.build_access IS '版を作るときに読んだ徒歩の行き方（ACTIVE・WALK）。API は、この版で読んだ行き方だけを使う（比べる道のりが版にある行き方だけを使い、徒歩の上限を守るため。PR #165 のレビュー）。あとで無効にした行き方は、place_access.status ですぐに除く';

@@ -66,14 +66,15 @@ public class DetourQueries {
         ),
         acc AS (
             -- 徒歩の行き方：使える順番（DEC-0013 決定3）でいちばん上のもの。同じ順番なら新しいもの。
-            -- 版を作り始めたあとに登録した行き方は、次の版まで使わない（比べる道のりが版に無く、上限を守れないため。PR #165 のレビュー）。
-            -- それまでは自動の目安で出す。無効にした行き方は、すぐに使わなくなる
+            -- 使うのは、この版を作るときに読んだ行き方（reach.build_access）だけ。比べる道のりが版にある行き方だけを使い、
+            -- 徒歩の上限を守るため（時刻には頼らない。PR #165 のレビュー）。あとで登録した行き方は次の版から、それまでは自動の目安。
+            -- 無効にした行き方は、status ですぐに使わなくなる
             SELECT DISTINCT ON (pa.station_place_id, pa.place_id)
                    pa.station_place_id, pa.place_id, pa.minutes, pa.arrival_point_id
               FROM place_access pa
               JOIN st ON st.station_place_id = pa.station_place_id
              WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK'
-               AND pa.created_at <= (SELECT b.created_at FROM reach.build b WHERE b.id = :buildId)
+               AND EXISTS (SELECT 1 FROM reach.build_access ba WHERE ba.build_id = :buildId AND ba.place_access_id = pa.id)
              ORDER BY pa.station_place_id, pa.place_id,
                       CASE WHEN pa.source = 'OPERATOR' OR (pa.source = 'OFFICIAL' AND pa.verification = 'HUMAN_VERIFIED') THEN 1
                            WHEN pa.source = 'OFFICIAL' THEN 2

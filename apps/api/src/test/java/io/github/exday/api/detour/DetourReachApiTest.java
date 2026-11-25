@@ -177,17 +177,18 @@ class DetourReachApiTest extends DbApiTestSupport {
     }
 
     @Test
-    void 版を作り始めたあとに登録した行き方は次の版まで使わない() {
-        // 桜木町駅 → 山下公園の徒歩10分の行き方を、版のあとに足す。比べる道のりが版に無いので、次の版まで使わない
-        jdbc.sql("""
+    void 版を作るときに読んでいない行き方は次の版まで使わない() {
+        // 桜木町駅 → 山下公園の徒歩10分の行き方を足す。この版を作るときに読んでいない（reach.build_access に無い）ので、
+        // 比べる道のりが版に無く、次の版まで使わない（登録の時刻にかかわらない）
+        long accessId = jdbc.sql("""
                 INSERT INTO place_access (place_id, station_place_id, mode, minutes, source, verification, created_decision_id)
                 SELECT (SELECT id FROM place WHERE public_id = :place), (SELECT id FROM place WHERE public_id = :station),
                        'WALK', 10, 'USER', 'UNVERIFIED', (SELECT created_decision_id FROM place_access LIMIT 1)
+                RETURNING id
                 """)
-            .param("place", sid("place:yamashita")).param("station", SAKURAGICHO).update();
-        jdbc.sql("UPDATE place_access SET created_at = (SELECT created_at FROM reach.build) + interval '1 minute'"
-            + " WHERE place_id = (SELECT id FROM place WHERE public_id = :place)")
-            .param("place", sid("place:yamashita")).update();
+            .param("place", sid("place:yamashita")).param("station", SAKURAGICHO).query(Long.class).single();
+        // 版より前の時刻で登録されていても使わない
+        jdbc.sql("UPDATE place_access SET created_at = '2000-01-01' WHERE id = :id").param("id", accessId).update();
         var yamashita = items(places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60"))).stream()
             .filter(i -> names(List.of(i)).getFirst().equals("山下公園")).findFirst().orElseThrow();
         // 山下公園は今までどおり石川町駅からの自動の目安（16分）。桜木町駅からの10分（過ごせる 40分）にはならない
@@ -196,11 +197,18 @@ class DetourReachApiTest extends DbApiTestSupport {
         var access = (Map<String, Object>) yamashita.get("access");
         assertThat(access).containsEntry("station", Map.of("id", sid("place:ishikawacho"), "name", "石川町駅"));
 
-        // 次の版（版を作り始めたのが行き方より後）では使う。ここでは版の作り始めの時点を動かして確かめる
-        jdbc.sql("UPDATE reach.build SET created_at = now() + interval '1 hour'").update();
+        // 版を作るときに読んだ行き方なら使う（ここでは記録を足して確かめる。比べる道のりが無い＝道がつながらない扱い）
+        jdbc.sql("INSERT INTO reach.build_access (build_id, place_access_id) SELECT id, :id FROM reach.build")
+            .param("id", accessId).update();
         yamashita = items(places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60"))).stream()
             .filter(i -> names(List.of(i)).getFirst().equals("山下公園")).findFirst().orElseThrow();
         assertThat(yamashita).containsEntry("stayMinutes", 40);
+
+        // あとで無効にした行き方は、版に記録があってもすぐに使わない
+        jdbc.sql("UPDATE place_access SET status = 'INVALID' WHERE id = :id").param("id", accessId).update();
+        yamashita = items(places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60"))).stream()
+            .filter(i -> names(List.of(i)).getFirst().equals("山下公園")).findFirst().orElseThrow();
+        assertThat(yamashita).containsEntry("stayMinutes", 16);
     }
 
     @Test

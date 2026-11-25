@@ -588,6 +588,10 @@ SELECT a.build_id, 'TRANSFER', a.node_id, b.node_id, 10, 10
     ON a.place_id = b.place_id AND a.line_id < b.line_id;
 
 -- 駅から場所への歩き（分。片道15分まで）。小机城址は推定の到達点までと、場所の代表点まで
+-- この版で読んだ徒歩の行き方（小机城址の公式の行き方）
+INSERT INTO reach.build_access (build_id, place_access_id)
+SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), pa.id FROM place_access pa WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK';
+
 INSERT INTO reach.place_walk (build_id, station_place_id, place_id, arrival_point_id, walk_min, method)
 SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), pg_temp.plid(v.st), pg_temp.plid(v.k),
        CASE WHEN v.to_arrival THEN (SELECT a.id FROM place_arrival_point a WHERE a.place_id = pg_temp.plid(v.k)) END,
