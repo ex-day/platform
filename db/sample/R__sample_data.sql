@@ -19,7 +19,7 @@
 -- Flyway の繰り返し実行のマイグレーション（R__）。内容を変えると、次の migrate で全部消して入れ直す。
 -- public_id は、キーから決まる値（md5 の先頭12文字）にする。本番では db/sample を読み込ませない。
 
-TRUNCATE app_user, place, subject, decision, discovery RESTART IDENTITY CASCADE;
+TRUNCATE app_user, place, subject, decision, discovery, reach.line, reach.build RESTART IDENTITY CASCADE;
 
 -- ---------------------------------------------------------
 -- 補助の関数（このスクリプトの中だけで使う）
@@ -128,6 +128,37 @@ SELECT pg_temp.plid(k), kind FROM (VALUES
     ('kozukue-castle', '城跡'), ('kozukue-castle', '公園'),
     ('slope-a', '坂'), ('slope-b', '坂'), ('slope-c', '坂'), ('slope-d', '坂')
 ) AS v (k, kind);
+
+-- 計算の中の駅（路線ごとの駅。DB V3、F06「データの形」1）。路線は実在のものだが、位置はおおよそで、
+-- N02 から取り込んだものではない。駅コード・グループコードは架空の値
+INSERT INTO reach.line (operator, name) VALUES
+    ('JR東日本', '東海道線'), ('JR東日本', '横須賀線'), ('JR東日本', '根岸線'), ('JR東日本', '横浜線'), ('JR東日本', '鶴見線'),
+    ('京浜急行電鉄', '本線'), ('東急電鉄', '東横線'), ('相模鉄道', '本線'), ('横浜市交通局', 'ブルーライン'),
+    ('横浜高速鉄道', 'みなとみらい線');
+
+INSERT INTO reach.station (place_id, line_id, name, geom)
+SELECT pg_temp.plid(v.k), l.id, v.name, pg_temp.geo(v.wkt)
+  FROM (VALUES
+    ('sakuragicho', 'JR東日本', '根岸線', '桜木町', 'POINT(139.6310 35.4508)'),
+    ('sakuragicho', '横浜市交通局', 'ブルーライン', '桜木町', 'POINT(139.6303 35.4505)'),
+    ('yokohama-st', 'JR東日本', '東海道線', '横浜', 'POINT(139.6222 35.4660)'),
+    ('yokohama-st', 'JR東日本', '横須賀線', '横浜', 'POINT(139.6224 35.4659)'),
+    ('yokohama-st', 'JR東日本', '根岸線', '横浜', 'POINT(139.6220 35.4657)'),
+    ('yokohama-st', '京浜急行電鉄', '本線', '横浜', 'POINT(139.6226 35.4663)'),
+    ('yokohama-st', '東急電鉄', '東横線', '横浜', 'POINT(139.6230 35.4655)'),
+    ('yokohama-st', '相模鉄道', '本線', '横浜', 'POINT(139.6210 35.4662)'),
+    ('yokohama-st', '横浜市交通局', 'ブルーライン', '横浜', 'POINT(139.6218 35.4652)'),
+    ('yokohama-st', '横浜高速鉄道', 'みなとみらい線', '横浜', 'POINT(139.6229 35.4653)'),
+    ('tsurumi-st', 'JR東日本', '東海道線', '鶴見', 'POINT(139.6760 35.5077)'),
+    ('tsurumi-st', 'JR東日本', '鶴見線', '鶴見', 'POINT(139.6763 35.5079)'),
+    ('yokohama-st', 'JR東日本', '横浜線', '横浜', 'POINT(139.6221 35.4658)'),
+    ('kozukue-st', 'JR東日本', '横浜線', '小机', 'POINT(139.5987 35.5090)'),
+    ('ishikawacho', 'JR東日本', '根岸線', '石川町', 'POINT(139.6430 35.4387)')
+  ) AS v (k, operator, line, name, wkt)
+  JOIN reach.line l ON l.operator = v.operator AND l.name = v.line;
+
+INSERT INTO reach.station_source (station_id, dataset_year, station_code, group_code)
+SELECT s.id, 2024, 'sample-' || s.id, 'sample-group-' || s.place_id FROM reach.station s;
 
 INSERT INTO place_estimate (place_id, metric, value, unit, method, method_version, computed_at)
 SELECT pg_temp.plid(k), 'SLOPE_GRADE', v, 'percent', 'elevation-x-road', 'sample-1', timestamptz '2026-03-20 09:00+09'
@@ -503,6 +534,82 @@ UPDATE conversation c
 
 INSERT INTO user_conversation_read (user_id, conversation_id, read_until)
 VALUES (pg_temp.uid('港の散歩人'), pg_temp.cid('walk'), '2026-04-05 12:10+09');
+
+-- 行き方と到達点（DB V3、F06「データの形」2・3）。小机城址の入口（推定）と、運営が公式の案内から登録した徒歩の行き方
+SELECT pg_temp.dec('kozukue-access', 'OPERATOR_REGISTER', 'OPERATOR_SQL', 'OPERATOR', 'ex-day 運営', NULL, '2026-03-01 10:00+09');
+INSERT INTO place_arrival_point (place_id, geom, kind, mode, source)
+VALUES (pg_temp.plid('kozukue-castle'), pg_temp.geo('POINT(139.5968 35.5124)'), 'ESTIMATED', 'WALK', 'OPERATOR');
+INSERT INTO place_access (place_id, station_place_id, mode, minutes, arrival_point_id, original_text, source,
+                          verification, retrieved_on, verified_at, created_decision_id)
+SELECT pg_temp.plid('kozukue-castle'), pg_temp.plid('kozukue-st'), 'WALK', 15, a.id, '小机駅から徒歩約15分',
+       'OFFICIAL', 'HUMAN_VERIFIED', '2026-03-01', '2026-03-01 10:00+09', pg_temp.decid('kozukue-access')
+  FROM place_arrival_point a WHERE a.place_id = pg_temp.plid('kozukue-castle');
+
+-- 到達圏の版・鉄道のグラフ・駅から場所への歩き（DB V4、F06「データの形」5・6）。
+-- 手で作った小さなグラフ（路線ごとに駅に1点、駅の間を直線の距離で結ぶ）で、N02・OSM から作ったものではない。
+-- 距離はおおよそ（根岸線 横浜〜桜木町 2.0km・桜木町〜石川町 1.8km、東海道線 横浜〜鶴見 7.0km、横浜線 横浜〜小机 9.0km、
+-- ブルーライン 横浜〜桜木町 2.0km）。表定速度は PoC の既定（在来線40・地下鉄30 km/h）。歩きの分も手で置いた目安
+UPDATE reach.line SET service_type = 'subway', speed_kmh = 30 WHERE operator = '横浜市交通局';
+UPDATE reach.line SET service_type = 'subway', speed_kmh = 30 WHERE operator = '横浜高速鉄道';
+INSERT INTO reach.build (version, status, sources, note, activated_at)
+VALUES ('sample.1', 'ACTIVE', '{"n02": "sample", "osm": "sample"}', 'サンプルデータの手で作った版', '2026-03-01 00:00+09');
+
+-- 路線ごとに、グラフに載せる駅（1駅1点）
+CREATE TEMP TABLE sample_graph_station AS
+SELECT s.id AS station_id, s.place_id, s.line_id, s.geom, p.public_id
+  FROM reach.station s JOIN reach.line l ON l.id = s.line_id JOIN place p ON p.id = s.place_id
+ WHERE (l.operator, l.name) IN (('JR東日本', '根岸線'), ('JR東日本', '東海道線'), ('JR東日本', '横浜線'), ('横浜市交通局', 'ブルーライン'));
+INSERT INTO reach.node (build_id, line_id, geom)
+SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), line_id, geom FROM sample_graph_station ORDER BY station_id;
+INSERT INTO reach.station_node (build_id, station_id, node_id)
+SELECT n.build_id, g.station_id, n.id FROM sample_graph_station g JOIN reach.node n ON n.line_id = g.line_id AND ST_Equals(n.geom::geometry, g.geom::geometry);
+
+INSERT INTO reach.edge (build_id, kind, line_id, source, target, length_m, cost, reverse_cost)
+SELECT a.build_id, 'RIDE', a.line_id, a.node_id, b.node_id, v.length_m,
+       v.length_m / 1000.0 / l.speed_kmh * 60, v.length_m / 1000.0 / l.speed_kmh * 60
+  FROM (VALUES
+    ('JR東日本', '根岸線', 'yokohama-st', 'sakuragicho', 2000),
+    ('JR東日本', '根岸線', 'sakuragicho', 'ishikawacho', 1800),
+    ('JR東日本', '東海道線', 'yokohama-st', 'tsurumi-st', 7000),
+    ('JR東日本', '横浜線', 'yokohama-st', 'kozukue-st', 9000),
+    ('横浜市交通局', 'ブルーライン', 'yokohama-st', 'sakuragicho', 2000)
+  ) AS v (operator, line, k_from, k_to, length_m)
+  JOIN reach.line l ON l.operator = v.operator AND l.name = v.line
+  JOIN (SELECT sn.build_id, g.line_id, g.place_id, sn.node_id FROM sample_graph_station g JOIN reach.station_node sn USING (station_id)) a
+    ON a.line_id = l.id AND a.place_id = pg_temp.plid(v.k_from)
+  JOIN (SELECT g.line_id, g.place_id, sn.node_id FROM sample_graph_station g JOIN reach.station_node sn USING (station_id)) b
+    ON b.line_id = l.id AND b.place_id = pg_temp.plid(v.k_to);
+
+-- 乗換：同じ駅の場所の、路線の違う点どうし（10分。F06「設定で持つ値」と同じ値を版を作るときに入れる）
+INSERT INTO reach.edge (build_id, kind, source, target, cost, reverse_cost)
+SELECT a.build_id, 'TRANSFER', a.node_id, b.node_id, 10, 10
+  FROM (SELECT sn.build_id, g.place_id, g.line_id, sn.node_id FROM sample_graph_station g JOIN reach.station_node sn USING (station_id)) a
+  JOIN (SELECT g.place_id, g.line_id, sn.node_id FROM sample_graph_station g JOIN reach.station_node sn USING (station_id)) b
+    ON a.place_id = b.place_id AND a.line_id < b.line_id;
+
+-- 駅から場所への歩き（分。片道15分まで）。小机城址は推定の到達点までと、場所の代表点まで
+-- この版で読んだ徒歩の行き方（小机城址の公式の行き方）
+INSERT INTO reach.build_access (build_id, place_access_id)
+SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), pa.id FROM place_access pa WHERE pa.status = 'ACTIVE' AND pa.mode = 'WALK';
+
+INSERT INTO reach.place_walk (build_id, station_place_id, place_id, arrival_point_id, walk_min, method)
+SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), pg_temp.plid(v.st), pg_temp.plid(v.k),
+       CASE WHEN v.to_arrival THEN (SELECT a.id FROM place_arrival_point a WHERE a.place_id = pg_temp.plid(v.k)) END,
+       v.walk_min, 'SAMPLE'
+  FROM (VALUES
+    ('sakuragicho', 'kishamichi', false, 2.0),
+    ('sakuragicho', 'minatomirai', false, 3.0),
+    ('yokohama-st', 'minatomirai', false, 8.0),
+    ('sakuragicho', 'ooka', false, 5.0),
+    ('ishikawacho', 'ooka', false, 12.0),
+    ('ishikawacho', 'yamashita', false, 14.0),
+    ('ishikawacho', 'hikawamaru', false, 15.0),
+    ('kozukue-st', 'kozukue-castle', true, 12.0),
+    ('kozukue-st', 'kozukue-castle', false, 9.0),
+    ('tsurumi-st', 'slope-a', false, 8.0),
+    ('tsurumi-st', 'slope-b', false, 13.0),
+    ('tsurumi-st', 'slope-c', false, 12.0)
+  ) AS v (st, k, to_arrival, walk_min);
 
 -- 検索のための情報（F07 の中身が決まるまでの仮のもの）
 INSERT INTO search_profile (discovery_id, search_text, subjects, seasons, analysis_version)

@@ -1,10 +1,14 @@
 package io.github.exday.api;
 
 import io.github.exday.api.conversation.ConversationNotFoundException;
+import io.github.exday.api.detour.InvalidDetourCursorException;
+import io.github.exday.api.detour.InvalidDetourMinutesException;
+import io.github.exday.api.detour.InvalidDetourStationException;
 import io.github.exday.api.discovery.DiscoveryNotFoundException;
+import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.project.ProjectNotFoundException;
 import io.github.exday.api.projectlist.InvalidProjectListCursorException;
-import io.github.exday.api.place.PlaceNotFoundException;
+import io.github.exday.api.station.InvalidStationQueryException;
 import io.github.exday.api.top.TopOriginNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -54,6 +58,27 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     public ProblemDetail invalidProjectListCursor(InvalidProjectListCursorException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
             "カーソルが、この絞り込み・並べ方で作ったものではない。条件を変えたら最初から読む。");
+    }
+
+    @ExceptionHandler(InvalidDetourCursorException.class)
+    public ProblemDetail invalidDetourCursor(InvalidDetourCursorException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+            "カーソルが読めない、条件が違う、または到達圏のデータ・計算の決まりが切り替わった。最初から読み直す。");
+    }
+
+    @ExceptionHandler(InvalidDetourMinutesException.class)
+    public ProblemDetail invalidDetourMinutes(InvalidDetourMinutesException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "使える時間は15分刻み。");
+    }
+
+    @ExceptionHandler(InvalidDetourStationException.class)
+    public ProblemDetail invalidDetourStation(InvalidDetourStationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidStationQueryException.class)
+    public ProblemDetail invalidStationQuery(InvalidStationQueryException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "探す文字が空。");
     }
 
     @ExceptionHandler(TopOriginNotFoundException.class)

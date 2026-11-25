@@ -1,6 +1,6 @@
 # db/check
 
-DB V2 の制約・ビューが、設計（[DB 設計 v0.2](../../docs/ex-day_db_design.md) 7節・7.1節）のとおりに働くかを確かめる SQL と手順。Flyway では流さない。
+DB V2〜V4 の制約・ビューが、設計（[DB 設計 v0.2](../../docs/ex-day_db_design.md) 7節・7.1節）のとおりに働くかを確かめる SQL と手順。Flyway では流さない。
 
 ## v2_checks.sql
 
@@ -20,6 +20,34 @@ docker compose exec -T db psql -U exday exday -v ON_ERROR_STOP=1 < db/check/v2_c
 5. 企画の変更の履歴（出来事から今の並びを再現できる、「作った」は1つ、中身を写す項目名を拒む、順番の入れ替え）
 6. 統合の自己参照
 7. そのほかの制約（Reaction の対象と種類、場所の共有の誘いは1件、判断の記録の主体、由来の種類と対象）
+
+## v3_checks.sql
+
+DB V3（駅・行き方・到達点。[F06](../../docs/ui/functions/F06-detour-reach.md)「データの形」）の制約を確かめる。v2_checks.sql と同じく、サンプルデータを入れた DB で流し、最後に ROLLBACK する。
+
+```bash
+docker compose exec -T db psql -U exday exday -v ON_ERROR_STOP=1 < db/check/v3_checks.sql
+```
+
+最後に `v3_checks: すべて OK` と出れば通っている。確かめること：
+
+1. 駅：サンプルの駅の場所はすべて計算の中の駅を持つ、同じ路線・同じ駅の場所は1行、年度ごとの駅コードは一意、駅の位置は点か線
+2. 到達点は点だけ
+3. 行き方：着く先は同じ場所の到達点だけ（複合の外部キー）、人が確かめたものは確かめた時点を持つ、駅と行き方の先が同じ場所は拒む、判断の記録を持つ、分数は0以上（駅直結・駅構内は0分）
+4. 駅を指す列（`reach.station.place_id`・`place_access.station_place_id`）は種類が「駅」の場所だけ。駅として指されている場所から「駅」の種類を外す・書き換えるのも拒む。制約のトリガーは commit の時点で確かめるので、同じトランザクションで駅を先に足しても「駅」の種類を足せば通る（スクリプトでは `SET CONSTRAINTS ALL IMMEDIATE` で文ごとに確かめる）
+
+## v4_checks.sql
+
+DB V4（到達圏の版・鉄道のグラフ・駅から場所への歩き。F06「データの形」5・6）の制約を確かめる。流し方は v3_checks.sql と同じ。
+
+```bash
+docker compose exec -T db psql -U exday exday -v ON_ERROR_STOP=1 < db/check/v4_checks.sql
+```
+
+1. 版：ACTIVE は1つだけ、ACTIVE は使い始めた時点を持つ、版の名前は英数字と `._-`
+2. グラフ：乗車の辺は路線を持ち乗換の辺は持たない、所要時間は0以上
+3. 駅から場所への歩き：0分以上（徒歩の行き方と比べるため上限の15分を超える行も持てる）、同じ版・駅・場所・到達点は1行（到達点のない行も1行）
+4. 版を消すと、その版のグラフ・駅の点・歩きも消える
 
 ## 同時の更新（2つの接続で確かめる）
 

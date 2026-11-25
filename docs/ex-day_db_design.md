@@ -4,8 +4,8 @@
 - 状態：案。テーブル定義は `db/migration/V2__*`（本書と食い違うときは、どちらかを直す）。表と列の骨組み、「いずれか1種類を指す」関係の持ち方、判断の記録・写し・公開制御・データの保持の方針を決める。テーブル定義とサンプルデータは、本書のレビュー（PR #150）のあとの PR で作った（2026-11-17 の人の判断）
 - 入力：[画面とデータの対応表](ex-day_screen_data_map.md)（2〜8節）、[論理エンティティ設計 v0.2](ex-day_logical_entity_design.md)、[MVP スコープ v0.4](ex-day_mvp_scope.md)、各画面の定義（`docs/ui/screens/`）
 - v0.1（v0.1 の論理設計に基づく閲覧用の DB。Discovery を器とする形）の本文は Git の履歴にある
+- **V3・V4 で足したもの**：寄り道の到達圏のデータ（駅・路線・表定速度・事前計算）と、場所の行き方（何件でも足せる形）・到達点・到達圏の計算の中の駅の番号（DEC-0013 決定2・4・5）。F06 の設計（#161、PR #165）で、DB V3（駅・行き方・到達点）と DB V4（到達圏の版・グラフ・駅から場所への歩き）として足した（3.2.1節）。更新の運用・性能は #163
 - **対象外**：
-  - 寄り道の到達圏のデータ（駅・路線・表定速度・事前計算）と、場所の行き方（何件でも足せる形）・到達点・到達圏の計算の中の駅の番号（DEC-0013 決定2・4・5）。F06 の設計（#161）で足す（2026-11-17 の人の判断。2026-11-19 に、PR ではなく Issue で追う形にした）
   - 会話の解析の運用の記録（解析の実行・バッチ・予算の台帳等。DEC-0018、論理設計 14節）。F02 の実装で足す。本書の表は「どの解析の版で作られたか」を `analysis_version`（text）で持つだけにする
   - MVP で使わない Entity（資料、提案、タグ、出典・根拠、Theme、システムの興味の推定、歴史的な時間。4.2節）
   - ベクトル（pgvector）。検索（F07）の設計で入れると決めたら足す
@@ -161,6 +161,37 @@
 
 - 採用されていない場所（新しい場所の案）は `place` に入れない。案は `place_candidate` の列に持つ（3.8節）
 - 場所の重複の統合・廃止は、MVP では運営が SQL で行い、判断の記録を足す（S13、MVP スコープ 5節）
+
+### 3.2.1 駅・行き方・到達点・到達圏（DB V3・V4。F06）
+
+寄り道の到達圏（F06）のための表。設計は [F06「データの形」](ui/functions/F06-detour-reach.md)、DEC-0013 決定2・4・5。`db/migration/V3__add_station_and_place_access.sql` で作った（PR #165）。
+
+| 表 | 主な列 | 制約・備考 |
+|---|---|---|
+| `reach.line` | `operator`、`name` | 路線。一意（`operator`, `name`）。表定速度等は到達圏のグラフの段（#163 のあと）で足す |
+| `reach.station` | `place_id`（駅の場所）、`line_id`、`name`（N02 の駅名）、`geom`（点か線） | 計算の中の駅（路線ごとの駅1行）。一意（`line_id`, `place_id`）。`place_id` は種類が「駅」の場所だけ（下の制約のトリガー） |
+| `reach.station_source` | `station_id`、`dataset_year`、`station_code`、`group_code` | N02 の年度ごとの対応。主キー（`station_id`, `dataset_year`）、一意（`dataset_year`, `station_code`） |
+| `place_arrival_point` | `place_id`、`geom`（点）、`kind`（CONFIRMED_ENTRANCE／ESTIMATED）、`mode`（WALK／CAR／BUS）、`source` | 到達点。1つの場所に0以上 |
+| `place_access` | `place_id`、`station_place_id`、`mode`（WALK／BUS／TAXI／OTHER）、`minutes`、`arrival_point_id`、`original_text`・`note`、`source`、`verification`、`source_url`・`retrieved_on`・`verified_at`、`status`（ACTIVE／INVALID／EXTRACTION_FAILED）、`created_decision_id` | 行き方。直さずに足していく。着く先は同じ場所の到達点だけ（複合の外部キー）。人が確かめたものは `verified_at` を持つ（CHECK）。判断の記録を必ず持つ。`minutes` は0以上（駅直結・駅構内は0分。OpenAPI の `DetourAccess.minutes` と同じ）。`station_place_id` は種類が「駅」の場所だけ（下の制約のトリガー）。MVP の F06 は徒歩だけを参照する |
+
+- `reach` のスキーマは、ドメインの表と分けた計算のデータ（論理設計 14節）。歩きのデータは OSM の歩ける道（DEC-0014 決定1、2026-11-21）。版の切り替え・更新の手順は #163
+
+DB V4（`db/migration/V4__add_reach_graph_and_place_walk.sql`。PR #165、#168）：到達圏の版・鉄道のグラフ・駅から場所への歩き。DB の image に pgRouting を足した。
+
+| 表 | 主な列 | 制約・備考 |
+|---|---|---|
+| `reach.build` | `version`、`status`（BUILDING／READY／ACTIVE／RETIRED／FAILED）、`sources`（元のデータの版）、`activated_at` | 到達圏のデータの版。ACTIVE は1つだけ（部分一意索引）。版を消すと、その版のグラフ・駅の点・歩きも消える |
+| `reach.line`（列を足す） | `service_type`、`speed_kmh` | 表定速度。誤差を「行けない」側に寄せるため遅めに置く |
+| `reach.speed_override` | `line_id`、`from_station`・`to_station`、`speed_kmh`、`source` | 区間ごとの表定速度の上書き（版を作るときに使う） |
+| `reach.node`・`reach.edge` | 版、路線、点（geography）／種類（RIDE／TRANSFER）・所要時間（分） | pgRouting が読むグラフ。点は路線ごとに分ける。乗車の辺は路線を持ち、乗換の辺は持たない |
+| `reach.station_node` | 版、計算の中の駅、点 | 駅（路線ごと）のホームの点 |
+| `reach.build_access` | 版、行き方 | 版を作るときに読んだ徒歩の行き方。API はこの版で読んだ行き方だけを使う（比べる道のりが版にある行き方だけ）。あとで無効にした行き方は `place_access.status` ですぐに除く |
+| `reach.place_walk` | 版、駅の場所、場所、到達点（NULL は代表点）、`walk_min`（0以上）、`method`（OSM_WALK／SAMPLE） | 駅から場所への歩きの道のり。ふつうは片道15分までで、徒歩の行き方がある組は、行き方と比べるために15分を超えても持つ（API は上限を超える組を外す）。同じ版・駅・場所・到達点は1行 |
+
+- 歩きのグラフそのもの（OSM の道）は、版を作る処理の中だけで使い、DB には持たない（ODbL の派生のデータベースを小さくする）
+- **駅を指す列は種類が「駅」の場所だけ**（PR #165 のレビュー）：`reach.station.place_id`・`place_access.station_place_id`。行き方は運営・ユーザー・会話・自動の取得など複数の経路から作られるので、書き込みの処理ごとに頼らず DB で守る。種類は `place_kind` にあり外部キーで表せないため、制約のトリガー（commit の時点で確かめる）で拒み、駅として指されている場所から「駅」の種類を外すことも拒む
+- `reach.station` は今、有効かどうか（状態・期間）を持たない。路線の一部が廃止されたときの扱い（有効なデータの年度で決める／状態か有効期間を持つ／版ごとに切り替える）は #163 の N02 の更新・廃止・名寄せで決める
+- 制約の確認：[db/check/v3_checks.sql・v4_checks.sql](../db/check/README.md)
 
 ### 3.3 会話と Post（4.3・4.4節）
 
@@ -358,7 +389,7 @@ Reaction の種類（**案**。C10・S03・S14）：
 | 解析の状態（反映が遅れていること） | 本書では持たない。F02 の運用の記録（DEC-0018）から出す |
 | 起点の既定のエリア | DB に持たない。始める地域はアプリの設定（場所の `public_id`）、ログインしている人は `user_interest` の興味のある地域 |
 | TOP の並びを保つための種 | 保存しない |
-| 寄り道の到達圏の事前計算 | F06 の設計（#161）で足す |
+| 寄り道の到達圏の事前計算 | DB V4 で足した（3.2.1節。#161、PR #165）。更新の運用は #163 |
 | 企画そのものの会話の同時投稿の重複防止 | `conversation` の部分一意（`entry_project_id`）WHERE `is_project_own`（3.3節） |
 
 ## 6. レビューで決めたこと（2026-11-17、PR #150）

@@ -1,0 +1,3 @@
+# 到達圏の版を作る取り込み（tools/reach）。pyosmium は poc #46 で確かめた版
+osmium==4.3.2
+psycopg[binary]==3.3.9

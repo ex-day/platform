@@ -92,9 +92,23 @@ class SampleDataIntegrationTest {
 
     @Test
     void 制約とビューの確認が通る() throws Exception {
-        // db/check/v2_checks.sql は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。
-        // 失敗すると RAISE EXCEPTION（NG: ...）で SQLException になる。最後に ROLLBACK するのでデータは変わらない。
-        String script = Files.readAllLines(DB_DIR.resolve("check/v2_checks.sql")).stream()
+        runCheck("check/v2_checks.sql");
+    }
+
+    @Test
+    void 駅と行き方の制約の確認が通る() throws Exception {
+        runCheck("check/v3_checks.sql");
+    }
+
+    @Test
+    void 到達圏の版とグラフと歩きの制約の確認が通る() throws Exception {
+        runCheck("check/v4_checks.sql");
+    }
+
+    // db/check の SQL は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。
+    // 失敗すると RAISE EXCEPTION（NG: ...）で SQLException になる。最後に ROLLBACK するのでデータは変わらない。
+    private static void runCheck(String path) throws Exception {
+        String script = Files.readAllLines(DB_DIR.resolve(path)).stream()
                 .filter(line -> !line.startsWith("\\"))
                 .collect(Collectors.joining("\n"));
         try (Connection connection = DriverManager.getConnection(
