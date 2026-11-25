@@ -12,12 +12,14 @@
 CREATE TEMP TABLE walk_component AS
 SELECT node AS node_id, component
 FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM walk_edge');
-DELETE FROM walk_edge e
- USING walk_component c
- JOIN (SELECT component FROM walk_component GROUP BY component
-        HAVING count(*) < current_setting('reach.min_island_nodes')::int) s USING (component)
- WHERE e.source = c.node_id;
-DELETE FROM walk_node n WHERE NOT EXISTS (SELECT 1 FROM walk_edge e WHERE e.source = n.node_id OR e.target = n.node_id);
+CREATE TEMP TABLE small_island AS
+SELECT c.node_id FROM walk_component c
+JOIN (SELECT component FROM walk_component GROUP BY component
+       HAVING count(*) < current_setting('reach.min_island_nodes')::int) s USING (component);
+CREATE UNIQUE INDEX ON small_island (node_id);
+ANALYZE small_island;
+DELETE FROM walk_edge e USING small_island i WHERE e.source = i.node_id;
+DELETE FROM walk_node n USING small_island i WHERE n.node_id = i.node_id;
 CREATE INDEX ON walk_node USING gist (geom);
 CREATE INDEX ON walk_edge USING gist (geom);
 ANALYZE walk_node;
