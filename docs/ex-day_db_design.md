@@ -174,10 +174,23 @@
 | `place_arrival_point` | `place_id`、`geom`（点）、`kind`（CONFIRMED_ENTRANCE／ESTIMATED）、`mode`（WALK／CAR／BUS）、`source` | 到達点。1つの場所に0以上 |
 | `place_access` | `place_id`、`station_place_id`、`mode`（WALK／BUS／TAXI／OTHER）、`minutes`、`arrival_point_id`、`original_text`・`note`、`source`、`verification`、`source_url`・`retrieved_on`・`verified_at`、`status`（ACTIVE／INVALID／EXTRACTION_FAILED）、`created_decision_id` | 行き方。直さずに足していく。着く先は同じ場所の到達点だけ（複合の外部キー）。人が確かめたものは `verified_at` を持つ（CHECK）。判断の記録を必ず持つ。`minutes` は0以上（駅直結・駅構内は0分。OpenAPI の `DetourAccess.minutes` と同じ）。`station_place_id` は種類が「駅」の場所だけ（下の制約のトリガー）。MVP の F06 は徒歩だけを参照する |
 
-- `reach` のスキーマは、ドメインの表と分けた計算のデータ（論理設計 14節）。グラフ（`reach.node`・`reach.edge`）・版（`reach.build`）・駅から場所への歩き（`reach.place_walk`）は、次のマイグレーションで作る。歩きのデータは OSM の歩ける道（DEC-0014 決定1、2026-11-21）。版の切り替え・更新の手順は #163
+- `reach` のスキーマは、ドメインの表と分けた計算のデータ（論理設計 14節）。歩きのデータは OSM の歩ける道（DEC-0014 決定1、2026-11-21）。版の切り替え・更新の手順は #163
+
+DB V4（`db/migration/V4__add_reach_graph_and_place_walk.sql`。PR #165、#168）：到達圏の版・鉄道のグラフ・駅から場所への歩き。DB の image に pgRouting を足した。
+
+| 表 | 主な列 | 制約・備考 |
+|---|---|---|
+| `reach.build` | `version`、`status`（BUILDING／READY／ACTIVE／RETIRED／FAILED）、`sources`（元のデータの版）、`activated_at` | 到達圏のデータの版。ACTIVE は1つだけ（部分一意索引）。版を消すと、その版のグラフ・駅の点・歩きも消える |
+| `reach.line`（列を足す） | `service_type`、`speed_kmh` | 表定速度。誤差を「行けない」側に寄せるため遅めに置く |
+| `reach.speed_override` | `line_id`、`from_station`・`to_station`、`speed_kmh`、`source` | 区間ごとの表定速度の上書き（版を作るときに使う） |
+| `reach.node`・`reach.edge` | 版、路線、点（geography）／種類（RIDE／TRANSFER）・所要時間（分） | pgRouting が読むグラフ。点は路線ごとに分ける。乗車の辺は路線を持ち、乗換の辺は持たない |
+| `reach.station_node` | 版、計算の中の駅、点 | 駅（路線ごと）のホームの点 |
+| `reach.place_walk` | 版、駅の場所、場所、到達点（NULL は代表点）、`walk_min`（0〜15）、`method`（OSM_WALK／SAMPLE） | 駅から場所への歩きの道のり。同じ版・駅・場所・到達点は1行 |
+
+- 歩きのグラフそのもの（OSM の道）は、版を作る処理の中だけで使い、DB には持たない（ODbL の派生のデータベースを小さくする）
 - **駅を指す列は種類が「駅」の場所だけ**（PR #165 のレビュー）：`reach.station.place_id`・`place_access.station_place_id`。行き方は運営・ユーザー・会話・自動の取得など複数の経路から作られるので、書き込みの処理ごとに頼らず DB で守る。種類は `place_kind` にあり外部キーで表せないため、制約のトリガー（commit の時点で確かめる）で拒み、駅として指されている場所から「駅」の種類を外すことも拒む
 - `reach.station` は今、有効かどうか（状態・期間）を持たない。路線の一部が廃止されたときの扱い（有効なデータの年度で決める／状態か有効期間を持つ／版ごとに切り替える）は #163 の N02 の更新・廃止・名寄せで決める
-- 制約の確認：[db/check/v3_checks.sql](../db/check/README.md)
+- 制約の確認：[db/check/v3_checks.sql・v4_checks.sql](../db/check/README.md)
 
 ### 3.3 会話と Post（4.3・4.4節）
 

@@ -48,6 +48,9 @@ public class DetourReachService {
     /** 別の駅へ向かうとき、使える時間の中で着けなければ、この分まで探して寄り道をしないで着く時間を求める。 */
     private static final double DIRECT_SEARCH_LIMIT_MINUTES = 24 * 60;
 
+    /** 使える時間の刻み（分。OpenAPI の multipleOf）。 */
+    private static final int MINUTES_STEP = 15;
+
     private final DetourQueries queries;
     private final StationService stations;
     private final DetourProperties settings;
@@ -98,6 +101,9 @@ public class DetourReachService {
     }
 
     private Calculation calculate(String fromId, int minutes, String toParam) {
+        if (minutes % MINUTES_STEP != 0) {
+            throw new InvalidDetourMinutesException();
+        }
         var from = station(fromId, "移動を始める駅");
         EndKind end;
         PlaceRow to = null;

@@ -2,6 +2,7 @@ package io.github.exday.api;
 
 import io.github.exday.api.conversation.ConversationNotFoundException;
 import io.github.exday.api.detour.InvalidDetourCursorException;
+import io.github.exday.api.detour.InvalidDetourMinutesException;
 import io.github.exday.api.detour.InvalidDetourStationException;
 import io.github.exday.api.discovery.DiscoveryNotFoundException;
 import io.github.exday.api.place.PlaceNotFoundException;
@@ -63,6 +64,11 @@ public class ApiErrors extends ResponseEntityExceptionHandler {
     public ProblemDetail invalidDetourCursor(InvalidDetourCursorException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
             "カーソルが読めない、条件が違う、または到達圏のデータ・計算の決まりが切り替わった。最初から読み直す。");
+    }
+
+    @ExceptionHandler(InvalidDetourMinutesException.class)
+    public ProblemDetail invalidDetourMinutes(InvalidDetourMinutesException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "使える時間は15分刻み。");
     }
 
     @ExceptionHandler(InvalidDetourStationException.class)
