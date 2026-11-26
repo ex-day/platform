@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>データはサンプルデータ（db/sample/R__sample_data.sql）の手で作った版（sample.1）：
  * 根岸線 横浜〜桜木町 3分・桜木町〜石川町 2.7分、東海道線 横浜〜鶴見 10.5分、横浜線 横浜〜小机 13.5分、ブルーライン 横浜〜桜木町 4分、
+ * 探索用の路線の京浜東北線 鶴見〜横浜〜桜木町〜石川町（同じ分で、横浜で乗換なし。DB V6）、
  * 乗換10分（待ちを含む）、行き・帰りそれぞれの最初の乗車の待ち5分。歩き：桜木町 → 汽車道2分・みなとみらい3分・大岡川5分、横浜 → みなとみらい8分、
  * 石川町 → 大岡川12分・山下公園14分・氷川丸15分、小机 → 小机城址（推定の到達点12分・代表点9分。公式の行き方は到達点まで15分）、
  * 鶴見 → 鶴見の坂A 8分・B 13分・C 12分。
@@ -52,7 +53,8 @@ class DetourReachApiTest extends DbApiTestSupport {
         assertThat(condition).containsEntry("minutes", 60).containsEntry("end", Map.of("kind", "return"));
         assertThat(condition.get("from")).isEqualTo(Map.of(
             "place", Map.of("id", SAKURAGICHO, "name", "桜木町駅"),
-            "lines", List.of(Map.of("operator", "JR東日本", "name", "根岸線"),
+            "lines", List.of(Map.of("operator", "JR東日本", "name", "京浜東北線"),
+                Map.of("operator", "JR東日本", "name", "根岸線"),
                 Map.of("operator", "横浜市営地下鉄", "name", "ブルーライン"))));
 
         var items = items(places(reach));
@@ -121,17 +123,19 @@ class DetourReachApiTest extends DbApiTestSupport {
     @Test
     void 別の駅へ向かうときは到着の駅までの帰りを引く() {
         var reach = okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=" + TSURUMI);
-        // 桜木町 → 鶴見：3（ブルーライン）＋10（乗換）＋10.5（東海道線）＋5（待ち）＝ 28.5 → 29分
-        assertThat(reach).containsEntry("kind", "reachable").containsEntry("directMinutes", 29);
+        // 桜木町 → 鶴見：京浜東北線（探索用の路線。根岸線と東海道線をまたいで乗換なし）3＋10.5＋5（待ち）＝ 18.5 → 19分
+        assertThat(reach).containsEntry("kind", "reachable").containsEntry("directMinutes", 19);
         @SuppressWarnings("unchecked")
         var end = (Map<String, Object>) ((Map<String, Object>) reach.get("condition")).get("end");
         assertThat(end).containsEntry("kind", "station");
         var items = items(places(reach));
-        // 汽車道：行き 2、帰り 2＋28.5 → 31、過ごせる 27。鶴見の坂A：行き 28.5＋8 → 37、帰り 8、過ごせる 15（到着の駅のまわり）
-        assertThat(names(items)).containsExactly("汽車道", "みなとみらい", "大岡川", "鶴見の坂A");
-        assertThat(items.get(0)).containsEntry("stayMinutes", 27).containsEntry("returnMinutes", 31);
-        assertThat(items.get(3)).containsEntry("stayMinutes", 15).containsEntry("outboundMinutes", 37)
+        // 汽車道：行き 2、帰り 2＋18.5 → 21、過ごせる 37。鶴見の坂A：行き 18.5＋8 → 27、帰り 8、過ごせる 25（到着の駅のまわり）。
+        // 鶴見の坂C：行き 18.5＋12 → 31、帰り 12、過ごせる 17。鶴見の坂B：行き 18.5＋13 → 32、帰り 13、過ごせる 15
+        assertThat(names(items)).containsExactly("汽車道", "みなとみらい", "大岡川", "鶴見の坂A", "鶴見の坂C", "鶴見の坂B");
+        assertThat(items.get(0)).containsEntry("stayMinutes", 37).containsEntry("returnMinutes", 21);
+        assertThat(items.get(3)).containsEntry("stayMinutes", 25).containsEntry("outboundMinutes", 27)
             .containsEntry("returnMinutes", 8);
+        assertThat(items.get(5)).containsEntry("stayMinutes", 15).containsEntry("outboundMinutes", 32);
     }
 
     @Test

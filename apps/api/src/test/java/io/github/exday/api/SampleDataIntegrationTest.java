@@ -1,6 +1,7 @@
 package io.github.exday.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -110,6 +111,48 @@ class SampleDataIntegrationTest {
     @Test
     void 歩きのグラフと場所ごとの作り直しと呼び名の確認が通る() throws Exception {
         runCheck("check/v5_checks.sql");
+    }
+
+    @Test
+    void 探索用の路線の確認が通る() throws Exception {
+        runCheck("check/v6_checks.sql");
+    }
+
+    /** リポジトリの tools/reach/。版を作る SQL（build_service.sql）を、小さなグラフで流して確かめる（PR #173 のレビュー）。 */
+    private static final Path REACH_DIR = DB_DIR.resolveSibling("tools").resolve("reach");
+
+    @Test
+    void 系統を版に足すSQLが直通_乗換_通過地点_環状_置き換えを作る() throws Exception {
+        runScripts(REACH_DIR.resolve("tests/service_graph.sql"), REACH_DIR.resolve("tests/service_case_ok.sql"),
+                REACH_DIR.resolve("sql/build_service.sql"), REACH_DIR.resolve("tests/service_case_ok_assert.sql"));
+    }
+
+    @Test
+    void 置き換えで外した区間への接続を失うと系統を版に足すSQLが失敗する() {
+        assertThatThrownBy(() -> runScripts(REACH_DIR.resolve("tests/service_graph.sql"),
+                REACH_DIR.resolve("tests/service_case_lost.sql"), REACH_DIR.resolve("sql/build_service.sql")))
+            .hasMessageContaining("外した区間の駅どうし");
+    }
+
+    @Test
+    void 並ぶ別の路線を走る系統は置き換えの代わりに数えない() {
+        assertThatThrownBy(() -> runScripts(REACH_DIR.resolve("tests/service_graph.sql"),
+                REACH_DIR.resolve("tests/service_case_parallel.sql"), REACH_DIR.resolve("sql/build_service.sql")))
+            .hasMessageContaining("外した区間の駅どうし");
+    }
+
+    // 1つの接続で、ファイルをつないで流す（一時の表を引き継ぐ）。最初のファイルが BEGIN し、最後が ROLLBACK する
+    // （失敗したときは接続を閉じてロールバックする）
+    private static void runScripts(Path... paths) throws Exception {
+        var script = new StringBuilder();
+        for (Path path : paths) {
+            script.append(Files.readString(path)).append('\n');
+        }
+        try (Connection connection = DriverManager.getConnection(
+                        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute(script.toString());
+        }
     }
 
     // db/check の SQL は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。

@@ -103,3 +103,7 @@ $RECYCLE.BIN/
 
 # 開発用の「今」と「いる場所」の設定（Issue #114。見本は dev/exday-dev.example.yaml）
 dev/exday-dev.local.yaml
+
+# Python
+__pycache__/
+*.pyc
