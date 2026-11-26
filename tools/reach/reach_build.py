@@ -169,49 +169,87 @@ def load_osm_walk(cur, pbf: Path) -> None:
     log(f"OSM：歩ける道の辺 {n_edges} 本、点 {len(nodes)} 個")
 
 
+def _lines(path: Path, key: str, operator: str, entries) -> list:
+    """通る路線：「路線名」（ファイルの operator の路線）か、{ operator = "...", name = "..." }（事業者をまたぐ直通）。"""
+    out = []
+    for entry in entries:
+        if isinstance(entry, str):
+            out.append((operator, entry))
+        elif isinstance(entry, dict) and set(entry) == {"operator", "name"}:
+            out.append((entry["operator"], entry["name"]))
+        else:
+            raise ValueError(f"{path.name}:{key}：lines は「路線名」か {{ operator = ..., name = ... }}：{entry!r}")
+    return out
+
+
+def _points(path: Path, key: str, entries) -> list:
+    """停車駅と通過地点の並び：「駅名」は停車駅、{ via = "駅名" } は通過地点（経路を決めるだけで、乗り降り・乗換はしない）。"""
+    out = []
+    for entry in entries:
+        if isinstance(entry, str):
+            out.append((entry, True))
+        elif isinstance(entry, dict) and set(entry) == {"via"}:
+            out.append((entry["via"], False))
+        else:
+            raise ValueError(f"{path.name}:{key}：stops は「駅名」か {{ via = \"駅名\" }}：{entry!r}")
+    return out
+
+
 def read_services(folder: Path) -> list:
-    """探索用の路線（運行系統）の定義（*.toml）を読んで確かめる（版を作り始める前に。#170）。"""
-    docs = []
+    """探索用の路線（運行系統）の定義（*.toml）を読んで確かめる（版を作り始める前に。#170）。
+
+    返すのは系統ごとの dict（key・operator・name・kind・speed_kmh・loop・lines・points・stop_names）と、置き換えてよい路線の組。
+    """
+    services, replace = [], []
     for path in sorted(folder.glob("*.toml")):
         with path.open("rb") as f:
             doc = tomllib.load(f)
+        operator = doc["operator"]
+        replace += _lines(path, "replace_lines", operator, doc.get("replace_lines", []))
         for svc in doc.get("service", []):
-            key, stops = svc["key"], svc["stops"]
-            if len(stops) < 2 or (svc.get("loop", False) and len(set(stops)) != len(stops)):
-                raise ValueError(f"{path.name}:{key}：停車駅が2つ未満、または環状で同じ駅を繰り返している")
-            unknown = set(svc.get("stop_names", {})) - set(stops)
+            key = svc["key"]
+            points = _points(path, key, svc["stops"])
+            stops = [name for name, is_stop in points if is_stop]
+            loop = bool(svc.get("loop", False))
+            if len(stops) < 2 or not points[0][1] or (not loop and not points[-1][1]):
+                raise ValueError(f"{path.name}:{key}：停車駅が2つ未満、または並びが停車駅で始まらない・停車駅で終わらない")
+            if loop and len(set(stops)) != len(stops):
+                raise ValueError(f"{path.name}:{key}：環状で同じ駅を繰り返している（最初の駅を最後に繰り返さない）")
+            names = svc.get("stop_names", {})
+            unknown = set(names) - set(stops)
             if unknown:
                 raise ValueError(f"{path.name}:{key}：stop_names に停車駅でない駅がある：{'・'.join(sorted(unknown))}")
-        docs.append(doc)
-    return docs
+            services.append({"key": key, "operator": svc.get("operator", operator), "name": svc["name"],
+                             "kind": svc.get("kind", "普通"), "speed_kmh": float(svc["speed_kmh"]), "loop": loop,
+                             "lines": _lines(path, key, operator, svc["lines"]), "points": points, "stop_names": names})
+    keys = [s["key"] for s in services]
+    if len(set(keys)) != len(keys):
+        raise ValueError("系統の key が重なっている")
+    return [services, replace]
 
 
-def load_services(cur, docs: list) -> int:
+def load_services(cur, defs: list) -> int:
     """読んだ系統の定義を、build_service.sql が読む一時の表に入れる（#170）。系統の数を返す。"""
+    services, replace = defs
     cur.execute("""
         CREATE TEMP TABLE svc_def (key text PRIMARY KEY, operator text NOT NULL, name text NOT NULL, kind text NOT NULL,
                                    speed_kmh double precision NOT NULL, is_loop boolean NOT NULL);
-        CREATE TEMP TABLE svc_def_line (key text NOT NULL, line_name text NOT NULL);
-        CREATE TEMP TABLE svc_def_stop (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL, display_name text);
+        CREATE TEMP TABLE svc_def_line (key text NOT NULL, operator text NOT NULL, line_name text NOT NULL);
+        CREATE TEMP TABLE svc_def_point (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL,
+                                         is_stop boolean NOT NULL, display_name text);
         CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
     """)
-    n = 0
-    for doc in docs:
-        operator = doc["operator"]
-        for line_name in doc.get("replace_lines", []):
-            cur.execute("INSERT INTO svc_replace VALUES (%s, %s)", (operator, line_name))
-        for svc in doc.get("service", []):
-            key, stops = svc["key"], svc["stops"]
-            cur.execute("INSERT INTO svc_def VALUES (%s, %s, %s, %s, %s, %s)",
-                        (key, operator, svc["name"], svc.get("kind", "普通"), float(svc["speed_kmh"]),
-                         bool(svc.get("loop", False))))
-            for line_name in svc["lines"]:
-                cur.execute("INSERT INTO svc_def_line VALUES (%s, %s)", (key, line_name))
-            names = svc.get("stop_names", {})
-            for seq, station in enumerate(stops, start=1):
-                cur.execute("INSERT INTO svc_def_stop VALUES (%s, %s, %s, %s)", (key, seq, station, names.get(station)))
-            n += 1
-    return n
+    for operator, line_name in replace:
+        cur.execute("INSERT INTO svc_replace VALUES (%s, %s)", (operator, line_name))
+    for svc in services:
+        cur.execute("INSERT INTO svc_def VALUES (%s, %s, %s, %s, %s, %s)",
+                    (svc["key"], svc["operator"], svc["name"], svc["kind"], svc["speed_kmh"], svc["loop"]))
+        for operator, line_name in svc["lines"]:
+            cur.execute("INSERT INTO svc_def_line VALUES (%s, %s, %s)", (svc["key"], operator, line_name))
+        for seq, (station, is_stop) in enumerate(svc["points"], start=1):
+            cur.execute("INSERT INTO svc_def_point VALUES (%s, %s, %s, %s, %s)",
+                        (svc["key"], seq, station, is_stop, svc["stop_names"].get(station) if is_stop else None))
+    return len(services)
 
 
 def settings(cur, build_id: int, n02_year: int) -> None:
@@ -240,7 +278,7 @@ def build(args) -> None:
                "transfer_minutes": TRANSFER_MINUTES, "walk_cap_minutes": WALK_CAP_MINUTES,
                "walk_meters_per_minute": WALK_METERS_PER_MINUTE, "min_island_nodes": MIN_ISLAND_NODES,
                "snap_meters": SNAP_METERS,
-               "services": sorted(svc["key"] for doc in services for svc in doc.get("service", []))}
+               "services": sorted(svc["key"] for svc in services[0])}
     with psycopg.connect(DSN) as conn:
         # 場所の変更のトランザクションが終わるのを待ってから版の行を足す（DB V5 の reach.build_lock_key の説明）
         conn.execute("SELECT pg_advisory_xact_lock(reach.build_lock_key())")

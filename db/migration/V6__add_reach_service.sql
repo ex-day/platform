@@ -22,7 +22,7 @@ CREATE TABLE reach.build_service (
     is_loop      boolean          NOT NULL DEFAULT false,
     UNIQUE (build_id, service_key)
 );
-COMMENT ON TABLE reach.build_service IS '版の探索用の路線（運行系統）。tools/reach/services/ の定義を、版を作るときに写したもの。operator は N02 の事業者名（見せるときは reach.operator_display の呼び名）、name は見せる系統の名前（山手線・上野東京ライン 等）';
+COMMENT ON TABLE reach.build_service IS '版の探索用の路線（運行系統）。tools/reach/services/ の定義を、版を作るときに写したもの。operator は主な事業者の N02 の事業者名（駅の候補では、停車駅の路線の事業者を出す。事業者をまたぐ直通のため）、name は見せる系統の名前（山手線・上野東京ライン 等）';
 COMMENT ON COLUMN reach.build_service.kind IS '種別（普通・快速・特急 等）。停車駅や速さが違えば別の系統にする';
 COMMENT ON COLUMN reach.build_service.is_loop IS '環状（最後の停車駅から最初の停車駅へもつながる）。停車駅は1回ずつ並べ、最初の駅を最後に繰り返さない';
 
@@ -33,7 +33,7 @@ CREATE TABLE reach.build_service_stop (
     display_name      text    CHECK (display_name <> ''),
     PRIMARY KEY (build_service_id, seq)
 );
-COMMENT ON TABLE reach.build_service_stop IS '版の系統の停車駅の並び（seq の順）。station_id は N02 の正式な路線の駅（reach.station。年度が変わっても同じ）。同じ駅が並びに2回出てもよい（一意にするのは順番だけ）';
+COMMENT ON TABLE reach.build_service_stop IS '版の系統の停車駅の並び（seq の順）。通過地点（経路を決めるだけの駅）は入れない。station_id は N02 の正式な路線の駅（reach.station。年度が変わっても同じ）。同じ駅が並びに2回出てもよい（一意にするのは順番だけ）';
 COMMENT ON COLUMN reach.build_service_stop.display_name IS 'この駅で見せる系統の名前（例：上野東京ラインを戸塚では「東海道線」）。無ければ reach.build_service.name';
 CREATE INDEX reach_build_service_stop_station_idx ON reach.build_service_stop (station_id);
 

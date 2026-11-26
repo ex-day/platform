@@ -72,7 +72,8 @@ public class StationQueries {
          LIMIT :limit
         """;
 
-    // 駅を通る路線：使っている版（ACTIVE）の探索用の路線（運行系統。停車駅ごとの名前があればそれ）と、N02 の路線。
+    // 駅を通る路線：使っている版（ACTIVE）の探索用の路線（運行系統。停車駅ごとの名前があればそれ。事業者は、その駅の
+    // 路線の事業者。事業者をまたぐ直通でも、駅ごとにその駅の事業者を出す）と、N02 の路線。
     // N02 の路線のうち、版で置き換えた路線（reach.build_replaced_line）は、その駅に乗車の辺が残っているときだけ出す
     // （系統と同じ線路が二重に出ないように。F06「データの形」9、#170）。
     // 事業者・路線は一般的な呼び名で見せる（DB V5 の呼び名の表。無ければ N02 の名前）。見せる名前の順。
@@ -81,13 +82,14 @@ public class StationQueries {
         SELECT x.place_id, x.operator, x.name
           FROM (
             SELECT s.place_id,
-                   coalesce(od.display_name, bs.operator) AS operator,
+                   coalesce(od.display_name, sl.operator) AS operator,
                    coalesce(st.display_name, bs.name) AS name
               FROM reach.build_service_stop st
               JOIN reach.build_service bs ON bs.id = st.build_service_id
               JOIN reach.build b ON b.id = bs.build_id AND b.status = 'ACTIVE'
               JOIN reach.station s ON s.id = st.station_id
-              LEFT JOIN reach.operator_display od ON od.operator = bs.operator
+              JOIN reach.line sl ON sl.id = s.line_id
+              LEFT JOIN reach.operator_display od ON od.operator = sl.operator
              WHERE s.place_id IN (:placeIds)
             UNION
             SELECT s.place_id,
