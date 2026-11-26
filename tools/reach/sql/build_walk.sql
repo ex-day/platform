@@ -9,7 +9,7 @@
 
 -- ---------------------------------------------------------------------------
 -- 小さな島を除く：ほかの道とつながっていない短い道の集まり（駅の中の通路など）。結ぶと駅や場所がどこへも歩けなくなる。
--- 閾値はメッシュ 5339 での暫定の値（poc #46）。確定は #163
+-- 閾値は100点（2026-11-26 に #163 で確定。メッシュ 5339 では、50〜2万のどれでも駅・場所の結び先は同じだった）
 -- ---------------------------------------------------------------------------
 CREATE TEMP TABLE walk_component AS
 SELECT node AS node_id, component
@@ -151,6 +151,34 @@ CROSS JOIN LATERAL (
 ) d
 WHERE a.station_place_id <> a.place_id
   AND d.agg_cost IS NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- 確かめるための数（reach_build.py がログに出す。#163）：道に結べなかった駅・着く先と、いちばん大きなつながり（本体）
+-- 以外に結んだ駅・着く先。本体以外は、切り出した範囲の端で切れた地域（木更津のあたり等）か、離れた島。
+-- 結べない駅が範囲の端に並ぶときは、OSM の元の地域か切り出しの範囲が N02 の範囲を覆っていない（README「使い方」）
+-- ---------------------------------------------------------------------------
+CREATE TEMP TABLE walk_main AS
+SELECT component FROM walk_component c WHERE NOT EXISTS (SELECT 1 FROM small_island i WHERE i.node_id = c.node_id)
+GROUP BY component ORDER BY count(*) DESC LIMIT 1;
+CREATE TEMP TABLE walk_report AS
+SELECT 'station_unsnapped' AS item, count(*)::int AS n,
+       (SELECT string_agg(name, '・' ORDER BY name) FROM (
+          SELECT DISTINCT s.name FROM reach.station s
+           WHERE EXISTS (SELECT 1 FROM reach.station_node sn
+                          WHERE sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint)
+             AND NOT EXISTS (SELECT 1 FROM station_snap x WHERE x.place_id = s.place_id) LIMIT 20) x) AS examples
+  FROM (SELECT DISTINCT s.place_id FROM reach.station s
+         WHERE EXISTS (SELECT 1 FROM reach.station_node sn
+                        WHERE sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint)
+           AND NOT EXISTS (SELECT 1 FROM station_snap x WHERE x.place_id = s.place_id)) u
+UNION ALL
+SELECT 'station_off_main', count(*)::int, NULL FROM station_snap s JOIN walk_component c ON c.node_id = s.node_id
+ WHERE c.component <> (SELECT component FROM walk_main)
+UNION ALL
+SELECT 'target_snapped', count(*)::int, NULL FROM target_snap
+UNION ALL
+SELECT 'target_off_main', count(*)::int, NULL FROM target_snap t JOIN walk_component c ON c.node_id = t.node_id
+ WHERE c.component <> (SELECT component FROM walk_main);
 
 -- ---------------------------------------------------------------------------
 -- 歩きのグラフと駅の点を版に残す（DB V5）。辺の形は両端を結んだ線にする（探す範囲で絞るためだけに使う。大きさを抑える）
