@@ -13,6 +13,8 @@
 - build：版（reach.build）を BUILDING で作り、N02 から駅の場所・計算の中の駅・路線と鉄道のグラフを、OSM の歩ける道から
   駅から場所への歩きを作って、READY にする。失敗したら FAILED にする（使っている版はそのまま）。鉄道のグラフが空
   （辺かグラフに結び付いた駅の点が0）なら失敗にする
+- 探索用の路線（運行系統）：--services のフォルダ（既定 tools/reach/services）の *.toml を読み、版の鉄道のグラフに足す
+  （build_service.sql。F06「データの形」9、#170）。停車駅・線路が見つからない、置き換えると乗れなくなる駅があるときは失敗にする
 - activate：READY（または前に使っていた RETIRED）の版を ACTIVE にし、それまでの ACTIVE を RETIRED にする（1つのトランザクション）。
   切り戻しは、前の版を activate する
 - OSM の .osm.pbf は、highway の道を切り出したもの（ex-day/poc reach/osmwalk/extract_highway.py）。小さな島を除いた歩きの
@@ -26,6 +28,7 @@ import math
 import os
 import sys
 import time
+import tomllib
 from collections import Counter
 from pathlib import Path
 
@@ -34,6 +37,7 @@ import psycopg
 
 DSN = os.environ.get("EXDAY_DSN", "postgresql://exday:exday@127.0.0.1:5433/exday")
 SQL_DIR = Path(__file__).resolve().parent / "sql"
+SERVICES_DIR = Path(__file__).resolve().parent / "services"
 
 # 計算の決まりの値（F06「設定で持つ値」）。API の exday.detour.* と同じ値にする
 TRANSFER_MINUTES = 10
@@ -165,6 +169,51 @@ def load_osm_walk(cur, pbf: Path) -> None:
     log(f"OSM：歩ける道の辺 {n_edges} 本、点 {len(nodes)} 個")
 
 
+def read_services(folder: Path) -> list:
+    """探索用の路線（運行系統）の定義（*.toml）を読んで確かめる（版を作り始める前に。#170）。"""
+    docs = []
+    for path in sorted(folder.glob("*.toml")):
+        with path.open("rb") as f:
+            doc = tomllib.load(f)
+        for svc in doc.get("service", []):
+            key, stops = svc["key"], svc["stops"]
+            if len(stops) < 2 or (svc.get("loop", False) and len(set(stops)) != len(stops)):
+                raise ValueError(f"{path.name}:{key}：停車駅が2つ未満、または環状で同じ駅を繰り返している")
+            unknown = set(svc.get("stop_names", {})) - set(stops)
+            if unknown:
+                raise ValueError(f"{path.name}:{key}：stop_names に停車駅でない駅がある：{'・'.join(sorted(unknown))}")
+        docs.append(doc)
+    return docs
+
+
+def load_services(cur, docs: list) -> int:
+    """読んだ系統の定義を、build_service.sql が読む一時の表に入れる（#170）。系統の数を返す。"""
+    cur.execute("""
+        CREATE TEMP TABLE svc_def (key text PRIMARY KEY, operator text NOT NULL, name text NOT NULL, kind text NOT NULL,
+                                   speed_kmh double precision NOT NULL, is_loop boolean NOT NULL);
+        CREATE TEMP TABLE svc_def_line (key text NOT NULL, line_name text NOT NULL);
+        CREATE TEMP TABLE svc_def_stop (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL, display_name text);
+        CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
+    """)
+    n = 0
+    for doc in docs:
+        operator = doc["operator"]
+        for line_name in doc.get("replace_lines", []):
+            cur.execute("INSERT INTO svc_replace VALUES (%s, %s)", (operator, line_name))
+        for svc in doc.get("service", []):
+            key, stops = svc["key"], svc["stops"]
+            cur.execute("INSERT INTO svc_def VALUES (%s, %s, %s, %s, %s, %s)",
+                        (key, operator, svc["name"], svc.get("kind", "普通"), float(svc["speed_kmh"]),
+                         bool(svc.get("loop", False))))
+            for line_name in svc["lines"]:
+                cur.execute("INSERT INTO svc_def_line VALUES (%s, %s)", (key, line_name))
+            names = svc.get("stop_names", {})
+            for seq, station in enumerate(stops, start=1):
+                cur.execute("INSERT INTO svc_def_stop VALUES (%s, %s, %s, %s)", (key, seq, station, names.get(station)))
+            n += 1
+    return n
+
+
 def settings(cur, build_id: int, n02_year: int) -> None:
     for key, value in (("reach.build_id", build_id), ("reach.n02_year", n02_year),
                        ("reach.transfer_minutes", TRANSFER_MINUTES), ("reach.walk_cap_minutes", WALK_CAP_MINUTES),
@@ -185,11 +234,13 @@ def report_walk(cur) -> None:
 
 
 def build(args) -> None:
+    services = read_services(args.services.expanduser())
     sources = {"n02": args.n02.name if args.n02.name != "UTF-8" else args.n02.parent.name,
                "n02_year": args.n02_year, "osm": args.osm.name, "bbox": args.bbox,
                "transfer_minutes": TRANSFER_MINUTES, "walk_cap_minutes": WALK_CAP_MINUTES,
                "walk_meters_per_minute": WALK_METERS_PER_MINUTE, "min_island_nodes": MIN_ISLAND_NODES,
-               "snap_meters": SNAP_METERS}
+               "snap_meters": SNAP_METERS,
+               "services": sorted(svc["key"] for doc in services for svc in doc.get("service", []))}
     with psycopg.connect(DSN) as conn:
         # 場所の変更のトランザクションが終わるのを待ってから版の行を足す（DB V5 の reach.build_lock_key の説明）
         conn.execute("SELECT pg_advisory_xact_lock(reach.build_lock_key())")
@@ -213,6 +264,14 @@ def build(args) -> None:
             if n_edge == 0 or n_station_node == 0:
                 raise RuntimeError(f"鉄道のグラフが空（辺 {n_edge} 本、グラフに結び付いた駅の点 {n_station_node} 個）。"
                                    "N02 のフォルダ・--bbox を確かめる")
+            n_service = load_services(cur, services)
+            cur.execute((SQL_DIR / "build_service.sql").read_text(encoding="utf-8"))
+            cur.execute("SELECT (SELECT count(*) FROM reach.build_service WHERE build_id = %s),"
+                        " (SELECT count(*) FROM reach.edge WHERE build_id = %s AND service_id IS NOT NULL),"
+                        " (SELECT string_agg(l.name, '・' ORDER BY l.name) FROM reach.build_replaced_line r"
+                        "   JOIN reach.line l ON l.id = r.line_id WHERE r.build_id = %s)", (build_id, build_id, build_id))
+            n_svc, n_svc_edge, replaced = cur.fetchone()
+            log(f"系統：{n_svc} / {n_service} 本、乗車の辺 {n_svc_edge} 本、置き換えた路線 {replaced or 'なし'}")
             load_osm_walk(cur, args.osm.expanduser())
             cur.execute((SQL_DIR / "build_walk.sql").read_text(encoding="utf-8"))
             cur.execute("SELECT count(*), count(DISTINCT place_id) FROM reach.place_walk WHERE build_id = %s", (build_id,))
@@ -256,6 +315,8 @@ def main() -> None:
     b.add_argument("--n02-year", type=int, required=True)
     b.add_argument("--osm", type=Path, required=True)
     b.add_argument("--bbox", type=float, nargs=4, metavar=("WEST", "SOUTH", "EAST", "NORTH"))
+    b.add_argument("--services", type=Path, default=SERVICES_DIR,
+                   help="探索用の路線（運行系統）の定義のフォルダ（*.toml。既定は tools/reach/services）")
     b.set_defaults(func=build)
     a = sub.add_parser("activate")
     a.add_argument("--version", required=True)

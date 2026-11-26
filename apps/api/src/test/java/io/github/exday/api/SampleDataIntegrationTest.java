@@ -112,6 +112,11 @@ class SampleDataIntegrationTest {
         runCheck("check/v5_checks.sql");
     }
 
+    @Test
+    void 探索用の路線の確認が通る() throws Exception {
+        runCheck("check/v6_checks.sql");
+    }
+
     // db/check の SQL は psql で流す前提のため、psql のメタコマンド（\set・\echo）の行を除いて流す。
     // 失敗すると RAISE EXCEPTION（NG: ...）で SQLException になる。最後に ROLLBACK するのでデータは変わらない。
     private static void runCheck(String path) throws Exception {

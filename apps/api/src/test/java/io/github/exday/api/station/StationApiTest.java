@@ -75,7 +75,8 @@ class StationApiTest extends DbApiTestSupport {
         assertThat(items(body)).containsExactly(Map.of(
             "place", ref("place:yokohama-st", "横浜駅"),
             "lines", List.of(
-                line("JR東日本", "東海道線"), line("JR東日本", "根岸線"), line("JR東日本", "横浜線"),
+                line("JR東日本", "京浜東北線"), line("JR東日本", "東海道線"), line("JR東日本", "根岸線"),
+                line("JR東日本", "横浜線"),
                 line("JR東日本", "横須賀線"),
                 line("京急", "本線"), line("東急", "東横線"), line("横浜市営地下鉄", "ブルーライン"),
                 line("横浜高速鉄道", "みなとみらい線"), line("相鉄", "相鉄本線"))));
@@ -88,7 +89,8 @@ class StationApiTest extends DbApiTestSupport {
         assertThat(withSuffix).isEqualTo(withoutSuffix);
         assertThat(items(withSuffix)).containsExactly(Map.of(
             "place", ref("place:sakuragicho", "桜木町駅"),
-            "lines", List.of(line("JR東日本", "根岸線"), line("横浜市営地下鉄", "ブルーライン"))));
+            "lines", List.of(line("JR東日本", "京浜東北線"), line("JR東日本", "根岸線"),
+                line("横浜市営地下鉄", "ブルーライン"))));
     }
 
     @Test

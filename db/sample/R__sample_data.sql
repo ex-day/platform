@@ -588,6 +588,37 @@ SELECT a.build_id, 'TRANSFER', a.node_id, b.node_id, 10, 10
   JOIN (SELECT g.place_id, g.line_id, sn.node_id FROM sample_graph_station g JOIN reach.station_node sn USING (station_id)) b
     ON a.place_id = b.place_id AND a.line_id < b.line_id;
 
+-- 探索用の路線（運行系統。DB V6、F06「データの形」9）：京浜東北線 鶴見〜横浜〜桜木町〜石川町（東海道線・根岸線をまたいで乗換なし）。
+-- 置き換えてよい路線は付けない（N02 の路線の辺も残す）。石川町では「根岸線」と見せる（停車駅ごとの名前）
+INSERT INTO reach.build_service (build_id, service_key, operator, name, kind, speed_kmh)
+VALUES ((SELECT id FROM reach.build WHERE version = 'sample.1'), 'jr-keihin-tohoku', '東日本旅客鉄道', '京浜東北線', '普通', 40);
+CREATE TEMP TABLE sample_service_stop AS
+SELECT v.seq, g.station_id, g.place_id, g.geom, v.display_name
+  FROM (VALUES (1, 'tsurumi-st', '東海道線', NULL), (2, 'yokohama-st', '東海道線', NULL),
+               (3, 'sakuragicho', '根岸線', NULL), (4, 'ishikawacho', '根岸線', '根岸線')) AS v (seq, k, line, display_name)
+  JOIN reach.line l ON l.operator = '東日本旅客鉄道' AND l.name = v.line
+  JOIN sample_graph_station g ON g.line_id = l.id AND g.place_id = pg_temp.plid(v.k);
+INSERT INTO reach.build_service_stop (build_service_id, seq, station_id, display_name)
+SELECT (SELECT id FROM reach.build_service WHERE service_key = 'jr-keihin-tohoku'), seq, station_id, display_name FROM sample_service_stop;
+INSERT INTO reach.node (build_id, service_id, geom)
+SELECT (SELECT id FROM reach.build WHERE version = 'sample.1'), (SELECT id FROM reach.build_service WHERE service_key = 'jr-keihin-tohoku'), geom
+  FROM sample_service_stop ORDER BY seq;
+CREATE TEMP TABLE sample_service_node AS
+SELECT st.seq, st.station_id, st.place_id, n.id AS node_id, n.build_id
+  FROM sample_service_stop st JOIN reach.node n ON n.service_id IS NOT NULL AND ST_Equals(n.geom::geometry, st.geom::geometry);
+INSERT INTO reach.station_node (build_id, station_id, node_id) SELECT build_id, station_id, node_id FROM sample_service_node;
+INSERT INTO reach.edge (build_id, kind, service_id, source, target, length_m, cost, reverse_cost)
+SELECT a.build_id, 'RIDE', (SELECT id FROM reach.build_service WHERE service_key = 'jr-keihin-tohoku'), a.node_id, b.node_id,
+       v.length_m, v.length_m / 1000.0 / 40 * 60, v.length_m / 1000.0 / 40 * 60
+  FROM (VALUES (1, 7000), (2, 2000), (3, 1800)) AS v (seq, length_m)
+  JOIN sample_service_node a ON a.seq = v.seq JOIN sample_service_node b ON b.seq = v.seq + 1;
+-- 乗換：系統の点と、同じ駅の場所の N02 の路線の点（10分）
+INSERT INTO reach.edge (build_id, kind, source, target, cost, reverse_cost)
+SELECT a.build_id, 'TRANSFER', a.node_id, sn.node_id, 10, 10
+  FROM sample_service_node a
+  JOIN sample_graph_station g ON g.place_id = a.place_id
+  JOIN reach.station_node sn ON sn.station_id = g.station_id AND sn.build_id = a.build_id AND sn.node_id <> a.node_id;
+
 -- 駅から場所への歩き（分。片道15分まで）。小机城址は推定の到達点までと、場所の代表点まで
 -- この版で読んだ徒歩の行き方（小机城址の公式の行き方）
 INSERT INTO reach.build_access (build_id, place_access_id)

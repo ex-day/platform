@@ -72,12 +72,25 @@ public class StationQueries {
          LIMIT :limit
         """;
 
+    // 駅を通る路線：使っている版（ACTIVE）の探索用の路線（運行系統。停車駅ごとの名前があればそれ）と、N02 の路線。
+    // N02 の路線のうち、版で置き換えた路線（reach.build_replaced_line）は、その駅に乗車の辺が残っているときだけ出す
+    // （系統と同じ線路が二重に出ないように。F06「データの形」9、#170）。
     // 事業者・路線は一般的な呼び名で見せる（DB V5 の呼び名の表。無ければ N02 の名前）。見せる名前の順。
-    // 同じ呼び名になる路線（横浜市の1号線と3号線 → ブルーライン 等）は1つにまとめる
+    // 同じ呼び名になるもの（横浜市の1号線と3号線 → ブルーライン 等）は1つにまとめる
     private static final String LINES = """
         SELECT x.place_id, x.operator, x.name
           FROM (
-            SELECT DISTINCT s.place_id,
+            SELECT s.place_id,
+                   coalesce(od.display_name, bs.operator) AS operator,
+                   coalesce(st.display_name, bs.name) AS name
+              FROM reach.build_service_stop st
+              JOIN reach.build_service bs ON bs.id = st.build_service_id
+              JOIN reach.build b ON b.id = bs.build_id AND b.status = 'ACTIVE'
+              JOIN reach.station s ON s.id = st.station_id
+              LEFT JOIN reach.operator_display od ON od.operator = bs.operator
+             WHERE s.place_id IN (:placeIds)
+            UNION
+            SELECT s.place_id,
                    coalesce(od.display_name, l.operator) AS operator,
                    coalesce(ld.display_name, l.name) AS name
               FROM reach.station s
@@ -85,6 +98,14 @@ public class StationQueries {
               LEFT JOIN reach.operator_display od ON od.operator = l.operator
               LEFT JOIN reach.line_display ld ON ld.operator = l.operator AND ld.name = l.name
              WHERE s.place_id IN (:placeIds)
+               AND NOT EXISTS (
+                   SELECT 1 FROM reach.build_replaced_line r JOIN reach.build b ON b.id = r.build_id AND b.status = 'ACTIVE'
+                    WHERE r.line_id = s.line_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM reach.station_node sn
+                            JOIN reach.edge e ON e.build_id = sn.build_id AND e.kind = 'RIDE' AND e.line_id = s.line_id
+                                             AND (e.source = sn.node_id OR e.target = sn.node_id)
+                           WHERE sn.build_id = r.build_id AND sn.station_id = s.id))
           ) x
          ORDER BY x.place_id, x.operator COLLATE "C", x.name COLLATE "C"
         """;
