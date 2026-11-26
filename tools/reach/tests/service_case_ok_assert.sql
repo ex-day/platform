@@ -1,6 +1,6 @@
 -- tools/reach/tests/service_case_ok_assert.sql：service_case_ok.sql と build_service.sql のあとに流す確かめ
-SELECT pg_temp.t_expect('系統4本と停車駅（通過地点は停車駅にしない）',
-    (SELECT count(*) FROM reach.build_service WHERE build_id = current_setting('reach.build_id')::bigint) = 4
+SELECT pg_temp.t_expect('系統5本と停車駅（通過地点は停車駅にしない）',
+    (SELECT count(*) FROM reach.build_service WHERE build_id = current_setting('reach.build_id')::bigint) = 5
     AND (SELECT count(*) FROM reach.build_service_stop st JOIN reach.build_service bs ON bs.id = st.build_service_id
           WHERE bs.service_key = 's-via') = 2);
 SELECT pg_temp.t_expect('事業者をまたぐ直通：T1 → T6 は乗換なし（4km ÷ 40km/h ＝ 6分）',
@@ -36,4 +36,7 @@ SELECT pg_temp.t_expect('辺を2本通る隣の停車駅：快速の T1 → T3 �
 SELECT pg_temp.t_expect('通過地点のある停車駅の間：s-via の T1 → T5 → T3 は 3km・4.5分（区間ごとに1回だけ足す）',
     (SELECT abs(e.cost - 4.5) < 1e-6 FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
       WHERE bs.service_key = 's-via'));
+SELECT pg_temp.t_expect('駅でない地点で路線が変わる：s-junction の T5 → T7 は J線と L線をつないで 2km',
+    (SELECT abs(e.length_m - 2000) < 1e-6 FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
+      WHERE bs.service_key = 's-junction'));
 ROLLBACK;

@@ -127,6 +127,15 @@ SELECT e.id, e.source, e.target, na.line_id AS line_a, nb.line_id AS line_b
  WHERE e.build_id = current_setting('reach.build_id')::bigint AND e.kind = 'TRANSFER'
    AND na.line_id IS NOT NULL AND nb.line_id IS NOT NULL;
 
+-- 駅でないところで路線どうしがつながる点（同じ位置にある、路線の違う N02 の点。例：大崎の近くで東海道線の大崎支線が山手線の
+-- 線路につながる点）。N02 のグラフは路線どうしを駅の乗換でしかつながないので、系統の道のりを測るときだけ、ここも通り抜けられる
+-- ようにする（無いと、湘南新宿ラインの大崎 → 西大井が品川を回る道になる）
+CREATE TEMP TABLE len_junction AS
+SELECT -(1000000000000 + row_number() OVER ()) AS id, a.id AS source, b.id AS target, a.line_id AS line_a, b.line_id AS line_b
+  FROM reach.node a JOIN reach.node b
+    ON b.build_id = a.build_id AND b.line_id IS NOT NULL AND a.line_id < b.line_id AND ST_DWithin(a.geom, b.geom, 1)
+ WHERE a.build_id = current_setting('reach.build_id')::bigint AND a.line_id IS NOT NULL;
+
 -- 駅の場所の、通る路線の点（N02）
 CREATE TEMP TABLE svc_place_nodes AS
 SELECT svc.service_id, s.place_id, array_agg(DISTINCT sn.node_id) AS nodes
@@ -156,8 +165,10 @@ SELECT g.service_id, g.hop, g.seq, g.from_place, g.to_place, p.length_m, p.edges
       SELECT * FROM pgr_dijkstra(
         format('SELECT id, source, target, cost, reverse_cost FROM len_edge WHERE line_id = ANY (%L::bigint[])
                 UNION ALL
-                SELECT -id, source, target, 0, 0 FROM len_transfer WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])',
-               svc.line_ids, svc.line_ids, svc.line_ids),
+                SELECT -id, source, target, 0, 0 FROM len_transfer WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])
+                UNION ALL
+                SELECT id, source, target, 0, 0 FROM len_junction WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])',
+               svc.line_ids, svc.line_ids, svc.line_ids, svc.line_ids, svc.line_ids),
         (SELECT nodes FROM svc_place_nodes x WHERE x.service_id = g.service_id AND x.place_id = g.from_place),
         (SELECT nodes FROM svc_place_nodes x WHERE x.service_id = g.service_id AND x.place_id = g.to_place),
         directed := false)),
