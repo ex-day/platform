@@ -5,7 +5,7 @@
 --
 -- 駅 T1〜T7（東西に約1km ごと）。路線（事業者「テスト鉄道」）：
 --   A線 T1–T2–T3（1km ずつ）、C線 T1–T5–T3（1.5km ずつ。A線の別の道）、B線 T3–T4（1km）、D線 T4–T1（3km。環状をつくる）、
---   F線 T2–T7（1km。T2 の別の路線）
+--   F線 T2–T7（1km。T2 の別の路線）、G線 T1–T2–T3（0.9km ずつ。A線と並ぶ別の路線で、A線より短い）
 -- 事業者「テスト地下鉄」：M線 T4–T6（1km。事業者をまたぐ直通）
 -- 表定速度はどれも 40km/h（1km ＝ 1.5分）。同じ駅の場所の路線の違う点どうしは乗換10分（build_rail.sql と同じ）
 BEGIN;
@@ -17,7 +17,8 @@ SELECT set_config('reach.transfer_minutes', '10', true);
 INSERT INTO reach.line (operator, name, service_type, speed_kmh) VALUES
   ('テスト鉄道', 'A線', 'conventional', 40), ('テスト鉄道', 'B線', 'conventional', 40),
   ('テスト鉄道', 'C線', 'conventional', 40), ('テスト鉄道', 'D線', 'conventional', 40),
-  ('テスト鉄道', 'F線', 'conventional', 40), ('テスト地下鉄', 'M線', 'subway', 40);
+  ('テスト鉄道', 'F線', 'conventional', 40), ('テスト鉄道', 'G線', 'conventional', 40),
+  ('テスト地下鉄', 'M線', 'subway', 40);
 
 CREATE TEMP TABLE t_station (name text PRIMARY KEY, x double precision, y double precision);
 INSERT INTO t_station VALUES ('T1', 139.00, 35.00), ('T2', 139.01, 35.00), ('T3', 139.02, 35.00), ('T4', 139.03, 35.00),
@@ -34,6 +35,7 @@ INSERT INTO t_line_station VALUES
   ('テスト鉄道', 'B線', 1, 'T3'), ('テスト鉄道', 'B線', 2, 'T4'),
   ('テスト鉄道', 'D線', 1, 'T4'), ('テスト鉄道', 'D線', 2, 'T1'),
   ('テスト鉄道', 'F線', 1, 'T2'), ('テスト鉄道', 'F線', 2, 'T7'),
+  ('テスト鉄道', 'G線', 1, 'T1'), ('テスト鉄道', 'G線', 2, 'T2'), ('テスト鉄道', 'G線', 3, 'T3'),
   ('テスト地下鉄', 'M線', 1, 'T4'), ('テスト地下鉄', 'M線', 2, 'T6');
 INSERT INTO reach.station (place_id, line_id, name, geom)
 SELECT p.id, l.id, ls.station, p.geom
@@ -51,7 +53,8 @@ SELECT n.build_id, s.id, n.id FROM reach.station s JOIN reach.node n ON n.line_i
 -- 乗車の辺：路線の隣の駅どうし。長さは指定の値（km）
 CREATE TEMP TABLE t_len (line text, a text, b text, km double precision);
 INSERT INTO t_len VALUES ('A線', 'T1', 'T2', 1), ('A線', 'T2', 'T3', 1), ('C線', 'T1', 'T5', 1.5), ('C線', 'T5', 'T3', 1.5),
-                         ('B線', 'T3', 'T4', 1), ('D線', 'T4', 'T1', 3), ('F線', 'T2', 'T7', 1), ('M線', 'T4', 'T6', 1);
+                         ('B線', 'T3', 'T4', 1), ('D線', 'T4', 'T1', 3), ('F線', 'T2', 'T7', 1), ('M線', 'T4', 'T6', 1),
+                         ('G線', 'T1', 'T2', 0.9), ('G線', 'T2', 'T3', 0.9);
 INSERT INTO reach.edge (build_id, kind, line_id, source, target, length_m, cost, reverse_cost)
 SELECT current_setting('reach.build_id')::bigint, 'RIDE', l.id, na.node_id, nb.node_id, t.km * 1000, t.km * 1.5, t.km * 1.5
   FROM t_len t JOIN reach.line l ON l.name = t.line

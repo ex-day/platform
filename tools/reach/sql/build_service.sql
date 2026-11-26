@@ -167,14 +167,16 @@ SELECT g.service_id, g.hop, g.seq, g.from_place, g.to_place, p.length_m, p.edges
   ) p ON true;
 
 -- 隣の停車駅の間（hop）：区間の道のりの合計。始まりは hop の停車駅、終わりは次の停車駅（環状の最後は最初の停車駅）
+-- 道のりは区間ごとに1回だけ足す。通った辺は別に集める（区間の辺を行に開いてから道のりを足すと、辺の本数だけ重なる。PR #173 のレビュー）
 CREATE TEMP TABLE svc_hop_path AS
 SELECT g.service_id, g.hop AS seq,
        (SELECT place_id FROM svc_stop s WHERE s.service_id = g.service_id AND s.seq = g.hop) AS from_place,
        coalesce((SELECT place_id FROM svc_stop s WHERE s.service_id = g.service_id AND s.seq = g.hop + 1),
                 (SELECT place_id FROM svc_stop s WHERE s.service_id = g.service_id AND s.seq = 1)) AS to_place,
        CASE WHEN bool_and(g.length_m IS NOT NULL) THEN sum(g.length_m) END AS length_m,
-       array_agg(e ORDER BY e) FILTER (WHERE e IS NOT NULL) AS edges
-  FROM svc_segment_path g LEFT JOIN LATERAL unnest(g.edges) AS e ON true
+       (SELECT array_agg(DISTINCT e ORDER BY e) FROM svc_segment_path g2, unnest(g2.edges) AS e
+         WHERE g2.service_id = g.service_id AND g2.hop = g.hop) AS edges
+  FROM svc_segment_path g
  GROUP BY g.service_id, g.hop;
 
 DO $$
@@ -196,6 +198,15 @@ SELECT current_setting('reach.build_id')::bigint, 'RIDE', h.service_id, na.node_
   JOIN svc_node na ON na.service_id = h.service_id AND na.place_id = h.from_place
   JOIN svc_node nb ON nb.service_id = h.service_id AND nb.place_id = h.to_place
  WHERE na.node_id <> nb.node_id;
+
+-- 系統の乗車の辺ごとに、実際にたどった N02 の辺（置き換えの確かめで、その路線を本当に通る辺だけを代わりに数える）
+CREATE TEMP TABLE svc_ride AS
+SELECT e.id, h.edges
+  FROM reach.edge e
+  JOIN svc_hop_path h ON h.service_id = e.service_id
+  JOIN svc_node na ON na.service_id = h.service_id AND na.place_id = h.from_place AND na.node_id = e.source
+  JOIN svc_node nb ON nb.service_id = h.service_id AND nb.place_id = h.to_place AND nb.node_id = e.target
+ WHERE e.build_id = current_setting('reach.build_id')::bigint AND e.kind = 'RIDE';
 
 -- ---------------------------------------------------------------------------
 -- 3. 乗換：系統の点と、同じ駅の場所のほかの点（N02 の路線の点・ほかの系統の点）
@@ -254,8 +265,9 @@ SELECT r.id, r.line_id, r.source, r.target
 DELETE FROM reach.edge e USING removed_edge r WHERE e.id = r.id;
 
 -- 外した区間（外した辺のつながったまとまり）ごとに、その区間の駅の場所が、互いに行き来できるかを確かめる。
--- 使ってよいのは、その路線の残った乗車の辺・その路線を通る系統の乗車の辺と、それらの点どうしの同じ駅の乗換だけ
--- （ほかの路線だけで行き来できても、その区間の駅への接続は失われている。PR #173 のレビュー）
+-- 使ってよいのは、その路線の残った乗車の辺・**その路線の辺を実際にたどった**系統の乗車の辺と、それらの点どうしの同じ駅の
+-- 乗換だけ（ほかの路線だけで行き来できても、その区間の駅への接続は失われている。系統の lines にその路線が入っていても、
+-- 並ぶ別の路線を走る辺は数えない。PR #173 のレビュー）
 CREATE TEMP TABLE replace_problem (line_id bigint, places text);
 DO $$
 DECLARE
@@ -268,7 +280,9 @@ BEGIN
     CREATE TEMP TABLE keep_ride AS
     SELECT e.id, e.source, e.target FROM reach.edge e
      WHERE e.build_id = b AND e.kind = 'RIDE'
-       AND (e.line_id = l.line_id OR e.service_id IN (SELECT service_id FROM svc WHERE l.line_id = ANY (line_ids)));
+       AND (e.line_id = l.line_id
+            OR EXISTS (SELECT 1 FROM svc_ride sr JOIN removed_edge re ON re.id = ANY (sr.edges)
+                        WHERE sr.id = e.id AND re.line_id = l.line_id));
     -- 点：残った辺の端と、この路線の駅の点
     CREATE TEMP TABLE keep_node AS
     SELECT source AS node_id FROM keep_ride UNION SELECT target FROM keep_ride

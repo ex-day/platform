@@ -134,6 +134,13 @@ class SampleDataIntegrationTest {
             .hasMessageContaining("外した区間の駅どうし");
     }
 
+    @Test
+    void 並ぶ別の路線を走る系統は置き換えの代わりに数えない() {
+        assertThatThrownBy(() -> runScripts(REACH_DIR.resolve("tests/service_graph.sql"),
+                REACH_DIR.resolve("tests/service_case_parallel.sql"), REACH_DIR.resolve("sql/build_service.sql")))
+            .hasMessageContaining("外した区間の駅どうし");
+    }
+
     // 1つの接続で、ファイルをつないで流す（一時の表を引き継ぐ）。最初のファイルが BEGIN し、最後が ROLLBACK する
     // （失敗したときは接続を閉じてロールバックする）
     private static void runScripts(Path... paths) throws Exception {

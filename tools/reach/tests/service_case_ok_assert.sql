@@ -27,4 +27,13 @@ SELECT pg_temp.t_expect('置き換え：A線の乗車の辺は外れ、C線は�
     AND (SELECT count(*) FROM reach.edge e JOIN reach.line l ON l.id = e.line_id
           WHERE e.build_id = current_setting('reach.build_id')::bigint AND l.name = 'C線') = 2
     AND (SELECT transfers = 0 FROM pg_temp.t_route('T1', 'T2')));
+SELECT pg_temp.t_expect('辺を2本通る隣の停車駅：快速の T1 → T3 は A線の2本で 2km・2分（60km/h。辺の本数だけ重ねない）',
+    (SELECT abs(e.length_m - 2000) < 1e-6 AND abs(e.cost - 2) < 1e-6
+       FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
+       JOIN reach.node a ON a.id = e.source JOIN reach.station_node sa ON sa.node_id = a.id JOIN reach.station s1 ON s1.id = sa.station_id
+       JOIN reach.node b ON b.id = e.target JOIN reach.station_node sb ON sb.node_id = b.id JOIN reach.station s2 ON s2.id = sb.station_id
+      WHERE bs.service_key = 's-express' AND s1.name = 'T1' AND s2.name = 'T3'));
+SELECT pg_temp.t_expect('通過地点のある停車駅の間：s-via の T1 → T5 → T3 は 3km・4.5分（区間ごとに1回だけ足す）',
+    (SELECT abs(e.cost - 4.5) < 1e-6 FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
+      WHERE bs.service_key = 's-via'));
 ROLLBACK;
