@@ -21,7 +21,6 @@ import io.github.exday.api.generated.model.ReturnDetourEnd;
 import io.github.exday.api.generated.model.StationDetourEnd;
 import io.github.exday.api.generated.model.StopDetourEnd;
 import io.github.exday.api.geometry.GeoJsonGeometries;
-import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.station.StationService;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,7 +104,7 @@ public class DetourReachService {
         if (minutes % MINUTES_STEP != 0) {
             throw new InvalidDetourMinutesException();
         }
-        var from = station(fromId, ApiProblem.DETOUR_FROM_NOT_STATION);
+        var from = station(fromId, ApiProblem.DETOUR_FROM_NOT_FOUND, ApiProblem.DETOUR_FROM_NOT_STATION);
         EndKind end;
         PlaceRow to = null;
         if (toParam == null) {
@@ -114,7 +113,7 @@ public class DetourReachService {
             end = EndKind.STOP;
         } else {
             end = EndKind.STATION;
-            to = station(toParam, ApiProblem.DETOUR_TO_NOT_STATION);
+            to = station(toParam, ApiProblem.DETOUR_TO_NOT_FOUND, ApiProblem.DETOUR_TO_NOT_STATION);
         }
         var build = queries.activeBuild().orElseThrow(DetourDataUnavailableException::new);
         // 版に入っていない駅（取り込んだ範囲の外・前の版にだけある駅）は、計算できないので 400（0件に見せない）
@@ -170,9 +169,12 @@ public class DetourReachService {
             t2s.stream().mapToDouble(Double::doubleValue).toArray());
     }
 
-    /** 駅の場所を読む。ない場所は 404、駅でない・ACTIVE でない場所は 400（{@code notStation}）。 */
-    private PlaceRow station(String publicId, ApiProblem notStation) {
-        var place = queries.place(publicId).orElseThrow(() -> new PlaceNotFoundException(publicId));
+    /**
+     * 駅の場所を読む。ない場所は 404（{@code notFound}）、駅でない・ACTIVE でない場所は 400（{@code notStation}）。
+     * 移動を始める駅と到着の駅で種類を分け、画面が直す駅の入力を開けるようにする（PR #172 のレビュー）。
+     */
+    private PlaceRow station(String publicId, ApiProblem notFound, ApiProblem notStation) {
+        var place = queries.place(publicId).orElseThrow(() -> new InvalidDetourStationException(notFound));
         if (!place.station() || !"ACTIVE".equals(place.status())) {
             throw new InvalidDetourStationException(notStation);
         }

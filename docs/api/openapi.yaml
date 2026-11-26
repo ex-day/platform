@@ -452,6 +452,7 @@ paths:
         - **見えるもの**：ACTIVE の場所だけ。Discovery の公開・非公開とは関係しない（場所は公開の対象。DEC-0020）。駅の場所（種類が駅）は寄れる場所に出さない
         - **400**：`from`・`to` が駅の場所でない（ACTIVE で種類が駅でない）、使っている到達圏のデータ（版）に入っていない、
           または到着の駅へ移動を始める駅から鉄道で着けない。どれかは `type` で見分ける（Problem の説明）。0件に見せない
+        - **404**：`from`・`to` の識別子の場所がない。`type` は detour-from-not-found・detour-to-not-found（どちらの駅かを見分ける）
         - **503**：使っている到達圏のデータ（ACTIVE の版）がない（最初の版を作る前など）。`type` は detour-data-unavailable
         - **並び**：過ごせる時間の長い順、同じなら場所の識別子（文字コード）の順（全順序）。S12 の並べ方の種類（`sort`）は、S12 の取得用 API の段で決める
         - **ページ**：この応答は、条件・寄り道をしないで着く時間・地図の帯と、寄れる場所の最初のページを返す。続きがあれば `nextCursor` を返し、
@@ -493,7 +494,7 @@ paths:
           （重複・欠落を出さないため。画面は getDetourReach から読み直す。既存の一覧と同じ扱い）
         - **前のページ**：API は「前へ」を持たない。画面が読んだページのカーソルを覚えて、もう一度読む
         - 時間が足りない（not_enough_time）ときは最初の応答に続きがないので、この API を呼ぶことはない（呼べば 400）
-        - **400・503** は getDetourReach と同じ（`type` で見分ける）
+        - **400・404・503** は getDetourReach と同じ（`type` で見分ける。駅の確かめは、カーソルの確かめより先に行う）
       parameters:
         - $ref: '#/components/parameters/DetourFrom'
         - $ref: '#/components/parameters/DetourMinutes'
@@ -2912,6 +2913,7 @@ components:
         利用者に見せる文言は画面の側で持つ。S12「計算できないとき」）。`title`・`detail` は開発・調べる人向けの説明で、文言は変わりうる
         （API の problems.properties にまとめる）。MVC が自分で返す入力のエラー（必須の値がない等）は `about:blank` のこともある。
         寄り道（F06）の種類：
+        - `detour-from-not-found`・`detour-to-not-found`（404）：移動を始める駅・到着の駅の識別子の場所がない
         - `detour-from-not-station`・`detour-to-not-station`（400）：移動を始める駅・到着の駅が駅の場所でない
         - `detour-from-out-of-coverage`・`detour-to-out-of-coverage`（400）：使っている到達圏のデータ（版）に入っていない駅
         - `detour-no-rail-route`（400）：到着の駅へ、移動を始める駅から鉄道で着けない

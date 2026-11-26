@@ -22,6 +22,8 @@ public enum ApiProblem {
     STATION_INVALID_QUERY("station-invalid-query", HttpStatus.BAD_REQUEST),
     DETOUR_INVALID_MINUTES("detour-invalid-minutes", HttpStatus.BAD_REQUEST),
     DETOUR_INVALID_CURSOR("detour-invalid-cursor", HttpStatus.BAD_REQUEST),
+    DETOUR_FROM_NOT_FOUND("detour-from-not-found", HttpStatus.NOT_FOUND),
+    DETOUR_TO_NOT_FOUND("detour-to-not-found", HttpStatus.NOT_FOUND),
     DETOUR_FROM_NOT_STATION("detour-from-not-station", HttpStatus.BAD_REQUEST),
     DETOUR_TO_NOT_STATION("detour-to-not-station", HttpStatus.BAD_REQUEST),
     DETOUR_FROM_OUT_OF_COVERAGE("detour-from-out-of-coverage", HttpStatus.BAD_REQUEST),

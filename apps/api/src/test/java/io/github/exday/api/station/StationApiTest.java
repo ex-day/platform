@@ -126,9 +126,15 @@ class StationApiTest extends DbApiTestSupport {
         assertThat(placesOf(items(okJson("/places/" + sid("place:kishamichi") + "/nearby-stations"))))
             .doesNotContain(Map.of("id", "tststation02", "name", "桜木町東駅"));
 
-        // 使っている版がなければ候補は空
+        // 使っている版がなければ、名前での検索・場所のまわり・現在地のまわりのどれも候補は空
         jdbc.sql("UPDATE reach.build SET status = 'RETIRED' WHERE status = 'ACTIVE'").update();
         assertThat(items(searchOk("桜木町"))).isEmpty();
+        assertThat(items(okJson("/places/" + sid("place:kishamichi") + "/nearby-stations"))).isEmpty();
+        var nearby = postJson("/stations/nearby", """
+                {"latitude": 35.4509, "longitude": 139.6308}
+                """);
+        assertThat(nearby.getStatusCode().value()).isEqualTo(200);
+        assertThat(items(nearby.getBody())).isEmpty();
     }
 
     @Test

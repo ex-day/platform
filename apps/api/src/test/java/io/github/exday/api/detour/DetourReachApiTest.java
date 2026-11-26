@@ -253,7 +253,12 @@ class DetourReachApiTest extends DbApiTestSupport {
             .isEqualTo("urn:ex-day:problem:detour-to-not-station");
         assertThat(problemType("/detour/reach?from=" + SAKURAGICHO + "&t=50"))
             .isEqualTo("urn:ex-day:problem:detour-invalid-minutes");
-        assertThat(problemType("/detour/reach?from=000000000000&t=60")).isEqualTo("urn:ex-day:problem:place-not-found");
+        var fromMissing = getJson("/detour/reach?from=000000000000&t=60");
+        assertThat(fromMissing.getStatusCode().value()).isEqualTo(404);
+        assertThat(fromMissing.getBody()).containsEntry("type", "urn:ex-day:problem:detour-from-not-found");
+        var toMissing = getJson("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=000000000000");
+        assertThat(toMissing.getStatusCode().value()).isEqualTo(404);
+        assertThat(toMissing.getBody()).containsEntry("type", "urn:ex-day:problem:detour-to-not-found");
         var body = getJson("/detour/reach?from=" + sid("place:yamashita") + "&t=60").getBody();
         assertThat(body).containsEntry("title", "移動を始める駅が正しくない").containsKey("detail");
     }
@@ -266,6 +271,50 @@ class DetourReachApiTest extends DbApiTestSupport {
         assertThat(from.getBody()).containsEntry("type", "urn:ex-day:problem:detour-from-out-of-coverage");
         assertThat(problemType("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=" + outside))
             .isEqualTo("urn:ex-day:problem:detour-to-out-of-coverage");
+    }
+
+    @Test
+    void 版に入っているが鉄道でつながらない到着の駅は400() {
+        // サンプルの版に、どの辺ともつながらない点だけを持つ駅を足す
+        long place = jdbc.sql("""
+                INSERT INTO place (public_id, name, spatial_type, geom, origin)
+                VALUES ('tststation03', '離れ駅', 'POINT', ST_SetSRID(ST_MakePoint(139.700, 35.500), 4326)::geography, 'OPERATOR')
+                RETURNING id
+                """).query(Long.class).single();
+        jdbc.sql("INSERT INTO place_kind (place_id, kind) VALUES (:id, '駅')").param("id", place).update();
+        long line = jdbc.sql("SELECT id FROM reach.line ORDER BY id LIMIT 1").query(Long.class).single();
+        long station = jdbc.sql("""
+                INSERT INTO reach.station (place_id, line_id, name, geom)
+                VALUES (:place, :line, '離れ', ST_SetSRID(ST_MakePoint(139.700, 35.500), 4326)::geography)
+                RETURNING id
+                """).param("place", place).param("line", line).query(Long.class).single();
+        long build = jdbc.sql("SELECT id FROM reach.build WHERE status = 'ACTIVE'").query(Long.class).single();
+        long node = jdbc.sql("""
+                INSERT INTO reach.node (build_id, line_id, geom)
+                VALUES (:build, :line, ST_SetSRID(ST_MakePoint(139.700, 35.500), 4326)::geography)
+                RETURNING id
+                """).param("build", build).param("line", line).query(Long.class).single();
+        jdbc.sql("INSERT INTO reach.station_node (build_id, station_id, node_id) VALUES (:build, :station, :node)")
+            .param("build", build).param("station", station).param("node", node).update();
+
+        var response = getJson("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=tststation03");
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getBody()).containsEntry("type", "urn:ex-day:problem:detour-no-rail-route");
+    }
+
+    @Test
+    void 続きのページでも駅の範囲の外は400_使っている版がなければ503() {
+        String cursor = (String) places(okJson("/detour/reach?from=" + SAKURAGICHO + "&t=60&limit=1")).get("nextCursor");
+        assertThat(cursor).isNotNull();
+        String outside = addStationOutsideBuild();
+        var outOfCoverage = getJson("/detour/reach/places?from=" + SAKURAGICHO + "&t=60&to=" + outside + "&after=" + cursor);
+        assertThat(outOfCoverage.getStatusCode().value()).isEqualTo(400);
+        assertThat(outOfCoverage.getBody()).containsEntry("type", "urn:ex-day:problem:detour-to-out-of-coverage");
+
+        jdbc.sql("UPDATE reach.build SET status = 'RETIRED' WHERE status = 'ACTIVE'").update();
+        var unavailable = getJson("/detour/reach/places?from=" + SAKURAGICHO + "&t=60&after=" + cursor);
+        assertThat(unavailable.getStatusCode().value()).isEqualTo(503);
+        assertThat(unavailable.getBody()).containsEntry("type", "urn:ex-day:problem:detour-data-unavailable");
     }
 
     @Test
