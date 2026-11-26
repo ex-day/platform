@@ -1,5 +1,6 @@
 package io.github.exday.api.detour;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class PlaceWalkRefreshQueries {
 
+    // 1回の中では、その回を始める前に積まれた行だけを取り出す（失敗して後ろに回した行を、同じ回ですぐに試し直さない）。
     // 作っている途中（BUILDING）の版の分は、READY になるまで取り出さない。使っている版（ACTIVE）を先に行う。
     // ほかの処理が取り出し中の行は飛ばす（API を複数動かしても同じ行を二重に行わない）
     private static final String NEXT_JOB = """
@@ -19,9 +21,14 @@ public class PlaceWalkRefreshQueries {
           JOIN reach.build b ON b.id = j.build_id
          WHERE b.status IN ('READY', 'ACTIVE', 'RETIRED')
            AND j.attempts < :maxAttempts
+           AND j.requested_at <= :runStartedAt
          ORDER BY (b.status = 'ACTIVE') DESC, j.requested_at, j.build_id, j.place_id
          LIMIT 1
            FOR UPDATE OF j SKIP LOCKED
+        """;
+
+    private static final String NOW = """
+        SELECT clock_timestamp()
         """;
 
     private static final String REFRESH = """
@@ -55,10 +62,16 @@ public class PlaceWalkRefreshQueries {
         this.jdbcClient = jdbcClient;
     }
 
-    /** 次に作り直す場所を取り出し、トランザクションの終わりまで行をロックする。 */
-    Optional<Job> lockNextJob(int maxAttempts) {
+    /** DB の今の時刻（1回を始めた時刻にする。アプリと DB の時計のずれに頼らない）。 */
+    OffsetDateTime now() {
+        return jdbcClient.sql(NOW).query(OffsetDateTime.class).single();
+    }
+
+    /** 次に作り直す場所（{@code runStartedAt} までに積まれたもの）を取り出し、トランザクションの終わりまで行をロックする。 */
+    Optional<Job> lockNextJob(int maxAttempts, OffsetDateTime runStartedAt) {
         return jdbcClient.sql(NEXT_JOB)
             .param("maxAttempts", maxAttempts)
+            .param("runStartedAt", runStartedAt)
             .query((rs, rowNum) -> new Job(rs.getLong("build_id"), rs.getLong("place_id")))
             .optional();
     }

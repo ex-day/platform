@@ -3,6 +3,7 @@ package io.github.exday.api.detour;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.exday.api.DbApiTestSupport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.assertj.core.data.Offset;
@@ -43,6 +44,12 @@ class PlaceWalkRefresherTest extends DbApiTestSupport {
                 INSERT INTO reach.walk_station (build_id, station_place_id, node_id, access_m)
                 SELECT :build, id, 1, 0 FROM place WHERE public_id = :station
                 """).param("build", buildId).param("station", sid("place:sakuragicho")).update();
+    }
+
+    @AfterEach
+    void dropFailingTrigger() {
+        jdbc.sql("DROP TRIGGER IF EXISTS test_fail_place_walk ON reach.place_walk").update();
+        jdbc.sql("DROP FUNCTION IF EXISTS public.test_fail_place_walk()").update();
     }
 
     private long addPark(String publicId, int node) {
@@ -120,6 +127,42 @@ class PlaceWalkRefresherTest extends DbApiTestSupport {
         assertThat(walkMinutes(park)).isNull();
         assertThat(jdbc.sql("SELECT count(*) FROM reach.place_walk_job WHERE place_id = :place")
             .param("place", park).query(Long.class).single()).isEqualTo(2L);
+    }
+
+    @Test
+    void 作り直しに失敗した場所は_同じトランザクションで試した回数を増やして残し_ほかの場所は続ける() {
+        long failing = addPark("tstpark00006", 3);
+        long ok = addPark("tstpark00007", 2);
+        // テストのためだけに、この場所の歩きを書くと失敗するようにする
+        jdbc.sql("""
+                CREATE FUNCTION public.test_fail_place_walk() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    IF NEW.place_id = %d THEN RAISE EXCEPTION 'テストの失敗'; END IF;
+                    RETURN NEW;
+                END $$
+                """.formatted(failing)).update();
+        jdbc.sql("""
+                CREATE TRIGGER test_fail_place_walk BEFORE INSERT ON reach.place_walk
+                FOR EACH ROW EXECUTE FUNCTION public.test_fail_place_walk()
+                """).update();
+
+        refresher.refreshPending();
+
+        assertThat(walkMinutes(ok)).isCloseTo(1.0, Offset.offset(1e-6));
+        assertThat(walkMinutes(failing)).isNull();
+        var failed = jdbc.sql("""
+                SELECT attempts, last_error FROM reach.place_walk_job WHERE build_id = :build AND place_id = :place
+                """).param("build", buildId).param("place", failing)
+            .query((rs, n) -> rs.getInt("attempts") + ":" + rs.getString("last_error")).single();
+        assertThat(failed).startsWith("1:").contains("テストの失敗");
+
+        // 失敗のあとに場所が変わると、積み直して試した回数は0に戻る
+        jdbc.sql("UPDATE place SET status = 'ABOLISHED' WHERE id = :id").param("id", failing).update();
+        assertThat(jdbc.sql("SELECT attempts FROM reach.place_walk_job WHERE build_id = :build AND place_id = :place")
+            .param("build", buildId).param("place", failing).query(Integer.class).single()).isZero();
+        refresher.refreshPending();
+        assertThat(jdbc.sql("SELECT count(*) FROM reach.place_walk_job WHERE place_id = :place")
+            .param("place", failing).query(Long.class).single()).isZero();
     }
 
     @Test
