@@ -1,6 +1,6 @@
 # db/check
 
-DB V2〜V5 の制約・ビューが、設計（[DB 設計 v0.2](../../docs/ex-day_db_design.md) 7節・7.1節）のとおりに働くかを確かめる SQL と手順。Flyway では流さない。
+DB V2〜V6 の制約・ビューが、設計（[DB 設計 v0.2](../../docs/ex-day_db_design.md) 7節・7.1節）のとおりに働くかを確かめる SQL と手順。Flyway では流さない。
 
 ## v2_checks.sql
 
@@ -67,6 +67,21 @@ docker compose exec -T db psql -U exday exday -v ON_ERROR_STOP=1 < db/check/v5_c
 8. 版を消すと、歩きのグラフ・駅の点・待ち行列も消える
 
 同じ文の中で作り直しと行の確かめをすると、副問い合わせが関数より先に読まれることがあるので、スクリプトでは文を分けている。
+
+## v6_checks.sql
+
+DB V6（探索用の路線（運行系統）。F06「データの形」9）を確かめる。流し方は v3_checks.sql と同じ。
+
+```bash
+docker compose exec -T db psql -U exday exday -v ON_ERROR_STOP=1 < db/check/v6_checks.sql
+```
+
+1. サンプルの京浜東北線（鶴見〜横浜〜桜木町〜石川町）は、停車駅4・乗車の辺3・点4（系統の点は駅の点でもある）
+2. 点・辺は N02 の路線か系統のどちらか1つに属する。乗換の辺はどちらにも属さない
+3. 同じ版で同じ識別子の系統は1つ、識別子は英小文字・数字・ハイフン、速さは正。停車の順は系統の中で1つ。同じ駅は並びに2回置ける
+4. 置き換えた路線は版ごとに1つ。版を消すと、系統・停車駅・系統の点と辺・置き換えた路線も消える
+
+系統を版に足す計算（停車駅の探し方・線路のたどり方・置き換えの確かめ）は `tools/reach/sql/build_service.sql` にあり、ここでは確かめない（`tools/reach/README.md`「探索用の路線」）。
 
 ## 同時の更新（2つの接続で確かめる）
 

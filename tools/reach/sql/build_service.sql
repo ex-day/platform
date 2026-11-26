@@ -206,6 +206,22 @@ DELETE FROM reach.edge e
  WHERE e.id = c.edge_id
    AND e.line_id IN (SELECT line_id FROM reach.build_replaced_line WHERE build_id = current_setting('reach.build_id')::bigint);
 
+-- 外したあとに残った置き換えた路線の辺のうち、つながった辺のまとまりが駅の場所を1つしか通らないもの（停車駅のホームの区間など。
+-- 隣の停車駅の間の道は近いほうのホームの端から測るので、端の駅のホームの区間は道に入らないことがある）も外す。
+-- 残すと、ほかの駅へ行けない辺のために、駅の候補に置き換えた路線の名前が出る
+CREATE TEMP TABLE replaced_rest AS
+SELECT e.id, e.source, e.target
+  FROM reach.edge e
+ WHERE e.build_id = current_setting('reach.build_id')::bigint AND e.kind = 'RIDE'
+   AND e.line_id IN (SELECT line_id FROM reach.build_replaced_line WHERE build_id = current_setting('reach.build_id')::bigint);
+CREATE TEMP TABLE replaced_rest_component AS
+SELECT node, component FROM pgr_connectedComponents('SELECT id, source, target, 1 AS cost, 1 AS reverse_cost FROM replaced_rest');
+DELETE FROM reach.edge e
+ USING replaced_rest r, replaced_rest_component c
+ WHERE e.id = r.id AND c.node = r.source
+   AND (SELECT count(DISTINCT pn.place_id) FROM replaced_rest_component c2 JOIN place_node pn ON pn.node_id = c2.node
+         WHERE c2.component = c.component) <= 1;
+
 DO $$
 DECLARE r record;
 BEGIN
