@@ -23,22 +23,25 @@
 pip install -r tools/reach/requirements.txt
 export EXDAY_DSN=postgresql://exday:exday@127.0.0.1:5433/exday   # 既定は compose.yaml の DB
 
-# OSM：Geofabrik から取ってきて、使う範囲の highway の道を切り出す（ex-day/poc reach/osmwalk/extract_highway.py）。
+# OSM：Geofabrik から、N02 の範囲と余白を全部覆うファイルを取ってくる（日本全体の asia/japan-latest.osm.pbf。
+# 「関東」は山梨を含まないので使わない）。使う範囲の highway の道を切り出す（ex-day/poc reach/osmwalk/extract_highway.py）。
 # 箱は N02 の --bbox より各辺 0.05度（約5km）広げる（範囲の端の駅のまわりの道が切れないように）
-python extract_highway.py ~/Downloads/kanto-261119.osm.pbf ~/Downloads/kanto-261119-5339-highway.osm.pbf 138.95 35.2833 140.05 36.05
+# ※ 日本全体のファイルからの切り出しは、まだ確かめていない（時間・メモリ。関東の 525MB で約50秒・4GB だった）
+python extract_highway.py ~/Downloads/japan-latest.osm.pbf ~/Downloads/japan-5339-highway.osm.pbf 138.95 35.2833 140.05 36.05
 
 # 版を作る（BUILDING → READY。失敗したら FAILED で、使っている版はそのまま。鉄道のグラフが空なら失敗）
 python tools/reach/reach_build.py build --version 2026-11-19.1 \
   --n02 ~/Downloads/N02-25_GML/UTF-8 --n02-year 2025 \
-  --osm ~/Downloads/kanto-261119-5339-highway.osm.pbf --bbox 139 35.3333 140 36
+  --osm ~/Downloads/japan-5339-highway.osm.pbf --bbox 139 35.3333 140 36
 
+# activate の前に、build のログの「道に結べなかった駅」を見る（範囲の端の駅が並んでいたら、OSM が N02 の範囲を覆っていない）
 # 使う版を切り替える（それまでの ACTIVE は RETIRED。切り戻しは前の版を activate する）
 python tools/reach/reach_build.py activate --version 2026-11-19.1
 python tools/reach/reach_build.py list
 ```
 
 - `--bbox` は N02 の駅・区間を絞る範囲（西 南 東 北）。省くと N02 の全部
-- **OSM は N02 の範囲を覆うものにする**（2026-11-26、#163）：元の地域のファイルが N02 の範囲を全部含むこと（Geofabrik の「関東」は山梨を含まないので、メッシュ 5339 の西の端の鳥沢・梁川・四方津の駅は道に結べない。日本全体のファイルか、隣の地域と `osmium merge` でまとめたものを使う。まとめる手順は、まだ確かめていない）。切り出しの箱は N02 の範囲より少し広くする（上の例）
+- **OSM は N02 の範囲と余白を覆うものにする**（2026-11-26、#163・PR #171 のレビュー）：元の地域のファイルが、N02 の範囲と切り出しの余白を全部含むこと。Geofabrik の「関東」は山梨を含まないので、メッシュ 5339 の西の端の鳥沢・梁川・四方津の駅が道に結べなかった（この README の「確かめたこと」の版は関東のファイルで作ったもの）。日本全体のファイル（上の例）か、隣の地域と `osmium merge` でまとめたものを使う。**どちらも、まだ確かめていない**。本番で使う版は、activate の前にログで、結べない駅が範囲の端に並んでいないことを確かめる
 - 版を作ると、道に結べなかった駅（名前）と、本体以外のつながりに結んだ駅・着く先の数をログに出す。結べない駅が範囲の端に並ぶときは、上の2つを確かめる
 - 版を切り替えると、読んでいる途中の続きのページのカーソルは 400 になり、画面は最初から読み直す（F06「ページとカーソル」）
 - 古い版を消すと、その版のグラフ・駅の点・歩きも消える（`DELETE FROM reach.build WHERE version = ...`）。ACTIVE の版は消さない
