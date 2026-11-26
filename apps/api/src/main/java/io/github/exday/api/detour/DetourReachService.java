@@ -1,5 +1,6 @@
 package io.github.exday.api.detour;
 
+import io.github.exday.api.ApiProblem;
 import io.github.exday.api.detour.DetourQueries.Build;
 import io.github.exday.api.detour.DetourQueries.PlaceQuery;
 import io.github.exday.api.detour.DetourQueries.PlaceRow;
@@ -20,7 +21,6 @@ import io.github.exday.api.generated.model.ReturnDetourEnd;
 import io.github.exday.api.generated.model.StationDetourEnd;
 import io.github.exday.api.generated.model.StopDetourEnd;
 import io.github.exday.api.geometry.GeoJsonGeometries;
-import io.github.exday.api.place.PlaceNotFoundException;
 import io.github.exday.api.station.StationService;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,7 +104,7 @@ public class DetourReachService {
         if (minutes % MINUTES_STEP != 0) {
             throw new InvalidDetourMinutesException();
         }
-        var from = station(fromId, "移動を始める駅");
+        var from = station(fromId, ApiProblem.DETOUR_FROM_NOT_FOUND, ApiProblem.DETOUR_FROM_NOT_STATION);
         EndKind end;
         PlaceRow to = null;
         if (toParam == null) {
@@ -113,10 +113,16 @@ public class DetourReachService {
             end = EndKind.STOP;
         } else {
             end = EndKind.STATION;
-            to = station(toParam, "到着の駅");
+            to = station(toParam, ApiProblem.DETOUR_TO_NOT_FOUND, ApiProblem.DETOUR_TO_NOT_STATION);
         }
-        var build = queries.activeBuild()
-            .orElseThrow(() -> new IllegalStateException("到達圏のデータの版（ACTIVE）がない"));
+        var build = queries.activeBuild().orElseThrow(DetourDataUnavailableException::new);
+        // 版に入っていない駅（取り込んだ範囲の外・前の版にだけある駅）は、計算できないので 400（0件に見せない）
+        if (!queries.stationInBuild(build.id(), from.id())) {
+            throw new InvalidDetourStationException(ApiProblem.DETOUR_FROM_OUT_OF_COVERAGE);
+        }
+        if (end == EndKind.STATION && !queries.stationInBuild(build.id(), to.id())) {
+            throw new InvalidDetourStationException(ApiProblem.DETOUR_TO_OUT_OF_COVERAGE);
+        }
         int wait = settings.waitMinutes();
 
         Map<Long, Double> fromTimes = queries.stationTimes(build.id(), from.id(), minutes);
@@ -129,7 +135,7 @@ public class DetourReachService {
                 rail = queries.stationTimes(build.id(), to.id(), DIRECT_SEARCH_LIMIT_MINUTES).get(from.id());
             }
             if (rail == null) {
-                throw new InvalidDetourStationException("到着の駅へ、移動を始める駅から鉄道で着けない。駅を選び直す。");
+                throw new InvalidDetourStationException(ApiProblem.DETOUR_NO_RAIL_ROUTE);
             }
             direct = (int) Math.ceil(rail + wait - 1e-9);
         }
@@ -163,11 +169,14 @@ public class DetourReachService {
             t2s.stream().mapToDouble(Double::doubleValue).toArray());
     }
 
-    /** 駅の場所を読む。ない場所は 404、駅でない・ACTIVE でない場所は 400。 */
-    private PlaceRow station(String publicId, String label) {
-        var place = queries.place(publicId).orElseThrow(() -> new PlaceNotFoundException(publicId));
+    /**
+     * 駅の場所を読む。ない場所は 404（{@code notFound}）、駅でない・ACTIVE でない場所は 400（{@code notStation}）。
+     * 移動を始める駅と到着の駅で種類を分け、画面が直す駅の入力を開けるようにする（PR #172 のレビュー）。
+     */
+    private PlaceRow station(String publicId, ApiProblem notFound, ApiProblem notStation) {
+        var place = queries.place(publicId).orElseThrow(() -> new InvalidDetourStationException(notFound));
         if (!place.station() || !"ACTIVE".equals(place.status())) {
-            throw new InvalidDetourStationException(label + "が駅の場所でない。駅を選び直す。");
+            throw new InvalidDetourStationException(notStation);
         }
         return place;
     }

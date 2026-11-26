@@ -309,7 +309,10 @@ export interface paths {
          *     - **場所で過ごせる時間** ＝ 使える時間 − 行き（移動を始める駅 → 寄り道先）− 帰り（寄り道先 → 終わり）。15分以上の場所だけを返す
          *     - **経由した駅は返さない**（DEC-0014 決定2。駅を経由するか、場所へ直接届くかを約束の外に置く）。利用者に見せる行き方（`access`）は、あるときだけ返す
          *     - **見えるもの**：ACTIVE の場所だけ。Discovery の公開・非公開とは関係しない（場所は公開の対象。DEC-0020）。駅の場所（種類が駅）は寄れる場所に出さない
-         *     - **400**：`from`・`to` が駅の場所でない（ACTIVE で種類が駅でない）、または到着の駅へ移動を始める駅から鉄道で着けない
+         *     - **400**：`from`・`to` が駅の場所でない（ACTIVE で種類が駅でない）、使っている到達圏のデータ（版）に入っていない、
+         *       または到着の駅へ移動を始める駅から鉄道で着けない。どれかは `type` で見分ける（Problem の説明）。0件に見せない
+         *     - **404**：`from`・`to` の識別子の場所がない。`type` は detour-from-not-found・detour-to-not-found（どちらの駅かを見分ける）
+         *     - **503**：使っている到達圏のデータ（ACTIVE の版）がない（最初の版を作る前など）。`type` は detour-data-unavailable
          *     - **並び**：過ごせる時間の長い順、同じなら場所の識別子（文字コード）の順（全順序）。S12 の並べ方の種類（`sort`）は、S12 の取得用 API の段で決める
          *     - **ページ**：この応答は、条件・寄り道をしないで着く時間・地図の帯と、寄れる場所の最初のページを返す。続きがあれば `nextCursor` を返し、
          *       続きは getDetourReachPlaces で読む（帯・条件はページで変わらないので、最初の応答だけで返す）。1ページの上限だけを持ち、
@@ -343,6 +346,7 @@ export interface paths {
          *       （重複・欠落を出さないため。画面は getDetourReach から読み直す。既存の一覧と同じ扱い）
          *     - **前のページ**：API は「前へ」を持たない。画面が読んだページのカーソルを覚えて、もう一度読む
          *     - 時間が足りない（not_enough_time）ときは最初の応答に続きがないので、この API を呼ぶことはない（呼べば 400）
+         *     - **400・404・503** は getDetourReach と同じ（`type` で見分ける。駅の確かめは、カーソルの確かめより先に行う）
          */
         get: operations["getDetourReachPlaces"];
         put?: never;
@@ -367,6 +371,7 @@ export interface paths {
          *
          *     - **当てはまり方**：名前が `q` と同じ → `q` で始まる → `q` を含む、の順。同じ順位の中は名前（「駅」を除く）の短い順、同じ長さなら名前（文字コード）の順、同じなら識別子の順（駅の読みは今のデータにないため。3段目）
          *     - 駅の名前の「駅」は付けても付けなくてもよい（「新横浜」「新横浜駅」）。比べるのは場所の表示名（別名・旧称は使わない）
+         *     - **候補に出す駅**：使っている到達圏のデータ（版）のグラフに入っている駅だけ（取り込んだ範囲の外の駅は出さない。版がなければ空。#163）
          *     - `%`・`_` は文字として扱う。前後の空白を除いて空になれば 400
          *     - ACTIVE の駅だけ（種類が駅の場所）
          */
@@ -392,6 +397,7 @@ export interface paths {
          *     距離の順は候補の表示だけに使い、自動で決めたり「おすすめ」としたりしない。
          *
          *     - **距離**：場所の形と駅の形の最短の直線の距離（メートル、四捨五入）。場所が駅なら、その駅を距離 0 で先頭に含める
+         *     - **候補に出す駅**：使っている到達圏のデータ（版）のグラフに入っている駅だけ（取り込んだ範囲の外の駅は出さない。版がなければ空。#163）
          *     - 直線で 5km 以内の ACTIVE の駅を、距離の順（同じなら識別子の順）に `limit` 件まで。5km 以内に駅がなければ空
          *     - 統合された場所は 404 にせず、統合先のまわりの駅を返す（S13 と同じく統合をたどる）
          */
@@ -419,6 +425,7 @@ export interface paths {
          *     （DEC-0022 決定5）。読み取りだけで、何も書き込まない。
          *
          *     - 座標は保存しない。API のアクセスのログ・エラーのログに本文を残さない
+         *     - **候補に出す駅**：使っている到達圏のデータ（版）のグラフに入っている駅だけ（取り込んだ範囲の外の駅は出さない。版がなければ空。#163）
          *     - 直線で 5km 以内の ACTIVE の駅を、距離の順（同じなら識別子の順）に `limit` 件まで。5km 以内に駅がなければ空
          *     - 距離の順は候補の表示だけに使い、自動で決めたり「おすすめ」としたりしない
          */
@@ -2048,7 +2055,21 @@ export interface components {
             /** @enum {string} */
             kind: "unavailable";
         };
-        /** @description RFC 9457 Problem Details */
+        /**
+         * @description RFC 9457 Problem Details。`type` はエラーの種類で、`urn:ex-day:problem:<種類>` の形（変えない識別子。画面はこれで見分け、
+         *     利用者に見せる文言は画面の側で持つ。S12「計算できないとき」）。`title`・`detail` は開発・調べる人向けの説明で、文言は変わりうる
+         *     （API の problems.properties にまとめる）。MVC が自分で返す入力のエラー（必須の値がない等）は `about:blank` のこともある。
+         *     寄り道（F06）の種類：
+         *     - `detour-from-not-found`・`detour-to-not-found`（404）：移動を始める駅・到着の駅の識別子の場所がない
+         *     - `detour-from-not-station`・`detour-to-not-station`（400）：移動を始める駅・到着の駅が駅の場所でない
+         *     - `detour-from-out-of-coverage`・`detour-to-out-of-coverage`（400）：使っている到達圏のデータ（版）に入っていない駅
+         *     - `detour-no-rail-route`（400）：到着の駅へ、移動を始める駅から鉄道で着けない
+         *     - `detour-invalid-minutes`（400）：使える時間が15分刻みでない
+         *     - `detour-invalid-cursor`（400）：カーソルが読めない・条件が違う・版や計算の決まりが切り替わった
+         *     - `detour-data-unavailable`（503）：使っている到達圏のデータ（ACTIVE の版）がない
+         *     - ほか：`invalid-parameters`・`place-not-found`・`discovery-not-found`・`conversation-not-found`・`project-not-found`・
+         *       `project-list-invalid-cursor`・`top-origin-not-found`・`station-invalid-query`
+         */
         Problem: {
             /** Format: uri-reference */
             type?: string;
@@ -2071,6 +2092,15 @@ export interface components {
         };
         /** @description 対象がない、または一般のユーザーには見えない（非公開、成立を取り消した Discovery など） */
         NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description いまは計算できない（寄り道の到達圏のデータがない等）。しばらくしてから試す */
+        ServiceUnavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -2387,6 +2417,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getDetourReachPlaces: {
@@ -2420,6 +2451,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     searchStations: {

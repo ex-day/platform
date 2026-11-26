@@ -21,6 +21,12 @@ public class DetourQueries {
         SELECT b.id, b.version FROM reach.build b WHERE b.status = 'ACTIVE'
         """;
 
+    // 駅の場所が、この版のグラフに点を持つか（取り込んだ範囲の外の駅・前の版にだけある駅は持たない）
+    private static final String STATION_IN_BUILD = """
+        SELECT EXISTS (SELECT 1 FROM reach.station_node sn JOIN reach.station s ON s.id = sn.station_id
+                        WHERE sn.build_id = :buildId AND s.place_id = :placeId)
+        """;
+
     private static final String PLACE = """
         SELECT p.id, p.public_id, p.name, p.status,
                EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = p.id AND k.kind = '駅') AS station
@@ -181,6 +187,14 @@ public class DetourQueries {
         return jdbcClient.sql(ACTIVE_BUILD)
             .query((rs, rowNum) -> new Build(rs.getLong("id"), rs.getString("version")))
             .optional();
+    }
+
+    boolean stationInBuild(long buildId, long placeId) {
+        return jdbcClient.sql(STATION_IN_BUILD)
+            .param("buildId", buildId)
+            .param("placeId", placeId)
+            .query(Boolean.class)
+            .single();
     }
 
     Optional<PlaceRow> place(String publicId) {

@@ -48,6 +48,12 @@ PR #153 のレビュー（2026-11-17）で決めた方針。
 - API の起動時にマイグレーションを流さない。
 - `db/` のマイグレーションは `compose.yaml` の flyway サービスで流す。
 
+## エラーの返し方
+
+- エラーは `ApiErrors` で problem+json（RFC 9457）にする。種類は `ApiProblem` に足し、`type`（`urn:ex-day:problem:<種類>`）・HTTP の状態をそこで決める。`type` は画面との約束なので名前を変えない
+- `title`・`detail` の文言は `src/main/resources/problems.properties` にまとめ、コードに書かない（2026-11-26 の人の判断：文言は一元管理する）。利用者に見せる文言は画面の側で `type` から引く
+- 新しい種類を足したら、`docs/api/openapi.yaml` の `Problem` の説明にも足す
+
 ## テスト
 
 - DB を使うテストは Testcontainers で書く。使う PostgreSQL＋PostGIS は `db/Dockerfile` と同じ構成にする（本番と同じ拡張で SQL の正しさを確かめられるようにする）。
