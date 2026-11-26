@@ -39,7 +39,7 @@ SQL_DIR = Path(__file__).resolve().parent / "sql"
 TRANSFER_MINUTES = 10
 WALK_CAP_MINUTES = 15
 WALK_METERS_PER_MINUTE = 80
-# 小さな島の閾値（点の数）と、道の点に結ぶ距離の上限（m）。poc #46 の暫定の値。確定は #163
+# 小さな島の閾値（点の数。2026-11-26 に #163 で確定）と、道の点に結ぶ距離の上限（m。poc #46）
 MIN_ISLAND_NODES = 100
 SNAP_METERS = 300
 
@@ -173,6 +173,17 @@ def settings(cur, build_id: int, n02_year: int) -> None:
         cur.execute("SELECT set_config(%s, %s, false)", (key, str(value)))
 
 
+def report_walk(cur) -> None:
+    """道に結べなかった駅と、本体以外のつながりに結んだ駅・着く先の数をログに出す（build_walk.sql の walk_report。#163）。"""
+    cur.execute("SELECT item, n, examples FROM walk_report")
+    r = {item: (n, examples) for item, n, examples in cur.fetchall()}
+    n, examples = r["station_unsnapped"]
+    log(f"歩き：道に結べなかった駅 {n} か所" + (f"（{examples}）" if examples else "")
+        + "。範囲の端に並ぶときは、OSM の元の地域・切り出しの範囲が N02 の範囲を覆っているか確かめる")
+    log(f"歩き：本体以外のつながりに結んだ駅 {r['station_off_main'][0]} か所、"
+        f"着く先 {r['target_off_main'][0]} / {r['target_snapped'][0]} 件")
+
+
 def build(args) -> None:
     sources = {"n02": args.n02.name if args.n02.name != "UTF-8" else args.n02.parent.name,
                "n02_year": args.n02_year, "osm": args.osm.name, "bbox": args.bbox,
@@ -206,6 +217,7 @@ def build(args) -> None:
             cur.execute((SQL_DIR / "build_walk.sql").read_text(encoding="utf-8"))
             cur.execute("SELECT count(*), count(DISTINCT place_id) FROM reach.place_walk WHERE build_id = %s", (build_id,))
             log("歩き：駅と場所（到達点）の組 {} 件、場所 {} 件".format(*cur.fetchone()))
+            report_walk(cur)
             cur.execute("UPDATE reach.build SET status = 'READY' WHERE id = %s", (build_id,))
         log(f"版 {args.version} を READY にした（使うには activate）")
     except Exception:
