@@ -531,13 +531,13 @@ export interface components {
         /** @description 駅（種類が駅の場所。1つの駅の場所は乗換できる駅のまとまり1つ）。同じ名前の駅を見分けるために路線を返す */
         Station: {
             place: components["schemas"]["PlaceRef"];
-            /** @description この駅を通る路線（事業者・路線の名前の順）。分からなければ空 */
+            /** @description この駅を通る路線（見せる事業者・路線の名前の順。同じ呼び名になる路線は1つにまとめる）。分からなければ空 */
             lines: components["schemas"]["StationLine"][];
         };
         StationLine: {
-            /** @description 事業者（例：JR東日本、横浜市交通局） */
+            /** @description 事業者の一般的な呼び名（例：JR東日本、東京メトロ、横浜市営地下鉄）。呼び名の表に無ければ国土数値情報 N02 の事業者名 */
             operator: string;
-            /** @description 路線の名前（例：横浜線） */
+            /** @description 路線の一般的な呼び名（例：横浜線、ブルーライン）。呼び名の表に無ければ N02 の路線名 */
             name: string;
         };
         StationList: {

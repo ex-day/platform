@@ -15,8 +15,10 @@
   （辺かグラフに結び付いた駅の点が0）なら失敗にする
 - activate：READY（または前に使っていた RETIRED）の版を ACTIVE にし、それまでの ACTIVE を RETIRED にする（1つのトランザクション）。
   切り戻しは、前の版を activate する
-- OSM の .osm.pbf は、highway の道を切り出したもの（ex-day/poc reach/osmwalk/extract_highway.py）。OSM から作った歩きの
-  グラフは、この処理の一時の表だけで使い、DB には残さない（ODbL。DEC-0014 決定1）
+- OSM の .osm.pbf は、highway の道を切り出したもの（ex-day/poc reach/osmwalk/extract_highway.py）。小さな島を除いた歩きの
+  グラフと駅の点は、版に残す（DB V5）。登録した場所の分だけ歩きを作り直すため（API の処理が reach.refresh_place_walk を呼ぶ）
+- 版の行を足すときに、場所の変更と同じ鍵（reach.build_lock_key()）を排他で取る。版の行より前に確定した場所の変更はこの処理が
+  読み、後の変更は場所の変更のトリガーが待ち行列（reach.place_walk_job）に積む。READY になると API の処理が作り直す
 """
 import argparse
 import json
@@ -175,8 +177,11 @@ def build(args) -> None:
     sources = {"n02": args.n02.name if args.n02.name != "UTF-8" else args.n02.parent.name,
                "n02_year": args.n02_year, "osm": args.osm.name, "bbox": args.bbox,
                "transfer_minutes": TRANSFER_MINUTES, "walk_cap_minutes": WALK_CAP_MINUTES,
-               "min_island_nodes": MIN_ISLAND_NODES}
-    with psycopg.connect(DSN, autocommit=True) as conn:
+               "walk_meters_per_minute": WALK_METERS_PER_MINUTE, "min_island_nodes": MIN_ISLAND_NODES,
+               "snap_meters": SNAP_METERS}
+    with psycopg.connect(DSN) as conn:
+        # 場所の変更のトランザクションが終わるのを待ってから版の行を足す（DB V5 の reach.build_lock_key の説明）
+        conn.execute("SELECT pg_advisory_xact_lock(reach.build_lock_key())")
         build_id = conn.execute(
             "INSERT INTO reach.build (version, status, sources) VALUES (%s, 'BUILDING', %s) RETURNING id",
             (args.version, json.dumps(sources, ensure_ascii=False))).fetchone()[0]

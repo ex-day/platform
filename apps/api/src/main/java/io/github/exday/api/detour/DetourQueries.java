@@ -66,8 +66,9 @@ public class DetourQueries {
         ),
         acc AS (
             -- 徒歩の行き方：使える順番（DEC-0013 決定3）でいちばん上のもの。同じ順番なら新しいもの。
-            -- 使うのは、この版を作るときに読んだ行き方（reach.build_access）だけ。比べる道のりが版にある行き方だけを使い、
-            -- 徒歩の上限を守るため（時刻には頼らない。PR #165 のレビュー）。あとで登録した行き方は次の版から、それまでは自動の目安。
+            -- 使うのは、版に記録した行き方（reach.build_access）だけ。比べる道のりが版にある行き方だけを使い、
+            -- 徒歩の上限を守るため（時刻には頼らない。PR #165 のレビュー）。あとで登録した行き方は、場所ごとの作り直し
+            -- （PlaceWalkRefresher。DB V5）で比べる道のりと一緒に記録され、それまでは自動の目安。
             -- 無効にした行き方は、status ですぐに使わなくなる
             SELECT DISTINCT ON (pa.station_place_id, pa.place_id)
                    pa.station_place_id, pa.place_id, pa.minutes, pa.arrival_point_id

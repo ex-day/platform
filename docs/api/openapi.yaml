@@ -805,7 +805,7 @@ components:
         place: { $ref: '#/components/schemas/PlaceRef' }
         lines:
           type: array
-          description: この駅を通る路線（事業者・路線の名前の順）。分からなければ空
+          description: この駅を通る路線（見せる事業者・路線の名前の順。同じ呼び名になる路線は1つにまとめる）。分からなければ空
           maxItems: 30
           items: { $ref: '#/components/schemas/StationLine' }
     StationLine:
@@ -813,8 +813,8 @@ components:
       additionalProperties: false
       required: [operator, name]
       properties:
-        operator: { type: string, minLength: 1, description: 事業者（例：JR東日本、横浜市交通局） }
-        name: { type: string, minLength: 1, description: 路線の名前（例：横浜線） }
+        operator: { type: string, minLength: 1, description: 事業者の一般的な呼び名（例：JR東日本、東京メトロ、横浜市営地下鉄）。呼び名の表に無ければ国土数値情報 N02 の事業者名 }
+        name: { type: string, minLength: 1, description: 路線の一般的な呼び名（例：横浜線、ブルーライン）。呼び名の表に無ければ N02 の路線名 }
     StationList:
       type: object
       additionalProperties: false
@@ -2910,7 +2910,7 @@ components:
             place: { id: 160663e75a0b, name: 桜木町駅 }
             lines:
               - { operator: JR東日本, name: 根岸線 }
-              - { operator: 横浜市交通局, name: ブルーライン }
+              - { operator: 横浜市営地下鉄, name: ブルーライン }
           minutes: 120
           end: { kind: return }
         directMinutes: 0
