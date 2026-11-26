@@ -113,6 +113,25 @@ class StationApiTest extends DbApiTestSupport {
     }
 
     @Test
+    void 使っている版に入っていない駅は候補に出さない() {
+        long id = jdbc.sql("""
+                INSERT INTO place (public_id, name, spatial_type, geom, origin)
+                VALUES ('tststation02', '桜木町東駅', 'POINT', ST_SetSRID(ST_MakePoint(139.632, 35.451), 4326)::geography, 'OPERATOR')
+                RETURNING id
+                """).query(Long.class).single();
+        jdbc.sql("INSERT INTO place_kind (place_id, kind) VALUES (:id, '駅')").param("id", id).update();
+
+        assertThat(items(searchOk("桜木町"))).extracting(s -> s.get("place"))
+            .containsExactly(ref("place:sakuragicho", "桜木町駅"));
+        assertThat(placesOf(items(okJson("/places/" + sid("place:kishamichi") + "/nearby-stations"))))
+            .doesNotContain(Map.of("id", "tststation02", "name", "桜木町東駅"));
+
+        // 使っている版がなければ候補は空
+        jdbc.sql("UPDATE reach.build SET status = 'RETIRED' WHERE status = 'ACTIVE'").update();
+        assertThat(items(searchOk("桜木町"))).isEmpty();
+    }
+
+    @Test
     void 廃止した駅は出さない() {
         jdbc.sql("UPDATE place SET status = 'ABOLISHED' WHERE public_id = :id").param("id", sid("place:ishikawacho")).update();
         assertThat(items(searchOk("町"))).extracting(s -> s.get("place"))

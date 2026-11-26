@@ -230,6 +230,52 @@ class DetourReachApiTest extends DbApiTestSupport {
             .containsExactly("みなとみらい", "大岡川", "山下公園");
     }
 
+    private String problemType(String path) {
+        return (String) getJson(path).getBody().get("type");
+    }
+
+    /** 駅の場所だが、使っている版のグラフに点を持たない駅（取り込んだ範囲の外の駅の代わり）。 */
+    private String addStationOutsideBuild() {
+        long id = jdbc.sql("""
+                INSERT INTO place (public_id, name, spatial_type, geom, origin)
+                VALUES ('tststation01', '範囲の外駅', 'POINT', ST_SetSRID(ST_MakePoint(139.632, 35.452), 4326)::geography, 'OPERATOR')
+                RETURNING id
+                """).query(Long.class).single();
+        jdbc.sql("INSERT INTO place_kind (place_id, kind) VALUES (:id, '駅')").param("id", id).update();
+        return "tststation01";
+    }
+
+    @Test
+    void 計算できない理由を種類で返す() {
+        assertThat(problemType("/detour/reach?from=" + sid("place:yamashita") + "&t=60"))
+            .isEqualTo("urn:ex-day:problem:detour-from-not-station");
+        assertThat(problemType("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=" + sid("place:yamashita")))
+            .isEqualTo("urn:ex-day:problem:detour-to-not-station");
+        assertThat(problemType("/detour/reach?from=" + SAKURAGICHO + "&t=50"))
+            .isEqualTo("urn:ex-day:problem:detour-invalid-minutes");
+        assertThat(problemType("/detour/reach?from=000000000000&t=60")).isEqualTo("urn:ex-day:problem:place-not-found");
+        var body = getJson("/detour/reach?from=" + sid("place:yamashita") + "&t=60").getBody();
+        assertThat(body).containsEntry("title", "移動を始める駅が正しくない").containsKey("detail");
+    }
+
+    @Test
+    void 版に入っていない駅は0件に見せず範囲の外として400() {
+        String outside = addStationOutsideBuild();
+        var from = getJson("/detour/reach?from=" + outside + "&t=60");
+        assertThat(from.getStatusCode().value()).isEqualTo(400);
+        assertThat(from.getBody()).containsEntry("type", "urn:ex-day:problem:detour-from-out-of-coverage");
+        assertThat(problemType("/detour/reach?from=" + SAKURAGICHO + "&t=60&to=" + outside))
+            .isEqualTo("urn:ex-day:problem:detour-to-out-of-coverage");
+    }
+
+    @Test
+    void 使っている版がなければ503() {
+        jdbc.sql("UPDATE reach.build SET status = 'RETIRED' WHERE status = 'ACTIVE'").update();
+        var response = getJson("/detour/reach?from=" + SAKURAGICHO + "&t=60");
+        assertThat(response.getStatusCode().value()).isEqualTo(503);
+        assertThat(response.getBody()).containsEntry("type", "urn:ex-day:problem:detour-data-unavailable");
+    }
+
     @Test
     void 駅でない_ない場所_時間の形の誤りは400か404() {
         assertThat(getJson("/detour/reach?from=" + sid("place:yamashita") + "&t=60").getStatusCode().value())

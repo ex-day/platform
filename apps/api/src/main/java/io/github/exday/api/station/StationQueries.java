@@ -9,7 +9,8 @@ import org.springframework.stereotype.Repository;
 /**
  * 駅を選ぶ（F06「駅の選び方」）ための SQL。値は {@code JdbcClient} の {@code .param(...)} で全てバインドする（apps/api/AGENTS.md）。
  *
- * <p>駅は、ACTIVE で種類が「駅」の場所（1つの駅の場所は乗換できる駅のまとまり1つ）。路線は計算の中の駅
+ * <p>駅は、ACTIVE で種類が「駅」の場所（1つの駅の場所は乗換できる駅のまとまり1つ）のうち、使っている到達圏のデータ
+ * （ACTIVE の版）のグラフに点を持つもの（取り込んだ範囲の外の駅を候補に出さない。版がなければ候補は空。#163）。路線は計算の中の駅
  * （{@code reach.station}・{@code reach.line}。DB V3）から読む。場所は公開状態を持たないので表から読む。
  */
 @Repository
@@ -27,6 +28,10 @@ public class StationQueries {
           FROM place p
          WHERE p.status = 'ACTIVE'
            AND EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = p.id AND k.kind = '駅')
+           AND EXISTS (SELECT 1 FROM reach.station st
+                         JOIN reach.station_node sn ON sn.station_id = st.id
+                         JOIN reach.build b ON b.id = sn.build_id AND b.status = 'ACTIVE'
+                        WHERE st.place_id = p.id)
            AND p.name LIKE :contains ESCAPE '\\'
          ORDER BY tier, char_length(regexp_replace(p.name, '駅$', '')), p.name COLLATE "C", p.public_id COLLATE "C"
          LIMIT :limit
@@ -40,6 +45,10 @@ public class StationQueries {
          WHERE t.id = :placeId
            AND s.status = 'ACTIVE'
            AND EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = s.id AND k.kind = '駅')
+           AND EXISTS (SELECT 1 FROM reach.station st
+                         JOIN reach.station_node sn ON sn.station_id = st.id
+                         JOIN reach.build b ON b.id = sn.build_id AND b.status = 'ACTIVE'
+                        WHERE st.place_id = s.id)
          ORDER BY (s.id = t.id) DESC, distance_meters, s.public_id COLLATE "C"
          LIMIT :limit
         """;
@@ -55,6 +64,10 @@ public class StationQueries {
           JOIN place s ON ST_DWithin(h.geom, s.geom, :radius)
          WHERE s.status = 'ACTIVE'
            AND EXISTS (SELECT 1 FROM place_kind k WHERE k.place_id = s.id AND k.kind = '駅')
+           AND EXISTS (SELECT 1 FROM reach.station st
+                         JOIN reach.station_node sn ON sn.station_id = st.id
+                         JOIN reach.build b ON b.id = sn.build_id AND b.status = 'ACTIVE'
+                        WHERE st.place_id = s.id)
          ORDER BY distance_meters, s.public_id COLLATE "C"
          LIMIT :limit
         """;
