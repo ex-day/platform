@@ -107,7 +107,8 @@ CREATE TEMP TABLE svc_def (key text PRIMARY KEY, operator text NOT NULL, name te
                            name_by_line boolean NOT NULL DEFAULT false);
 CREATE TEMP TABLE svc_def_line (key text NOT NULL, operator text NOT NULL, line_name text NOT NULL);
 CREATE TEMP TABLE svc_def_point (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL,
-                                 is_stop boolean NOT NULL, display_name text);
+                                 is_stop boolean NOT NULL, display_name text,
+                                 line_operator text, line_name text);
 CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
 CREATE TEMP TABLE svc_junction (ord integer PRIMARY KEY, operator_a text NOT NULL, line_a text NOT NULL,
                                 operator_b text NOT NULL, line_b text NOT NULL, near text NOT NULL,
