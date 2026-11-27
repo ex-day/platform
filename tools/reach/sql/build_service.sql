@@ -47,8 +47,11 @@ SELECT dp.key, dp.seq, dp.station_name, dp.is_stop, dp.display_name, s.id AS sta
   FROM svc_def_point dp
   JOIN svc ON svc.service_key = dp.key
   JOIN reach.station s ON normalize(s.name, NFC) = normalize(dp.station_name, NFC) AND s.line_id = ANY (svc.line_ids)
+  -- 路線を書いた停車駅・通過地点は、その路線の駅だけ（同じ名前で駅の場所が2つ以上あるとき）
+  LEFT JOIN reach.line dl ON dl.operator = dp.line_operator AND dl.name = dp.line_name
  WHERE EXISTS (SELECT 1 FROM reach.station_node sn
-                WHERE sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint);
+                WHERE sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint)
+   AND (dp.line_name IS NULL OR s.line_id = dl.id);
 
 DO $$
 DECLARE r record;

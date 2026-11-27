@@ -182,16 +182,23 @@ def _lines(path: Path, key: str, operator: str, entries) -> list:
     return out
 
 
-def _points(path: Path, key: str, entries) -> list:
-    """停車駅と通過地点の並び：「駅名」は停車駅、{ via = "駅名" } は通過地点（経路を決めるだけで、乗り降り・乗換はしない）。"""
+def _points(path: Path, key: str, operator: str, entries) -> list:
+    """停車駅と通過地点の並び：「駅名」は停車駅、{ via = "駅名" } は通過地点（経路を決めるだけで、乗り降り・乗換はしない）。
+
+    { stop = "駅名", line = 路線 } / { via = "駅名", line = 路線 } は、その駅をその路線の駅で探す（同じ名前で駅の場所が2つ以上
+    あるとき。例：池袋は副都心線の場所が別。路線は lines と同じ書き方）。返すのは (駅名, 停車駅か, 路線 または None) の並び。
+    """
     out = []
     for entry in entries:
         if isinstance(entry, str):
-            out.append((entry, True))
+            out.append((entry, True, None))
         elif isinstance(entry, dict) and set(entry) == {"via"}:
-            out.append((entry["via"], False))
+            out.append((entry["via"], False, None))
+        elif isinstance(entry, dict) and set(entry) in ({"stop", "line"}, {"via", "line"}):
+            line = _lines(path, key, operator, [entry["line"]])[0]
+            out.append((entry.get("stop", entry.get("via")), "stop" in entry, line))
         else:
-            raise ValueError(f"{path.name}:{key}：stops は「駅名」か {{ via = \"駅名\" }}：{entry!r}")
+            raise ValueError(f"{path.name}:{key}：stops は「駅名」・{{ via = \"駅名\" }}・{{ stop = \"駅名\", line = 路線 }}：{entry!r}")
     return out
 
 
@@ -222,8 +229,8 @@ def read_services(folder: Path) -> list:
             junctions.append((pair[0], pair[1], j["near"], float(gap)))
         for svc in doc.get("service", []):
             key = svc["key"]
-            points = _points(path, key, svc["stops"])
-            stops = [name for name, is_stop in points if is_stop]
+            points = _points(path, key, operator, svc["stops"])
+            stops = [name for name, is_stop, _ in points if is_stop]
             loop = bool(svc.get("loop", False))
             if len(stops) < 2 or not points[0][1] or (not loop and not points[-1][1]):
                 raise ValueError(f"{path.name}:{key}：停車駅が2つ未満、または並びが停車駅で始まらない・停車駅で終わらない")
@@ -252,7 +259,8 @@ def load_services(cur, defs: list) -> int:
                                    name_by_line boolean NOT NULL DEFAULT false);
         CREATE TEMP TABLE svc_def_line (key text NOT NULL, operator text NOT NULL, line_name text NOT NULL);
         CREATE TEMP TABLE svc_def_point (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL,
-                                         is_stop boolean NOT NULL, display_name text);
+                                         is_stop boolean NOT NULL, display_name text,
+                                         line_operator text, line_name text);
         CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
         CREATE TEMP TABLE svc_junction (ord integer PRIMARY KEY, operator_a text NOT NULL, line_a text NOT NULL,
                                         operator_b text NOT NULL, line_b text NOT NULL, near text NOT NULL,
@@ -267,9 +275,10 @@ def load_services(cur, defs: list) -> int:
                     (svc["key"], svc["operator"], svc["name"], svc["kind"], svc["speed_kmh"], svc["loop"], svc["name_by_line"]))
         for operator, line_name in svc["lines"]:
             cur.execute("INSERT INTO svc_def_line VALUES (%s, %s, %s)", (svc["key"], operator, line_name))
-        for seq, (station, is_stop) in enumerate(svc["points"], start=1):
-            cur.execute("INSERT INTO svc_def_point VALUES (%s, %s, %s, %s, %s)",
-                        (svc["key"], seq, station, is_stop, svc["stop_names"].get(station) if is_stop else None))
+        for seq, (station, is_stop, line) in enumerate(svc["points"], start=1):
+            cur.execute("INSERT INTO svc_def_point VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (svc["key"], seq, station, is_stop, svc["stop_names"].get(station) if is_stop else None,
+                         line[0] if line else None, line[1] if line else None))
     return len(services)
 
 

@@ -39,11 +39,11 @@ SELECT pg_temp.t_expect('通過地点のある停車駅の間：s-via の T1 →
 SELECT pg_temp.t_expect('駅でない地点で路線が変わる：s-junction の T5 → T7 は J線と L線をつないで 2km',
     (SELECT abs(e.length_m - 2000) < 1e-6 FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
       WHERE bs.service_key = 's-junction'));
-SELECT pg_temp.t_expect('駅ごとの路線の名前で見せる系統：s-express は T1 で「A線」、T4 で「B線」、境の T3 はどちらか（停車駅の路線の名前）',
+SELECT pg_temp.t_expect('駅ごとの路線の名前で見せる系統：s-express は T1 で「A線」、T3（B線の駅と書いた）・T4 で「B線」（停車駅の路線の名前）',
     (SELECT string_agg(s.name || '=' || st.display_name, ',' ORDER BY st.seq)
        FROM reach.build_service_stop st JOIN reach.build_service bs ON bs.id = st.build_service_id
        JOIN reach.station s ON s.id = st.station_id
-      WHERE bs.service_key = 's-express') IN ('T1=A線,T3=A線,T4=B線', 'T1=A線,T3=B線,T4=B線'));
+      WHERE bs.service_key = 's-express') = 'T1=A線,T3=B線,T4=B線');
 SELECT pg_temp.t_expect('同じ路線の線路の切れ目：s-gap の T6 → T8 は Q1–Q2 をつないで 1km',
     (SELECT abs(e.length_m - 1000) < 1e-6 FROM reach.edge e JOIN reach.build_service bs ON bs.id = e.service_id
       WHERE bs.service_key = 's-gap'));

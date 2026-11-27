@@ -19,11 +19,13 @@ INSERT INTO svc_def_line VALUES ('s-through', 'テスト鉄道', 'A線'), ('s-th
 INSERT INTO svc_def_point VALUES
   ('s-through', 1, 'T1', true, NULL), ('s-through', 2, 'T2', true, NULL), ('s-through', 3, 'T3', true, NULL),
   ('s-through', 4, 'T4', true, NULL), ('s-through', 5, 'T6', true, '地下鉄直通線'),
-  ('s-express', 1, 'T1', true, NULL), ('s-express', 2, 'T3', true, NULL), ('s-express', 3, 'T4', true, NULL),
+  ('s-express', 1, 'T1', true, NULL), ('s-express', 3, 'T4', true, NULL),
   ('s-via', 1, 'T1', true, NULL), ('s-via', 2, 'T5', false, NULL), ('s-via', 3, 'T3', true, NULL),
   ('s-loop', 1, 'T1', true, NULL), ('s-loop', 2, 'T2', true, NULL), ('s-loop', 3, 'T3', true, NULL), ('s-loop', 4, 'T4', true, NULL),
   ('s-junction', 1, 'T5', true, NULL), ('s-junction', 2, 'T7', true, NULL),
   ('s-gap', 1, 'T6', true, NULL), ('s-gap', 2, 'T8', true, NULL);
+-- s-express の T3 は B線の駅で探す（停車駅に路線を書く。駅で見せる名前も B線になる）
+INSERT INTO svc_def_point VALUES ('s-express', 2, 'T3', true, NULL, 'テスト鉄道', 'B線');
 INSERT INTO svc_replace VALUES ('テスト鉄道', 'A線');
 INSERT INTO svc_junction VALUES (1, 'テスト鉄道', 'J線', 'テスト鉄道', 'L線', 'T7', 1),
                                 (2, 'テスト鉄道', 'N線', 'テスト鉄道', 'N線', 'T8', 20);
