@@ -198,7 +198,7 @@ def _points(path: Path, key: str, entries) -> list:
 def read_services(folder: Path) -> list:
     """探索用の路線（運行系統）の定義（*.toml）を読んで確かめる（版を作り始める前に。#170）。
 
-    返すのは系統ごとの dict（key・operator・name・kind・speed_kmh・loop・lines・points・stop_names）と、置き換えてよい路線の組と、
+    返すのは系統ごとの dict（key・operator・name・kind・speed_kmh・loop・name_by_line・lines・points・stop_names）と、置き換えてよい路線の組と、
     駅でないところの路線のつなぎ目（2つの路線と近くの駅。PR #174 のレビュー）。
     """
     services, replace, junctions = [], [], []
@@ -208,12 +208,15 @@ def read_services(folder: Path) -> list:
         operator = doc["operator"]
         replace += _lines(path, "replace_lines", operator, doc.get("replace_lines", []))
         for j in doc.get("junction", []):
-            if set(j) - {"lines", "near", "note"} or not isinstance(j.get("near"), str):
-                raise ValueError(f"{path.name}:junction：lines（2つ）・near（駅名）・note だけを書く：{j!r}")
+            if set(j) - {"lines", "near", "gap_m"} or not isinstance(j.get("near"), str):
+                raise ValueError(f"{path.name}:junction：lines（2つ）・near（駅名）・gap_m だけを書く：{j!r}")
             pair = _lines(path, "junction", operator, j.get("lines", []))
-            if len(pair) != 2 or pair[0] == pair[1]:
-                raise ValueError(f"{path.name}:junction：lines には違う路線を2つ書く：{j!r}")
-            junctions.append((pair[0], pair[1], j["near"]))
+            gap = j.get("gap_m", 1)
+            if len(pair) != 2 or not isinstance(gap, (int, float)) or not 0 < gap <= 50:
+                raise ValueError(f"{path.name}:junction：lines には路線を2つ、gap_m は 50 以下の正の数を書く：{j!r}")
+            if pair[0] == pair[1] and "gap_m" not in j:
+                raise ValueError(f"{path.name}:junction：同じ路線の線路の切れ目をつなぐときは gap_m を書く：{j!r}")
+            junctions.append((pair[0], pair[1], j["near"], float(gap)))
         for svc in doc.get("service", []):
             key = svc["key"]
             points = _points(path, key, svc["stops"])
@@ -229,6 +232,7 @@ def read_services(folder: Path) -> list:
                 raise ValueError(f"{path.name}:{key}：stop_names に停車駅でない駅がある：{'・'.join(sorted(unknown))}")
             services.append({"key": key, "operator": svc.get("operator", operator), "name": svc["name"],
                              "kind": svc.get("kind", "普通"), "speed_kmh": float(svc["speed_kmh"]), "loop": loop,
+                             "name_by_line": bool(svc.get("name_by_line", False)),
                              "lines": _lines(path, key, operator, svc["lines"]), "points": points, "stop_names": names})
     keys = [s["key"] for s in services]
     if len(set(keys)) != len(keys):
@@ -241,21 +245,23 @@ def load_services(cur, defs: list) -> int:
     services, replace, junctions = defs
     cur.execute("""
         CREATE TEMP TABLE svc_def (key text PRIMARY KEY, operator text NOT NULL, name text NOT NULL, kind text NOT NULL,
-                                   speed_kmh double precision NOT NULL, is_loop boolean NOT NULL);
+                                   speed_kmh double precision NOT NULL, is_loop boolean NOT NULL,
+                                   name_by_line boolean NOT NULL DEFAULT false);
         CREATE TEMP TABLE svc_def_line (key text NOT NULL, operator text NOT NULL, line_name text NOT NULL);
         CREATE TEMP TABLE svc_def_point (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL,
                                          is_stop boolean NOT NULL, display_name text);
         CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
         CREATE TEMP TABLE svc_junction (ord integer PRIMARY KEY, operator_a text NOT NULL, line_a text NOT NULL,
-                                        operator_b text NOT NULL, line_b text NOT NULL, near text NOT NULL);
+                                        operator_b text NOT NULL, line_b text NOT NULL, near text NOT NULL,
+                                        gap_m double precision NOT NULL DEFAULT 1);
     """)
-    for ord_, ((op_a, line_a), (op_b, line_b), near) in enumerate(junctions, start=1):
-        cur.execute("INSERT INTO svc_junction VALUES (%s, %s, %s, %s, %s, %s)", (ord_, op_a, line_a, op_b, line_b, near))
+    for ord_, ((op_a, line_a), (op_b, line_b), near, gap) in enumerate(junctions, start=1):
+        cur.execute("INSERT INTO svc_junction VALUES (%s, %s, %s, %s, %s, %s, %s)", (ord_, op_a, line_a, op_b, line_b, near, gap))
     for operator, line_name in replace:
         cur.execute("INSERT INTO svc_replace VALUES (%s, %s)", (operator, line_name))
     for svc in services:
-        cur.execute("INSERT INTO svc_def VALUES (%s, %s, %s, %s, %s, %s)",
-                    (svc["key"], svc["operator"], svc["name"], svc["kind"], svc["speed_kmh"], svc["loop"]))
+        cur.execute("INSERT INTO svc_def VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (svc["key"], svc["operator"], svc["name"], svc["kind"], svc["speed_kmh"], svc["loop"], svc["name_by_line"]))
         for operator, line_name in svc["lines"]:
             cur.execute("INSERT INTO svc_def_line VALUES (%s, %s, %s)", (svc["key"], operator, line_name))
         for seq, (station, is_stop) in enumerate(svc["points"], start=1):
