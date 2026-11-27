@@ -40,12 +40,13 @@ BEGIN
   END IF;
 END $$;
 
--- 停車駅・通過地点の候補：通る路線の駅で、版のグラフに点がある駅
+-- 停車駅・通過地点の候補：通る路線の駅で、版のグラフに点がある駅。名前は NFC にそろえて比べる（N02 には、互換漢字で書いた
+-- 駅名がある。例：京王線の笹塚の「塚」が U+FA10）
 CREATE TEMP TABLE svc_point_candidate AS
 SELECT dp.key, dp.seq, dp.station_name, dp.is_stop, dp.display_name, s.id AS station_id, s.place_id
   FROM svc_def_point dp
   JOIN svc ON svc.service_key = dp.key
-  JOIN reach.station s ON s.name = dp.station_name AND s.line_id = ANY (svc.line_ids)
+  JOIN reach.station s ON normalize(s.name, NFC) = normalize(dp.station_name, NFC) AND s.line_id = ANY (svc.line_ids)
  WHERE EXISTS (SELECT 1 FROM reach.station_node sn
                 WHERE sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint);
 
@@ -88,8 +89,16 @@ BEGIN
   END IF;
 END $$;
 
+-- 駅で見せる名前：stop_names に書いた名前。name_by_line の系統（直通運転で、駅ではその駅の路線の名前で見せるもの）は、
+-- 書いていない駅で、その駅の N02 の路線の見せる名前（reach.line_display。無ければ N02 の名前）にする。版を作るときの名前を写す
 INSERT INTO reach.build_service_stop (build_service_id, seq, station_id, display_name)
-SELECT service_id, stop_no, station_id, display_name FROM svc_point WHERE is_stop;
+SELECT p.service_id, p.stop_no, p.station_id,
+       coalesce(p.display_name, CASE WHEN d.name_by_line THEN coalesce(ld.display_name, l.name) END)
+  FROM svc_point p
+  JOIN svc ON svc.service_id = p.service_id JOIN svc_def d ON d.key = svc.service_key
+  JOIN reach.station s ON s.id = p.station_id JOIN reach.line l ON l.id = s.line_id
+  LEFT JOIN reach.line_display ld ON ld.operator = l.operator AND ld.name = l.name
+ WHERE p.is_stop;
 
 CREATE TEMP TABLE svc_stop AS
 SELECT service_id, stop_no AS seq, station_id, place_id FROM svc_point WHERE is_stop;
@@ -142,18 +151,20 @@ CREATE TEMP TABLE len_junction_candidate AS
 SELECT a.id AS source, b.id AS target, a.line_id AS line_a, b.line_id AS line_b, a.geom
   FROM len_node a JOIN len_node b ON a.line_id < b.line_id AND ST_DWithin(a.geom, b.geom, 1);
 
--- 書いたつなぎ目：2つの路線の候補のうち、近くの駅（同じ名前の駅の点）から 500 m 以内のもの（離れた別のつなぎ目・立体交差を拾わないように）
+-- 書いたつなぎ目：2つの路線の点の組で、違う路線どうしは 1 m（同じ位置）、同じ路線の切れ目は gap_m 以内にあり、近くの駅（同じ名前の駅の点）から 500 m 以内の
+-- もの（離れた別のつなぎ目・立体交差を拾わないように）。2つの路線に同じ路線を書くと、N02 の線路の切れ目（同じ路線の中で、
+-- 少し離れて終わる2つの点。例：東武伊勢崎線の押上で、押上駅の線路と曳舟へ向かう線路が約 16 m 離れている）をつなぐ
 CREATE TEMP TABLE len_junction AS
-SELECT -(1000000000000 + row_number() OVER ()) AS id, c.source, c.target, c.line_a, c.line_b, j.ord
+SELECT -(1000000000000 + row_number() OVER ()) AS id, a.id AS source, b.id AS target, a.line_id AS line_a, b.line_id AS line_b, j.ord
   FROM svc_junction j
   JOIN reach.line la ON la.operator = j.operator_a AND la.name = j.line_a
   JOIN reach.line lb ON lb.operator = j.operator_b AND lb.name = j.line_b
-  JOIN len_junction_candidate c
-    ON (c.line_a = la.id AND c.line_b = lb.id) OR (c.line_a = lb.id AND c.line_b = la.id)
+  JOIN len_node a ON a.line_id = la.id
+  JOIN len_node b ON b.line_id = lb.id AND b.id <> a.id AND (la.id <> lb.id OR a.id < b.id) AND ST_DWithin(a.geom, b.geom, CASE WHEN la.id = lb.id THEN j.gap_m ELSE 1 END)
  WHERE EXISTS (SELECT 1 FROM reach.station s
                  JOIN reach.station_node sn ON sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint
                  JOIN reach.node n ON n.id = sn.node_id
-                WHERE s.name = j.near AND ST_DWithin(n.geom, c.geom, 500));
+                WHERE s.name = j.near AND ST_DWithin(n.geom, a.geom, 500));
 
 DO $$
 DECLARE r record;
@@ -163,24 +174,32 @@ BEGIN
     FROM svc_junction j
    WHERE NOT EXISTS (SELECT 1 FROM len_junction x WHERE x.ord = j.ord);
   IF r.bad IS NOT NULL THEN
-    RAISE EXCEPTION '書いたつなぎ目が見つからない（2つの路線の点が同じ位置にない、路線が N02 にない、近くの駅から 500 m より遠い）：%', r.bad;
+    RAISE EXCEPTION '書いたつなぎ目が見つからない（2つの路線の点が同じ位置（同じ路線の切れ目は gap_m 以内）にない、路線が N02 にない、近くの駅から 500 m より遠い）：%', r.bad;
   END IF;
 END $$;
 
 -- つなぎ目の一覧（reach_build.py がログに出す。人が確かめるため）：使うつなぎ目と、書いていない候補のうち、
 -- どれかの系統が両方の路線を通るもの（書けば使われるもの）。駅の点どうしの候補は、駅の乗換でつながるので出さない
 CREATE TEMP TABLE junction_report AS
-SELECT CASE WHEN EXISTS (SELECT 1 FROM len_junction x WHERE x.source = c.source AND x.target = c.target)
-            THEN 'used' ELSE 'unlisted' END AS state,
+WITH pair AS (
+  -- 使うつなぎ目（書いたもの。駅の点どうしでも出す）
+  SELECT 'used' AS state, x.source, x.target, x.line_a, x.line_b FROM len_junction x
+  UNION ALL
+  -- 書いていない候補：同じ位置にある路線の違う点の組で、駅の点でなく、どれかの系統が両方の路線を通るもの
+  SELECT 'unlisted', c.source, c.target, c.line_a, c.line_b FROM len_junction_candidate c
+   WHERE NOT EXISTS (SELECT 1 FROM len_junction x WHERE x.source = c.source AND x.target = c.target)
+     AND NOT EXISTS (SELECT 1 FROM reach.station_node sn WHERE sn.node_id IN (c.source, c.target))
+     AND EXISTS (SELECT 1 FROM svc WHERE c.line_a = ANY (svc.line_ids) AND c.line_b = ANY (svc.line_ids)))
+SELECT p.state,
        la.operator || ' ' || la.name || '・' || lb.operator || ' ' || lb.name AS lines,
-       (SELECT s.name || ' ' || round(ST_Distance(n.geom, c.geom)) || 'm'
+       (SELECT s.name || ' ' || round(ST_Distance(n.geom, a.geom)) || 'm'
           FROM reach.station_node sn JOIN reach.station s ON s.id = sn.station_id JOIN reach.node n ON n.id = sn.node_id
          WHERE sn.build_id = current_setting('reach.build_id')::bigint
-         ORDER BY n.geom <-> c.geom LIMIT 1) AS near,
-       round(ST_Y(c.geom::geometry)::numeric, 5) || ',' || round(ST_X(c.geom::geometry)::numeric, 5) AS latlon
-  FROM len_junction_candidate c JOIN reach.line la ON la.id = c.line_a JOIN reach.line lb ON lb.id = c.line_b
- WHERE NOT EXISTS (SELECT 1 FROM reach.station_node sn WHERE sn.node_id IN (c.source, c.target))
-   AND EXISTS (SELECT 1 FROM svc WHERE c.line_a = ANY (svc.line_ids) AND c.line_b = ANY (svc.line_ids));
+         ORDER BY n.geom <-> a.geom LIMIT 1) AS near,
+       round(ST_Y(a.geom::geometry)::numeric, 5) || ',' || round(ST_X(a.geom::geometry)::numeric, 5)
+         || CASE WHEN ST_Distance(a.geom, b.geom) >= 1 THEN '、' || round(ST_Distance(a.geom, b.geom)) || 'm 離れた点' ELSE '' END AS latlon
+  FROM pair p JOIN len_node a ON a.id = p.source JOIN len_node b ON b.id = p.target
+  JOIN reach.line la ON la.id = p.line_a JOIN reach.line lb ON lb.id = p.line_b;
 
 -- 駅の場所の、通る路線の点（N02）
 CREATE TEMP TABLE svc_place_nodes AS
