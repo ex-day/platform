@@ -1,14 +1,15 @@
 -- tools/reach/sql/build_service.sql
 -- 探索用の路線（運行系統）を、版の鉄道のグラフに足す（F06「データの形」9、DB V6、#170）。
 -- reach_build.py が、build_rail.sql のあとに、同じ接続で流す。系統の定義（tools/reach/services/*.toml）は、reach_build.py が
--- 一時の表 svc_def・svc_def_line・svc_def_point・svc_replace に入れておく（apps/api の BuildServiceSqlTest も同じ形で入れて流す）。
+-- 一時の表 svc_def・svc_def_line・svc_def_point・svc_replace・svc_junction に入れておく（apps/api の BuildServiceSqlTest も同じ形で入れて流す）。
 -- svc_def_point は停車駅と通過地点の並び（is_stop）。通過地点は経路を決めるだけで、乗り降り・乗換はできない（PR #173 のレビュー）
 -- 設定（reach_build.py が SET する）：reach.build_id、reach.transfer_minutes
 --
 -- 1. 系統と停車駅を版に写す。停車駅・通過地点は、通る路線（lines。事業者をまたいでよい）の駅から、駅の名前で探す
 --    （版のグラフにある駅だけ）
 -- 2. 系統の点（系統 × 駅の場所に1つ。停車駅だけ）を作る。隣の停車駅の間は、間の通過地点を順にたどり、通る路線の線路だけを
---    たどって道のりを測り（正式な路線の境は通り抜ける）、系統の表定速度で所要時間にした乗車の辺を足す
+--    たどって道のりを測り（正式な路線の境は通り抜ける。駅でないところは、定義に書いたつなぎ目だけ）、系統の表定速度で
+--    所要時間にした乗車の辺を足す
 -- 3. 乗換：系統の点と、同じ駅の場所のほかの点（N02 の路線の点・ほかの系統の点）を結ぶ（同じ系統の中は乗換にしない）
 -- 4. 置き換えてよい路線（replace_lines）だけ、系統の走る区間の N02 の乗車の辺を外す。外した区間ごとに、その区間の駅が、
 --    残ったその路線の辺と、その路線を通る系統（と同じ駅の乗換）で、互いに行き来できるかを確かめ、できなければ失敗にする
@@ -127,6 +128,60 @@ SELECT e.id, e.source, e.target, na.line_id AS line_a, nb.line_id AS line_b
  WHERE e.build_id = current_setting('reach.build_id')::bigint AND e.kind = 'TRANSFER'
    AND na.line_id IS NOT NULL AND nb.line_id IS NOT NULL;
 
+-- 駅でないところで路線どうしがつながる点（つなぎ目）。N02 のグラフは路線どうしを駅の乗換でしかつながないので、
+-- 系統の道のりを測るときだけ、つなぎ目も通り抜けられるようにする（無いと、湘南新宿ラインの大崎 → 西大井が品川を回る道になる）。
+-- 同じ位置（1 m 以内）にある路線の違う N02 の点は、立体交差（地下鉄どうし・高架と地上 など）でも同じ位置になるので、
+-- 自動ではつながない。人が定義の [[junction]] に書いたつなぎ目（2つの路線と、近くの駅）だけを使う（PR #174 のレビュー）
+CREATE TEMP TABLE len_node AS
+SELECT id, line_id, geom FROM reach.node
+ WHERE build_id = current_setting('reach.build_id')::bigint AND line_id IS NOT NULL;
+CREATE INDEX ON len_node USING gist (geom);
+ANALYZE len_node;
+-- つなぎ目の候補：同じ位置にある、路線の違う点の組
+CREATE TEMP TABLE len_junction_candidate AS
+SELECT a.id AS source, b.id AS target, a.line_id AS line_a, b.line_id AS line_b, a.geom
+  FROM len_node a JOIN len_node b ON a.line_id < b.line_id AND ST_DWithin(a.geom, b.geom, 1);
+
+-- 書いたつなぎ目：2つの路線の候補のうち、近くの駅（同じ名前の駅の点）から 500 m 以内のもの（離れた別のつなぎ目・立体交差を拾わないように）
+CREATE TEMP TABLE len_junction AS
+SELECT -(1000000000000 + row_number() OVER ()) AS id, c.source, c.target, c.line_a, c.line_b, j.ord
+  FROM svc_junction j
+  JOIN reach.line la ON la.operator = j.operator_a AND la.name = j.line_a
+  JOIN reach.line lb ON lb.operator = j.operator_b AND lb.name = j.line_b
+  JOIN len_junction_candidate c
+    ON (c.line_a = la.id AND c.line_b = lb.id) OR (c.line_a = lb.id AND c.line_b = la.id)
+ WHERE EXISTS (SELECT 1 FROM reach.station s
+                 JOIN reach.station_node sn ON sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint
+                 JOIN reach.node n ON n.id = sn.node_id
+                WHERE s.name = j.near AND ST_DWithin(n.geom, c.geom, 500));
+
+DO $$
+DECLARE r record;
+BEGIN
+  SELECT string_agg(j.operator_a || ' ' || j.line_a || '・' || j.operator_b || ' ' || j.line_b || '（' || j.near || '）', '、') AS bad
+    INTO r
+    FROM svc_junction j
+   WHERE NOT EXISTS (SELECT 1 FROM len_junction x WHERE x.ord = j.ord);
+  IF r.bad IS NOT NULL THEN
+    RAISE EXCEPTION '書いたつなぎ目が見つからない（2つの路線の点が同じ位置にない、路線が N02 にない、近くの駅から 500 m より遠い）：%', r.bad;
+  END IF;
+END $$;
+
+-- つなぎ目の一覧（reach_build.py がログに出す。人が確かめるため）：使うつなぎ目と、書いていない候補のうち、
+-- どれかの系統が両方の路線を通るもの（書けば使われるもの）。駅の点どうしの候補は、駅の乗換でつながるので出さない
+CREATE TEMP TABLE junction_report AS
+SELECT CASE WHEN EXISTS (SELECT 1 FROM len_junction x WHERE x.source = c.source AND x.target = c.target)
+            THEN 'used' ELSE 'unlisted' END AS state,
+       la.operator || ' ' || la.name || '・' || lb.operator || ' ' || lb.name AS lines,
+       (SELECT s.name || ' ' || round(ST_Distance(n.geom, c.geom)) || 'm'
+          FROM reach.station_node sn JOIN reach.station s ON s.id = sn.station_id JOIN reach.node n ON n.id = sn.node_id
+         WHERE sn.build_id = current_setting('reach.build_id')::bigint
+         ORDER BY n.geom <-> c.geom LIMIT 1) AS near,
+       round(ST_Y(c.geom::geometry)::numeric, 5) || ',' || round(ST_X(c.geom::geometry)::numeric, 5) AS latlon
+  FROM len_junction_candidate c JOIN reach.line la ON la.id = c.line_a JOIN reach.line lb ON lb.id = c.line_b
+ WHERE NOT EXISTS (SELECT 1 FROM reach.station_node sn WHERE sn.node_id IN (c.source, c.target))
+   AND EXISTS (SELECT 1 FROM svc WHERE c.line_a = ANY (svc.line_ids) AND c.line_b = ANY (svc.line_ids));
+
 -- 駅の場所の、通る路線の点（N02）
 CREATE TEMP TABLE svc_place_nodes AS
 SELECT svc.service_id, s.place_id, array_agg(DISTINCT sn.node_id) AS nodes
@@ -156,8 +211,10 @@ SELECT g.service_id, g.hop, g.seq, g.from_place, g.to_place, p.length_m, p.edges
       SELECT * FROM pgr_dijkstra(
         format('SELECT id, source, target, cost, reverse_cost FROM len_edge WHERE line_id = ANY (%L::bigint[])
                 UNION ALL
-                SELECT -id, source, target, 0, 0 FROM len_transfer WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])',
-               svc.line_ids, svc.line_ids, svc.line_ids),
+                SELECT -id, source, target, 0, 0 FROM len_transfer WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])
+                UNION ALL
+                SELECT id, source, target, 0, 0 FROM len_junction WHERE line_a = ANY (%L::bigint[]) AND line_b = ANY (%L::bigint[])',
+               svc.line_ids, svc.line_ids, svc.line_ids, svc.line_ids, svc.line_ids),
         (SELECT nodes FROM svc_place_nodes x WHERE x.service_id = g.service_id AND x.place_id = g.from_place),
         (SELECT nodes FROM svc_place_nodes x WHERE x.service_id = g.service_id AND x.place_id = g.to_place),
         directed := false)),
