@@ -3,7 +3,7 @@
 -- - s-express：A線・B線の快速。T1・T3・T4 に止まる（T2 は通過）
 -- - s-via：A線と C線を通れるが、T5 を通過地点にして C線を通る（T1・T3 に止まる）
 -- - s-loop：A線・B線・D線の環状。T1・T2・T3・T4 に止まり、T4 → T1 は D線
--- - s-junction：J線 → L線。駅でない地点 P で路線が変わる（T5・T7 に止まる）
+-- - s-junction：J線 → L線。駅でない地点 P で路線が変わる（T5・T7 に止まる）。P は、つなぎ目（T7 の近く）として書く
 -- - A線を置き換えてよい（T1・T2・T3 は s-through が止まる）
 INSERT INTO svc_def VALUES ('s-through', 'テスト鉄道', '直通線', '普通', 40, false), ('s-express', 'テスト鉄道', '快速線', '快速', 60, false),
                            ('s-via', 'テスト鉄道', '回り道線', '普通', 40, false), ('s-loop', 'テスト鉄道', '環状線', '普通', 40, true),
@@ -21,3 +21,4 @@ INSERT INTO svc_def_point VALUES
   ('s-loop', 1, 'T1', true, NULL), ('s-loop', 2, 'T2', true, NULL), ('s-loop', 3, 'T3', true, NULL), ('s-loop', 4, 'T4', true, NULL),
   ('s-junction', 1, 'T5', true, NULL), ('s-junction', 2, 'T7', true, NULL);
 INSERT INTO svc_replace VALUES ('テスト鉄道', 'A線');
+INSERT INTO svc_junction VALUES (1, 'テスト鉄道', 'J線', 'テスト鉄道', 'L線', 'T7');

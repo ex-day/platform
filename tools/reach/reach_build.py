@@ -198,14 +198,22 @@ def _points(path: Path, key: str, entries) -> list:
 def read_services(folder: Path) -> list:
     """探索用の路線（運行系統）の定義（*.toml）を読んで確かめる（版を作り始める前に。#170）。
 
-    返すのは系統ごとの dict（key・operator・name・kind・speed_kmh・loop・lines・points・stop_names）と、置き換えてよい路線の組。
+    返すのは系統ごとの dict（key・operator・name・kind・speed_kmh・loop・lines・points・stop_names）と、置き換えてよい路線の組と、
+    駅でないところの路線のつなぎ目（2つの路線と近くの駅。PR #174 のレビュー）。
     """
-    services, replace = [], []
+    services, replace, junctions = [], [], []
     for path in sorted(folder.glob("*.toml")):
         with path.open("rb") as f:
             doc = tomllib.load(f)
         operator = doc["operator"]
         replace += _lines(path, "replace_lines", operator, doc.get("replace_lines", []))
+        for j in doc.get("junction", []):
+            if set(j) - {"lines", "near", "note"} or not isinstance(j.get("near"), str):
+                raise ValueError(f"{path.name}:junction：lines（2つ）・near（駅名）・note だけを書く：{j!r}")
+            pair = _lines(path, "junction", operator, j.get("lines", []))
+            if len(pair) != 2 or pair[0] == pair[1]:
+                raise ValueError(f"{path.name}:junction：lines には違う路線を2つ書く：{j!r}")
+            junctions.append((pair[0], pair[1], j["near"]))
         for svc in doc.get("service", []):
             key = svc["key"]
             points = _points(path, key, svc["stops"])
@@ -225,12 +233,12 @@ def read_services(folder: Path) -> list:
     keys = [s["key"] for s in services]
     if len(set(keys)) != len(keys):
         raise ValueError("系統の key が重なっている")
-    return [services, replace]
+    return [services, replace, junctions]
 
 
 def load_services(cur, defs: list) -> int:
     """読んだ系統の定義を、build_service.sql が読む一時の表に入れる（#170）。系統の数を返す。"""
-    services, replace = defs
+    services, replace, junctions = defs
     cur.execute("""
         CREATE TEMP TABLE svc_def (key text PRIMARY KEY, operator text NOT NULL, name text NOT NULL, kind text NOT NULL,
                                    speed_kmh double precision NOT NULL, is_loop boolean NOT NULL);
@@ -238,7 +246,11 @@ def load_services(cur, defs: list) -> int:
         CREATE TEMP TABLE svc_def_point (key text NOT NULL, seq integer NOT NULL, station_name text NOT NULL,
                                          is_stop boolean NOT NULL, display_name text);
         CREATE TEMP TABLE svc_replace (operator text NOT NULL, line_name text NOT NULL);
+        CREATE TEMP TABLE svc_junction (ord integer PRIMARY KEY, operator_a text NOT NULL, line_a text NOT NULL,
+                                        operator_b text NOT NULL, line_b text NOT NULL, near text NOT NULL);
     """)
+    for ord_, ((op_a, line_a), (op_b, line_b), near) in enumerate(junctions, start=1):
+        cur.execute("INSERT INTO svc_junction VALUES (%s, %s, %s, %s, %s, %s)", (ord_, op_a, line_a, op_b, line_b, near))
     for operator, line_name in replace:
         cur.execute("INSERT INTO svc_replace VALUES (%s, %s)", (operator, line_name))
     for svc in services:
@@ -258,6 +270,19 @@ def settings(cur, build_id: int, n02_year: int) -> None:
                        ("reach.walk_meters_per_minute", WALK_METERS_PER_MINUTE),
                        ("reach.min_island_nodes", MIN_ISLAND_NODES), ("reach.snap_meters", SNAP_METERS)):
         cur.execute("SELECT set_config(%s, %s, false)", (key, str(value)))
+
+
+def report_junction(cur) -> None:
+    """駅でないところの路線のつなぎ目の一覧をログに出す（build_service.sql の junction_report。PR #174 のレビュー）。
+
+    使うつなぎ目（定義の [[junction]] に書いたもの）と、書いていない候補のうち、どれかの系統が両方の路線を通るもの。
+    候補は、同じ位置にある路線の違う点で、立体交差のこともある。書く前に、地図で本当に線路がつながるかを確かめる。
+    """
+    cur.execute("SELECT state, lines, near, latlon FROM junction_report ORDER BY state DESC, lines, latlon")
+    rows = cur.fetchall()
+    for state, label in (("used", "使う"), ("unlisted", "書いていない候補")):
+        items = [f"{lines}（{near}、{latlon}）" for s, lines, near, latlon in rows if s == state]
+        log(f"つなぎ目：{label} {len(items)} か所" + ("" if not items else "：" + "、".join(items)))
 
 
 def report_walk(cur) -> None:
@@ -310,6 +335,7 @@ def build(args) -> None:
                         "   JOIN reach.line l ON l.id = r.line_id WHERE r.build_id = %s)", (build_id, build_id, build_id))
             n_svc, n_svc_edge, replaced = cur.fetchone()
             log(f"系統：{n_svc} / {n_service} 本、乗車の辺 {n_svc_edge} 本、置き換えた路線 {replaced or 'なし'}")
+            report_junction(cur)
             load_osm_walk(cur, args.osm.expanduser())
             cur.execute((SQL_DIR / "build_walk.sql").read_text(encoding="utf-8"))
             cur.execute("SELECT count(*), count(DISTINCT place_id) FROM reach.place_walk WHERE build_id = %s", (build_id,))
