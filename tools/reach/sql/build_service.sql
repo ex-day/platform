@@ -151,7 +151,7 @@ CREATE TEMP TABLE len_junction_candidate AS
 SELECT a.id AS source, b.id AS target, a.line_id AS line_a, b.line_id AS line_b, a.geom
   FROM len_node a JOIN len_node b ON a.line_id < b.line_id AND ST_DWithin(a.geom, b.geom, 1);
 
--- 書いたつなぎ目：2つの路線の点の組で、gap_m（ふつうは 1 m。同じ位置）以内にあり、近くの駅（同じ名前の駅の点）から 500 m 以内の
+-- 書いたつなぎ目：2つの路線の点の組で、違う路線どうしは 1 m（同じ位置）、同じ路線の切れ目は gap_m 以内にあり、近くの駅（同じ名前の駅の点）から 500 m 以内の
 -- もの（離れた別のつなぎ目・立体交差を拾わないように）。2つの路線に同じ路線を書くと、N02 の線路の切れ目（同じ路線の中で、
 -- 少し離れて終わる2つの点。例：東武伊勢崎線の押上で、押上駅の線路と曳舟へ向かう線路が約 16 m 離れている）をつなぐ
 CREATE TEMP TABLE len_junction AS
@@ -160,7 +160,7 @@ SELECT -(1000000000000 + row_number() OVER ()) AS id, a.id AS source, b.id AS ta
   JOIN reach.line la ON la.operator = j.operator_a AND la.name = j.line_a
   JOIN reach.line lb ON lb.operator = j.operator_b AND lb.name = j.line_b
   JOIN len_node a ON a.line_id = la.id
-  JOIN len_node b ON b.line_id = lb.id AND b.id <> a.id AND (la.id <> lb.id OR a.id < b.id) AND ST_DWithin(a.geom, b.geom, j.gap_m)
+  JOIN len_node b ON b.line_id = lb.id AND b.id <> a.id AND (la.id <> lb.id OR a.id < b.id) AND ST_DWithin(a.geom, b.geom, CASE WHEN la.id = lb.id THEN j.gap_m ELSE 1 END)
  WHERE EXISTS (SELECT 1 FROM reach.station s
                  JOIN reach.station_node sn ON sn.station_id = s.id AND sn.build_id = current_setting('reach.build_id')::bigint
                  JOIN reach.node n ON n.id = sn.node_id
@@ -174,7 +174,7 @@ BEGIN
     FROM svc_junction j
    WHERE NOT EXISTS (SELECT 1 FROM len_junction x WHERE x.ord = j.ord);
   IF r.bad IS NOT NULL THEN
-    RAISE EXCEPTION '書いたつなぎ目が見つからない（2つの路線の点が同じ位置（gap_m 以内）にない、路線が N02 にない、近くの駅から 500 m より遠い）：%', r.bad;
+    RAISE EXCEPTION '書いたつなぎ目が見つからない（2つの路線の点が同じ位置（同じ路線の切れ目は gap_m 以内）にない、路線が N02 にない、近くの駅から 500 m より遠い）：%', r.bad;
   END IF;
 END $$;
 

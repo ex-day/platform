@@ -216,6 +216,9 @@ def read_services(folder: Path) -> list:
                 raise ValueError(f"{path.name}:junction：lines には路線を2つ、gap_m は 50 以下の正の数を書く：{j!r}")
             if pair[0] == pair[1] and "gap_m" not in j:
                 raise ValueError(f"{path.name}:junction：同じ路線の線路の切れ目をつなぐときは gap_m を書く：{j!r}")
+            if pair[0] != pair[1] and "gap_m" in j:
+                raise ValueError(f"{path.name}:junction：gap_m は同じ路線の線路の切れ目だけに書く（違う路線どうしは同じ位置＝1 m 以内だけ。"
+                                 f"立体交差・並ぶ線路をつながないように。PR #175 のレビュー）：{j!r}")
             junctions.append((pair[0], pair[1], j["near"], float(gap)))
         for svc in doc.get("service", []):
             key = svc["key"]
